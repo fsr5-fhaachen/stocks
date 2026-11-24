@@ -6,13 +6,18 @@ on:
   pull_request:
     branches: ["main", "dev"]
 
+# a newer push to the same branch or pull request replaces the running check; nothing retries
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     strategy:
       matrix:
-        php-version: ["8.4"]
+        php-version: ["8.5"]
         node-version: [24.x]
 
     steps:
@@ -22,6 +27,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php-version }}
+          extensions: redis
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4.0.3
         with:
@@ -30,7 +36,7 @@ jobs:
       - name: Copy .env
         run: php -r "file_exists('.env') || copy('.env.example', '.env');"
       - name: Install PHP Dependencies
-        run: composer update --no-interaction --no-progress
+        run: composer install --no-interaction --no-progress
       - name: Install Node.js Dependencies
         run: |
           npm ci
@@ -39,7 +45,7 @@ jobs:
           npm run lint
       - name: Execute PHP linting
         run: |
-          ./vendor/bin/pint
+          ./vendor/bin/pint --test
       - name: Execute build
         run: npm run build --if-present
       - name: Generate key
@@ -62,8 +68,5 @@ jobs:
           DB_DATABASE: database/database.sqlite
         run: |
           php artisan db:seed
-      # - name: Execute tests (Unit and Feature tests) via PHPUnit
-      #   env:
-      #     DB_CONNECTION: sqlite
-      #     DB_DATABASE: database/database.sqlite
-      #   run: vendor/bin/phpunit
+      - name: Execute tests (Unit and Feature tests) via PHPUnit
+        run: vendor/bin/phpunit

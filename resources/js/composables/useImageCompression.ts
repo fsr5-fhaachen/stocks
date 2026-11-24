@@ -1,11 +1,12 @@
 /**
- * Compression of images in the browser before they are uploaded. The image is scaled down to the maximum size
- * and stored as jpeg. Animated gifs and files the browser can not read are uploaded unchanged.
+ * Compression of images in the browser before they are uploaded (taken from Portals). The image
+ * is scaled down to the maximum size and stored as jpeg. Files the browser can not read are
+ * uploaded unchanged; the server checks type and size anyway.
  */
 export default function () {
   const compressImage = async (
     file: File,
-    maxSize = 1200,
+    maxSize = 1600,
     quality = 0.8,
   ): Promise<File> => {
     if (!file.type.startsWith("image/") || file.type === "image/gif") {
@@ -50,7 +51,14 @@ export default function () {
     });
   };
 
+  /**
+   * Compress all files of a file input.
+   */
+  const compressImages = (files: FileList | File[] | null) =>
+    Promise.all(Array.from(files ?? []).map((file) => compressImage(file)));
+
   return {
     compressImage,
+    compressImages,
   };
 }

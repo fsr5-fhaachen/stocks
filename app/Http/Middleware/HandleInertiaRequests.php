@@ -2,69 +2,68 @@
 
 namespace App\Http\Middleware;
 
-use App\Helpers\RandomGenerator;
-use App\Models\Module;
-use App\Models\Page;
+use App\Support\AppVersion;
+use App\Support\Branding;
+use App\Support\Extensions\Navigation;
+use App\Support\Settings;
+use App\Support\Surface;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
+/**
+ * Props every page gets. All props are closures, so partial reloads (e.g. infinite scroll of a
+ * table) do not compute them.
+ */
 class HandleInertiaRequests extends Middleware
 {
     /**
      * The root template that's loaded on the first page visit.
-     *
-     * @see https://inertiajs.com/server-side-setup#root-template
      *
      * @var string
      */
     protected $rootView = 'app';
 
     /**
-     * Determines the current asset version.
-     *
-     * @see https://inertiajs.com/asset-versioning
-     */
-    public function version(Request $request): ?string
-    {
-        return parent::version($request);
-    }
-
-    /**
      * Defines the props that are shared by default.
      *
-     * @see https://inertiajs.com/shared-data
+     * @return array<string, mixed>
      */
     public function share(Request $request): array
     {
-        // the props are lazy (closures), so that partial reloads (e.g. infinite scroll of tables) do not execute the queries
-        return array_merge(parent::share($request), [
-            'appEventType' => config('app.event_type'),
-            'user' => function () use ($request) {
-                $user = $request->user();
-                if ($user) {
-                    // get all roles of the user
-                    $user->rolesArray = $user->roles->pluck('name')->toArray();
+        $settings = app(Settings::class);
 
-                    // get all permissions of the user
-                    $user->permissionsArray = $user->getAllPermissions()->pluck('name')->toArray();
-                }
-
-                return $user;
-            },
-            // get all modules and store them in a array with $module->key => $module
-            'modules' => fn () => Module::all()->keyBy('key')->all(),
-            // users can only opt out of the random generator if it is enabled in the dashboard
-            'randomGeneratorOptOutEnabled' => fn () => app(RandomGenerator::class)->isOptOutEnabled(),
-            'randomGeneratorTutorOptOutEnabled' => fn () => app(RandomGenerator::class)->isTutorOptOutEnabled(),
-            // start time for the live update of tables
-            'serverTime' => fn () => now()->timestamp,
-            'message' => [
-                'success' => fn () => $request->session()->get('success'),
-                'error' => fn () => $request->session()->get('error'),
-                'warning' => fn () => $request->session()->get('warning'),
-                'info' => fn () => $request->session()->get('info'),
+        return [
+            ...parent::share($request),
+            'auth' => fn () => $request->user() ? [
+                'user' => $request->user()->only(['id', 'firstname', 'lastname', 'email', 'name']),
+                'permissions' => $request->user()->getAllPermissions()->pluck('name'),
+            ] : null,
+            // a surface (e.g. the kiosk) has no menu
+            'navigation' => fn () => $request->user() && ! Surface::current() ? app(Navigation::class)->forUser($request->user()) : [],
+            // surface of the request (e.g. the kiosk) or null, see App\Support\Surface
+            'surface' => fn () => Surface::shared(),
+            // version below the menu and a newer release on GitHub; not on the kiosk
+            'app' => fn () => $request->user() && ! Surface::current() ? app(AppVersion::class)->shared($request->user()) : null,
+            'organization' => fn () => [
+                'name' => $settings->get('organization.name'),
+                'short_name' => $settings->get('organization.short_name'),
+                'accent_color' => $settings->get('organization.accent_color'),
+                // logo for dark backgrounds (dark mode) and for light ones (light mode)
+                'logo_url' => app(Branding::class)->url('logo'),
+                'logo_light_url' => app(Branding::class)->url('logo_light'),
+                'imprint_url' => $settings->get('legal.imprint_url'),
+                'privacy_url' => $settings->get('legal.privacy_url'),
             ],
-            'pages' => fn () => Page::orderBy('sort_order')->get(),
-        ]);
+            'flash' => fn () => [
+                'success' => $request->session()->get('success'),
+                'error' => $request->session()->get('error'),
+                'warning' => $request->session()->get('warning'),
+                'info' => $request->session()->get('info'),
+                // item with a new number (e.g. split off part): offer to print its label
+                'label' => $request->session()->get('label'),
+            ],
+            // start time of the live update of tables, see App\Support\Table\Table
+            'serverTime' => fn () => now()->timestamp,
+        ];
     }
 }

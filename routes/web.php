@@ -1,310 +1,230 @@
 <?php
 
-use App\Http\Controllers\Api\ApiController;
-use App\Http\Controllers\AppController;
-use App\Http\Controllers\DashboardAdminAuditLogController;
-use App\Http\Controllers\DashboardAdminController;
-use App\Http\Controllers\DashboardAdminCountdownController;
-use App\Http\Controllers\DashboardAdminRandomGeneratorController;
-use App\Http\Controllers\DashboardAdminScoreSystemController;
-use App\Http\Controllers\DashboardAdminScoringController;
-use App\Http\Controllers\DashboardAdminStrichlistensystemController;
-use App\Http\Controllers\DashboardAdminStrichlistensystemInvoiceController;
-use App\Http\Controllers\DashboardAdminWorkshopController;
+use App\Http\Controllers\Admin\AuditLogController;
+use App\Http\Controllers\Admin\MailSettingsController;
+use App\Http\Controllers\Admin\ModuleController;
+use App\Http\Controllers\Admin\RoleController;
+use App\Http\Controllers\Admin\SettingsController;
+use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Auth\InvitationController;
+use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\PasswordResetController;
+use App\Http\Controllers\BrandingController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\DashboardEventController;
-use App\Http\Controllers\DashboardTutorController;
-use App\Http\Controllers\DashboardTutorScoringController;
-use App\Http\Controllers\RandomGeneratorController;
-use App\Http\Controllers\StrichlistensystemController;
-use App\Http\Controllers\StrichlistensystemKioskController;
-use App\Http\Middleware\ActiveModule;
-use App\Http\Middleware\ActivePublicModule;
-use App\Http\Middleware\IsLoggedInAdmin;
-use App\Http\Middleware\IsLoggedInTutor;
-use App\Http\Middleware\RedirectIfTutor;
-use App\Http\Middleware\StrichlistensystemKiosk;
-use Illuminate\Auth\Middleware\Authenticate;
-use Illuminate\Auth\Middleware\RedirectIfAuthenticated;
+use App\Http\Controllers\Inventory\CategoryController;
+use App\Http\Controllers\Inventory\ConditionController;
+use App\Http\Controllers\Inventory\ContentsPdfController;
+use App\Http\Controllers\Inventory\ItemController;
+use App\Http\Controllers\Inventory\ItemHistoryController;
+use App\Http\Controllers\Inventory\ItemPhotoController;
+use App\Http\Controllers\Inventory\LocationController;
+use App\Http\Controllers\Inventory\MoveController;
+use App\Http\Controllers\Inventory\ScanController;
+use App\Http\Controllers\Inventory\UnitController;
+use App\Http\Controllers\Labels\DemoSheetController;
+use App\Http\Controllers\Labels\PrintController;
+use App\Http\Controllers\Labels\PrinterController;
+use App\Http\Controllers\Labels\PrinterModelController;
+use App\Http\Controllers\Labels\ReservedNumberController;
+use App\Http\Controllers\Labels\TemplateController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SetupController;
+use App\Http\Controllers\ShortLinkController;
+use App\Http\Controllers\WebAppController;
 use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
 
 /*
 |--------------------------------------------------------------------------
-| Web Routes
+| Routes of the core
 |--------------------------------------------------------------------------
 |
-| Here is where you can register web routes for your application. These
-| routes are loaded by the RouteServiceProvider within a group which
-| contains the "web" middleware group. Now create something great!
+| Modules register their own routes in modules/<Module>/routes/web.php behind
+| the middleware "module:<key>".
 |
 */
 
-Route::get('/', [AppController::class, 'index'])->name('app.index');
+Route::get('/setup', [SetupController::class, 'show'])->name('setup.show');
 
-Route::middleware(RedirectIfAuthenticated::class)->group(function () {
-    Route::get('/login', [AppController::class, 'login'])->name('app.login');
-    Route::post('/login', [AppController::class, 'loginUser'])->name('app.loginUser');
+// logo and favicon, also for guests (login page, browser tab)
+Route::get('/branding/{kind}', [BrandingController::class, 'show'])->whereIn('kind', ['logo', 'favicon', 'print_logo'])->name('branding.show');
+Route::post('/setup', [SetupController::class, 'store'])->middleware('throttle:10,1')->name('setup.store');
 
-    Route::middleware(ActiveModule::class.':registration')->group(function () {
-        Route::get('/register', [AppController::class, 'register'])->name('app.register');
-        Route::post('/register', [AppController::class, 'registerUser'])->name('app.registerUser');
-    });
+// web app: manifest and icons from the logo, also for guests (added to the home screen before login);
+// the service worker for push lies in public/sw.js
+Route::get('/manifest.webmanifest', [WebAppController::class, 'manifest'])->name('web-app.manifest');
+Route::get('/web-app/icon-{size}.png', [WebAppController::class, 'icon'])->whereNumber('size')->name('web-app.icon');
+
+// short links in the codes of labels: the full page when logged in, otherwise a public view
+// (documentation/LABELS.md); limited, so nobody tries out the inventory
+Route::get('/s/{code}', [ShortLinkController::class, 'show'])->where('code', '[^/]+')->middleware('throttle:short-links')->name('short-link');
+Route::get('/s-photos/{photo}', [ShortLinkController::class, 'photo'])->middleware('signed:relative')->name('short-link.photo');
+
+Route::middleware('guest')->group(function () {
+    Route::get('/login', [LoginController::class, 'show'])->name('login');
+    Route::post('/login', [LoginController::class, 'store'])->name('login.store');
+
+    Route::get('/forgot-password', [PasswordResetController::class, 'create'])->name('password.request');
+    Route::post('/forgot-password', [PasswordResetController::class, 'store'])->middleware('throttle:5,1')->name('password.email');
+    Route::get('/reset-password/{token}', [PasswordResetController::class, 'edit'])->name('password.reset');
+    Route::post('/reset-password', [PasswordResetController::class, 'update'])->name('password.update');
+
+    Route::get('/invitation/{token}', [InvitationController::class, 'show'])->name('invitation.show');
+    Route::post('/invitation/{token}', [InvitationController::class, 'store'])->middleware('throttle:10,1')->name('invitation.store');
 });
 
-Route::prefix('dashboard')->middleware(Authenticate::class)->group(function () {
-    Route::middleware(RedirectIfTutor::class)->group(function () {
-        Route::get('/', [DashboardController::class, 'index'])->name('dashboard.index');
+Route::middleware('auth')->group(function () {
+    Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
 
-        Route::prefix('event/{event}')->group(function () {
-            Route::get('/', [DashboardEventController::class, 'index'])->name('dashboard.event.index');
-            Route::get('/register', [DashboardEventController::class, 'register'])->name('dashboard.event.register');
-            Route::post('/register', [DashboardEventController::class, 'registerUser'])->name('dashboard.event.registerUser');
-            Route::get('/unregister', [DashboardEventController::class, 'unregister'])->name('dashboard.event.unregister');
-            Route::post('/unregister', [DashboardEventController::class, 'unregisterUser'])->name('dashboard.event.unregisterUser');
+    Route::redirect('/', '/dashboard');
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    // notifications and push of the own account (documentation/NOTIFICATIONS.md)
+    Route::put('/profile/notifications', [ProfileController::class, 'notifications'])->name('profile.notifications');
+    Route::post('/profile/push', [ProfileController::class, 'subscribe'])->middleware('throttle:10,60')->name('profile.push');
+    Route::delete('/profile/push', [ProfileController::class, 'unsubscribe'])->name('profile.push.destroy');
+    Route::post('/profile/notify-test', [ProfileController::class, 'test'])->middleware('throttle:10,1')->name('profile.notify-test');
+
+    Route::get('/styleguide', fn () => Inertia::render('Styleguide'))->middleware('can:settings.manage')->name('styleguide');
+
+    // inventory, see documentation/INVENTORY.md
+    Route::prefix('inventory')->name('inventory.')->middleware('can:inventory.view')->group(function () {
+        Route::get('/items', [ItemController::class, 'index'])->name('items.index');
+        Route::get('/misplaced', [ItemController::class, 'misplaced'])->name('items.misplaced');
+        Route::get('/lookup', [ItemController::class, 'lookup'])->name('lookup');
+        Route::get('/places', [ItemController::class, 'places'])->name('places');
+        Route::get('/stats', [ItemController::class, 'stats'])->name('stats');
+        Route::get('/items/{item}/contents', [ItemController::class, 'contents'])->name('items.contents');
+        Route::get('/photos/{photo}', [ItemPhotoController::class, 'show'])->name('photos.show');
+        Route::get('/scan', [ScanController::class, 'show'])->name('scan');
+        Route::get('/items/{item}/contents.pdf', [ContentsPdfController::class, 'show'])->name('items.contents-pdf');
+
+        Route::middleware('can:inventory.edit')->group(function () {
+            Route::get('/items/create', [ItemController::class, 'create'])->name('items.create');
+            Route::post('/items', [ItemController::class, 'store'])->name('items.store');
+            Route::get('/items/{item}/edit', [ItemController::class, 'edit'])->name('items.edit');
+            Route::put('/items/{item}', [ItemController::class, 'update'])->name('items.update');
+            Route::post('/items/{item}/photos', [ItemPhotoController::class, 'store'])->name('items.photos.store');
+            Route::post('/items/{item}/photos/{photo}/cover', [ItemPhotoController::class, 'cover'])->scopeBindings()->name('items.photos.cover');
+            Route::delete('/items/{item}/photos/{photo}', [ItemPhotoController::class, 'destroy'])->scopeBindings()->name('items.photos.destroy');
         });
 
-        Route::middleware(ActiveModule::class.':randomGenerator')->group(function () {
-            Route::get('/random-generator', [RandomGeneratorController::class, 'index'])->name('dashboard.randomGenerator.index');
-            Route::post('/random-generator', [RandomGeneratorController::class, 'update'])->name('dashboard.randomGenerator.update');
-        });
-    });
+        Route::get('/items/{item}', [ItemController::class, 'show'])->name('items.show');
 
-    Route::prefix('tutor/')->group(function () {
-        Route::get('/login', [DashboardController::class, 'login'])->name('dashboard.tutor.login');
-        Route::post('/login', [DashboardController::class, 'loginTutor'])->name('dashboard.loginTutor');
-    });
-
-    Route::prefix('tutor')->middleware(IsLoggedInTutor::class)->group(function () {
-        Route::get('/', [DashboardTutorController::class, 'index'])->name('dashboard.tutor.index');
-        Route::get('/event/{event}', [DashboardTutorController::class, 'event'])->name('dashboard.tutor.event.index');
-        Route::get('/slot/{slot}', [DashboardTutorController::class, 'slot'])->name('dashboard.tutor.slot.index');
-        Route::get('/workshop-session/{workshopSession}', [DashboardTutorController::class, 'workshopSession'])->name('dashboard.tutor.workshopSession.index');
-        Route::get('/group/{group}', [DashboardTutorController::class, 'group'])->name('dashboard.tutor.group.index');
-
-        Route::middleware(ActiveModule::class.':randomGenerator')->group(function () {
-            Route::get('/random-generator', [RandomGeneratorController::class, 'tutorIndex'])->name('dashboard.tutor.randomGenerator.index');
-            Route::post('/random-generator', [RandomGeneratorController::class, 'tutorUpdate'])->name('dashboard.tutor.randomGenerator.update');
+        Route::middleware('can:inventory.move')->group(function () {
+            Route::get('/move', [MoveController::class, 'create'])->name('move');
+            Route::post('/move', [MoveController::class, 'store'])->name('move.store');
+            Route::post('/items/{item}/return-home', [ItemController::class, 'returnHome'])->name('items.return-home');
+            Route::post('/items/{item}/condition', [ItemController::class, 'changeCondition'])->name('items.condition');
+            Route::post('/items/{item}/consume', [ItemController::class, 'consume'])->name('items.consume');
+            Route::post('/items/{item}/merge', [ItemController::class, 'merge'])->name('items.merge');
         });
 
-        Route::middleware(ActiveModule::class.':scoring')->prefix('scoring')->group(function () {
-            Route::get('/', [DashboardTutorScoringController::class, 'index'])->name('dashboard.tutor.scoring.index');
-            Route::post('/competition/{competition}/duel', [DashboardTutorScoringController::class, 'storeDuel'])->name('dashboard.tutor.scoring.storeDuel');
-            Route::post('/duel/{duel}', [DashboardTutorScoringController::class, 'updateDuel'])->name('dashboard.tutor.scoring.updateDuel');
-            Route::delete('/duel/{duel}', [DashboardTutorScoringController::class, 'deleteDuel'])->name('dashboard.tutor.scoring.deleteDuel');
-        });
-    });
-
-    // the stage functions are also used by the stage tutors, so only the permission is checked and not the admin role
-    Route::prefix('admin')->middleware(IsLoggedInTutor::class)->group(function () {
-        Route::middleware(ActiveModule::class.':randomGenerator', 'can:manage random generator')->group(function () {
-            Route::get('/random-generator', [DashboardAdminRandomGeneratorController::class, 'index'])->name('dashboard.admin.randomGenerator.index');
-            Route::post('/random-generator', [DashboardAdminRandomGeneratorController::class, 'indexExecuteSubmit'])->name('dashboard.admin.randomGenerator.indexExecuteSubmit');
-            Route::post('/random-generator/settings', [DashboardAdminRandomGeneratorController::class, 'updateSettings'])->name('dashboard.admin.randomGenerator.updateSettings');
-            Route::post('/random-generator/reset-drawn', [DashboardAdminRandomGeneratorController::class, 'resetDrawn'])->name('dashboard.admin.randomGenerator.resetDrawn');
-            Route::post('/random-generator/user/{user}/reset-drawn', [DashboardAdminRandomGeneratorController::class, 'resetDrawnUser'])->name('dashboard.admin.randomGenerator.resetDrawnUser');
-            Route::get('/random-generator/display', [DashboardAdminRandomGeneratorController::class, 'display'])->name('dashboard.admin.randomGenerator.display');
+        Route::middleware('can:inventory.retire')->group(function () {
+            Route::post('/items/{item}/retire', [ItemController::class, 'retire'])->name('items.retire');
+            Route::delete('/items/{item}', [ItemController::class, 'destroy'])->name('items.destroy');
         });
 
-        Route::middleware(ActiveModule::class.':scoreSystem', 'can:manage score system')->group(function () {
-            Route::get('/score-system', [DashboardAdminScoreSystemController::class, 'index'])->name('dashboard.admin.scoreSystem.index');
-            Route::post('/score-system', [DashboardAdminScoreSystemController::class, 'indexExecuteSubmit'])->name('dashboard.admin.scoreSystem.indexExecuteSubmit');
-            Route::get('/score-system/display', [DashboardAdminScoreSystemController::class, 'display'])->name('dashboard.admin.scoreSystem.display');
+        Route::middleware('can:inventory.history.delete')->scopeBindings()->group(function () {
+            Route::delete('/items/{item}/movements/{movement}', [ItemHistoryController::class, 'destroyMovement'])->name('items.movements.destroy');
+            Route::delete('/items/{item}/condition-changes/{conditionChange}', [ItemHistoryController::class, 'destroyConditionChange'])->name('items.condition-changes.destroy');
         });
 
-        Route::middleware(ActiveModule::class.':countdown', 'can:manage countdown')->group(function () {
-            Route::get('/countdown', [DashboardAdminCountdownController::class, 'index'])->name('dashboard.admin.countdown.index');
-            Route::post('/countdown', [DashboardAdminCountdownController::class, 'indexExecuteSubmit'])->name('dashboard.admin.countdown.indexExecuteSubmit');
-            Route::get('/countdown/display', [DashboardAdminCountdownController::class, 'display'])->name('dashboard.admin.countdown.display');
-        });
-    });
+        Route::get('/locations', [LocationController::class, 'index'])->name('locations.index');
+        Route::get('/locations/{location}', [LocationController::class, 'show'])->name('locations.show');
 
-    Route::prefix('admin')->middleware(IsLoggedInAdmin::class)->group(function () {
+        Route::middleware('can:locations.manage')->group(function () {
+            Route::post('/locations', [LocationController::class, 'store'])->name('locations.store');
+            Route::put('/locations/{location}', [LocationController::class, 'update'])->name('locations.update');
+            Route::delete('/locations/{location}', [LocationController::class, 'destroy'])->name('locations.destroy');
 
-        Route::middleware('can:view statistics')->group(function () {
-            Route::get('/', [DashboardAdminController::class, 'index'])->name('dashboard.admin.index');
-            Route::get('/download-stats', [DashboardAdminController::class, 'downloadStatistics'])->name('dashboard.admin.downloadStatistics');
-        });
-
-        Route::middleware('can:manage users')->group(function () {
-            Route::get('/users', [DashboardAdminController::class, 'users'])->name('dashboard.admin.users');
-            Route::post('/user/{user}', [DashboardAdminController::class, 'editUser'])->name('dashboard.admin.editUser');
-            Route::post('/user/{user}/reset-pin', [DashboardAdminController::class, 'resetUserPin'])->middleware(ActiveModule::class.':strichlistensystem')->name('dashboard.admin.resetUserPin');
-
-            Route::middleware('can:delete users')->group(function () {
-                Route::delete('/user/{user}', [DashboardAdminController::class, 'deleteUser'])->name('dashboard.admin.deleteUser');
-            });
-
-            Route::get('/register', [DashboardAdminController::class, 'register'])->name('dashboard.admin.register');
-            Route::post('/register', [DashboardAdminController::class, 'registerUser'])->name('dashboard.admin.registerUser');
-            Route::post('/assign', [DashboardAdminController::class, 'assignUser'])->name('dashboard.admin.assignUser');
+            Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
+            Route::post('/categories', [CategoryController::class, 'store'])->name('categories.store');
+            Route::put('/categories/{category}', [CategoryController::class, 'update'])->name('categories.update');
+            Route::delete('/categories/{category}', [CategoryController::class, 'destroy'])->name('categories.destroy');
         });
 
-        Route::middleware('can:manage events')->group(function () {
-            Route::get('/event/{event}', [DashboardAdminController::class, 'event'])->name('dashboard.admin.event.index');
-            Route::get('/event/{event}/registrations', [DashboardAdminController::class, 'registrations'])->name('dashboard.admin.event.registrations');
-            Route::get('/event/{event}/not-registered', [DashboardAdminController::class, 'notRegistered'])->name('dashboard.admin.event.notRegistered');
-            Route::get('/event/{event}/submit', [DashboardAdminController::class, 'eventSubmit'])->name('dashboard.admin.event.submit');
-            Route::post('/event/{event}/submit', [DashboardAdminController::class, 'eventExecuteSubmit'])->name('dashboard.admin.event.executeSubmit');
+        Route::middleware('can:inventory.options.manage')->group(function () {
+            Route::get('/conditions', [ConditionController::class, 'index'])->name('conditions.index');
+            Route::post('/conditions', [ConditionController::class, 'store'])->name('conditions.store');
+            Route::put('/conditions/{condition}', [ConditionController::class, 'update'])->name('conditions.update');
+            Route::delete('/conditions/{condition}', [ConditionController::class, 'destroy'])->name('conditions.destroy');
 
-            Route::prefix('/event/{event}/workshops')->scopeBindings()->group(function () {
-                Route::get('/', [DashboardAdminWorkshopController::class, 'index'])->name('dashboard.admin.workshops.index');
-                Route::post('/settings', [DashboardAdminWorkshopController::class, 'updateSettings'])->name('dashboard.admin.workshops.updateSettings');
-                Route::post('/block', [DashboardAdminWorkshopController::class, 'storeBlock'])->name('dashboard.admin.workshops.storeBlock');
-                Route::post('/block/{workshopBlock}', [DashboardAdminWorkshopController::class, 'updateBlock'])->name('dashboard.admin.workshops.updateBlock');
-                Route::delete('/block/{workshopBlock}', [DashboardAdminWorkshopController::class, 'deleteBlock'])->name('dashboard.admin.workshops.deleteBlock');
-                Route::post('/workshop', [DashboardAdminWorkshopController::class, 'storeWorkshop'])->name('dashboard.admin.workshops.storeWorkshop');
-                Route::post('/workshop/{workshop}', [DashboardAdminWorkshopController::class, 'updateWorkshop'])->name('dashboard.admin.workshops.updateWorkshop');
-                Route::delete('/workshop/{workshop}', [DashboardAdminWorkshopController::class, 'deleteWorkshop'])->name('dashboard.admin.workshops.deleteWorkshop');
-                Route::post('/run', [DashboardAdminWorkshopController::class, 'run'])->name('dashboard.admin.workshops.run');
-                Route::post('/publish', [DashboardAdminWorkshopController::class, 'publish'])->name('dashboard.admin.workshops.publish');
-                Route::post('/unpublish', [DashboardAdminWorkshopController::class, 'unpublish'])->name('dashboard.admin.workshops.unpublish');
-                Route::post('/assign', [DashboardAdminWorkshopController::class, 'assign'])->name('dashboard.admin.workshops.assign');
-            });
-        });
-
-        Route::prefix('strichlistensystem')->middleware(ActiveModule::class.':strichlistensystem', 'can:manage strichlistensystem')->group(function () {
-            Route::get('/', [DashboardAdminStrichlistensystemController::class, 'index'])->name('dashboard.admin.strichlistensystem.index');
-            Route::get('/export', [DashboardAdminStrichlistensystemController::class, 'export'])->name('dashboard.admin.strichlistensystem.export');
-            Route::get('/billing', [DashboardAdminStrichlistensystemController::class, 'billing'])->name('dashboard.admin.strichlistensystem.billing');
-            Route::get('/bookings', [DashboardAdminStrichlistensystemController::class, 'bookings'])->name('dashboard.admin.strichlistensystem.bookings');
-            Route::get('/billing/user/{user}', [DashboardAdminStrichlistensystemController::class, 'billingUser'])->name('dashboard.admin.strichlistensystem.billingUser');
-            Route::post('/billing/user/{user}/payment', [DashboardAdminStrichlistensystemController::class, 'storePayment'])->name('dashboard.admin.strichlistensystem.storePayment');
-            Route::delete('/billing/payment/{payment}', [DashboardAdminStrichlistensystemController::class, 'deletePayment'])->name('dashboard.admin.strichlistensystem.deletePayment');
-            Route::post('/billing/user/{user}/invoice', [DashboardAdminStrichlistensystemInvoiceController::class, 'store'])->name('dashboard.admin.strichlistensystem.storeInvoice');
-            Route::get('/invoices', [DashboardAdminStrichlistensystemInvoiceController::class, 'index'])->name('dashboard.admin.strichlistensystem.invoices');
-            Route::get('/invoice/{invoice}/pdf', [DashboardAdminStrichlistensystemInvoiceController::class, 'pdf'])->name('dashboard.admin.strichlistensystem.invoicePdf');
-            Route::post('/invoice/{invoice}/cancel', [DashboardAdminStrichlistensystemInvoiceController::class, 'cancel'])->name('dashboard.admin.strichlistensystem.cancelInvoice');
-            Route::get('/invoice-settings', [DashboardAdminStrichlistensystemInvoiceController::class, 'settings'])->name('dashboard.admin.strichlistensystem.invoiceSettings');
-            Route::post('/invoice-settings', [DashboardAdminStrichlistensystemInvoiceController::class, 'updateSettings'])->name('dashboard.admin.strichlistensystem.updateInvoiceSettings');
-            Route::post('/article', [DashboardAdminStrichlistensystemController::class, 'storeArticle'])->name('dashboard.admin.strichlistensystem.storeArticle');
-            Route::post('/article/{article}', [DashboardAdminStrichlistensystemController::class, 'updateArticle'])->name('dashboard.admin.strichlistensystem.updateArticle');
-            Route::post('/article/{article}/toggle-active', [DashboardAdminStrichlistensystemController::class, 'toggleArticleActive'])->name('dashboard.admin.strichlistensystem.toggleArticleActive');
-            Route::delete('/article/{article}', [DashboardAdminStrichlistensystemController::class, 'deleteArticle'])->name('dashboard.admin.strichlistensystem.deleteArticle');
-            Route::get('/kiosk-devices', [DashboardAdminStrichlistensystemController::class, 'kioskDevices'])->name('dashboard.admin.strichlistensystem.kioskDevices');
-            Route::post('/kiosk-device', [DashboardAdminStrichlistensystemController::class, 'storeKioskDevice'])->name('dashboard.admin.strichlistensystem.storeKioskDevice');
-            Route::post('/kiosk-device/{device}/regenerate-token', [DashboardAdminStrichlistensystemController::class, 'regenerateKioskDeviceToken'])->name('dashboard.admin.strichlistensystem.regenerateKioskDeviceToken');
-            Route::delete('/kiosk-device/{device}', [DashboardAdminStrichlistensystemController::class, 'deleteKioskDevice'])->name('dashboard.admin.strichlistensystem.deleteKioskDevice');
-        });
-
-        Route::middleware(ActiveModule::class.':scoring', 'can:manage scoring')->prefix('scoring')->group(function () {
-            Route::get('/', [DashboardAdminScoringController::class, 'index'])->name('dashboard.admin.scoring.index');
-            Route::post('/competition', [DashboardAdminScoringController::class, 'storeCompetition'])->name('dashboard.admin.scoring.storeCompetition');
-            Route::get('/competition/{competition}', [DashboardAdminScoringController::class, 'showCompetition'])->name('dashboard.admin.scoring.competition');
-            Route::post('/competition/{competition}', [DashboardAdminScoringController::class, 'updateCompetition'])->name('dashboard.admin.scoring.updateCompetition');
-            Route::post('/competition/{competition}/toggle-open', [DashboardAdminScoringController::class, 'toggleCompetitionOpen'])->name('dashboard.admin.scoring.toggleCompetitionOpen');
-            Route::delete('/competition/{competition}', [DashboardAdminScoringController::class, 'deleteCompetition'])->name('dashboard.admin.scoring.deleteCompetition');
-
-            Route::post('/competition/{competition}/team', [DashboardAdminScoringController::class, 'storeTeam'])->name('dashboard.admin.scoring.storeTeam');
-            Route::post('/competition/{competition}/import-teams', [DashboardAdminScoringController::class, 'importTeams'])->name('dashboard.admin.scoring.importTeams');
-            Route::post('/team/{team}', [DashboardAdminScoringController::class, 'updateTeam'])->name('dashboard.admin.scoring.updateTeam');
-            Route::delete('/team/{team}', [DashboardAdminScoringController::class, 'deleteTeam'])->name('dashboard.admin.scoring.deleteTeam');
-
-            Route::post('/competition/{competition}/duel', [DashboardAdminScoringController::class, 'storeDuel'])->name('dashboard.admin.scoring.storeDuel');
-            Route::post('/duel/{duel}', [DashboardAdminScoringController::class, 'updateDuel'])->name('dashboard.admin.scoring.updateDuel');
-            Route::delete('/duel/{duel}', [DashboardAdminScoringController::class, 'deleteDuel'])->name('dashboard.admin.scoring.deleteDuel');
-
-            Route::post('/competition/{competition}/extra-point', [DashboardAdminScoringController::class, 'storeExtraPoint'])->name('dashboard.admin.scoring.storeExtraPoint');
-            Route::post('/extra-point/{extraPoint}', [DashboardAdminScoringController::class, 'updateExtraPoint'])->name('dashboard.admin.scoring.updateExtraPoint');
-            Route::delete('/extra-point/{extraPoint}', [DashboardAdminScoringController::class, 'deleteExtraPoint'])->name('dashboard.admin.scoring.deleteExtraPoint');
-        });
-
-        Route::middleware('can:view audit log')->group(function () {
-            Route::get('/audit-log', [DashboardAdminAuditLogController::class, 'index'])->name('dashboard.admin.auditLog.index');
+            Route::get('/units', [UnitController::class, 'index'])->name('units.index');
+            Route::post('/units', [UnitController::class, 'store'])->name('units.store');
+            Route::put('/units/{unit}', [UnitController::class, 'update'])->name('units.update');
+            Route::delete('/units/{unit}', [UnitController::class, 'destroy'])->name('units.destroy');
         });
     });
 
-    Route::get('{slug?}', [DashboardController::class, 'cmsPage'])->where('slug', '.*');
-});
+    // labels, see documentation/LABELS.md
+    Route::prefix('labels')->name('labels.')->group(function () {
+        Route::middleware('can:labels.print')->group(function () {
+            Route::get('/print', [PrintController::class, 'create'])->name('print');
+            Route::post('/printed', [PrintController::class, 'printed'])->name('printed');
+            Route::post('/confirm-address', [PrintController::class, 'confirmAddress'])->name('confirm-address');
+            Route::get('/images/{name}', [TemplateController::class, 'showImage'])->where('name', '[A-Za-z0-9._-]+')->name('images.show');
 
-// strichlistensystem
-Route::prefix('strichlistensystem')->middleware(ActiveModule::class.':strichlistensystem')->group(function () {
-    // images of the articles are no personal data, so they are available in the kiosk, the self service and the admin
-    Route::get('/article/{article}/image', [StrichlistensystemController::class, 'articleImage'])->name('strichlistensystem.articleImage');
+            Route::get('/reserved', [ReservedNumberController::class, 'index'])->name('reserved.index');
+            Route::post('/reserved', [ReservedNumberController::class, 'store'])->name('reserved.store');
+            Route::post('/reserved/release', [ReservedNumberController::class, 'release'])->name('reserved.release');
+            // test label sheet of the demo data (documentation/DEMO.md)
+            Route::get('/demo-sheet.pdf', [DemoSheetController::class, 'show'])->name('demo-sheet');
+        });
 
-    // pairing of a tablet with the pairing url (or qr code) of a kiosk device
-    Route::get('/kiosk/pair/{device}', [StrichlistensystemKioskController::class, 'pair'])->middleware('throttle:10,1')->name('strichlistensystem.kiosk.pair');
+        Route::middleware('can:labels.manage')->group(function () {
+            Route::get('/templates', [TemplateController::class, 'index'])->name('templates.index');
+            Route::post('/templates', [TemplateController::class, 'store'])->name('templates.store');
+            Route::get('/templates/{template}/edit', [TemplateController::class, 'edit'])->name('templates.edit');
+            Route::put('/templates/{template}', [TemplateController::class, 'update'])->name('templates.update');
+            Route::post('/templates/{template}/duplicate', [TemplateController::class, 'duplicate'])->name('templates.duplicate');
+            Route::delete('/templates/{template}', [TemplateController::class, 'destroy'])->name('templates.destroy');
+            Route::post('/images', [TemplateController::class, 'storeImage'])->name('images.store');
 
-    // kiosk for the tablets, every request must contain the cookie of a paired kiosk device
-    Route::prefix('kiosk')->middleware(StrichlistensystemKiosk::class)->group(function () {
-        Route::get('/', [StrichlistensystemKioskController::class, 'index'])->name('strichlistensystem.kiosk.index');
-        Route::post('/logout', [StrichlistensystemKioskController::class, 'logout'])->name('strichlistensystem.kiosk.logout');
-        Route::get('/user/{user}', [StrichlistensystemKioskController::class, 'show'])->name('strichlistensystem.kiosk.show');
-        Route::get('/user/{user}/avatar', [StrichlistensystemKioskController::class, 'avatar'])->name('strichlistensystem.kiosk.avatar');
-        Route::post('/user/{user}/pin', [StrichlistensystemKioskController::class, 'verifyPin'])->name('strichlistensystem.kiosk.verifyPin');
-        Route::post('/user/{user}/buy/{article}', [StrichlistensystemKioskController::class, 'buy'])->name('strichlistensystem.kiosk.buy');
-        Route::post('/user/{user}/cancel/{articleActionLog}', [StrichlistensystemKioskController::class, 'cancel'])->withTrashed()->name('strichlistensystem.kiosk.cancel');
+            Route::get('/printers', [PrinterController::class, 'index'])->name('printers.index');
+            Route::post('/printers', [PrinterController::class, 'store'])->name('printers.store');
+            Route::put('/printers/{printer}', [PrinterController::class, 'update'])->name('printers.update');
+            Route::delete('/printers/{printer}', [PrinterController::class, 'destroy'])->name('printers.destroy');
+            Route::post('/printer-models', [PrinterModelController::class, 'store'])->name('printer-models.store');
+            Route::put('/printer-models/{printerModel}', [PrinterModelController::class, 'update'])->name('printer-models.update');
+            Route::delete('/printer-models/{printerModel}', [PrinterModelController::class, 'destroy'])->name('printer-models.destroy');
+        });
     });
 
-    // self service for logged in users
-    Route::middleware(Authenticate::class)->group(function () {
-        Route::get('/', [StrichlistensystemController::class, 'index'])->name('strichlistensystem.index');
-        Route::post('/pin', [StrichlistensystemController::class, 'updatePin'])->name('strichlistensystem.updatePin');
-        Route::post('/billing-details', [StrichlistensystemController::class, 'updateBillingDetails'])->name('strichlistensystem.updateBillingDetails');
-        Route::post('/buy/{article}', [StrichlistensystemController::class, 'buy'])->name('strichlistensystem.buy');
-        Route::post('/cancel/{articleActionLog}', [StrichlistensystemController::class, 'cancel'])->withTrashed()->name('strichlistensystem.cancel');
+    Route::prefix('admin')->name('admin.')->group(function () {
+        Route::middleware('can:users.view')->group(function () {
+            Route::get('/users', [UserController::class, 'index'])->name('users.index');
+            Route::post('/users/invite', [UserController::class, 'invite'])->middleware('can:users.invite')->name('users.invite');
+            Route::delete('/invitations/{invitation}', [UserController::class, 'destroyInvitation'])->middleware('can:users.invite')->name('invitations.destroy');
+            // changing roles additionally needs roles.manage and is checked by the action (grant rule)
+            Route::put('/users/{user}', [UserController::class, 'update'])->middleware('can:users.manage')->name('users.update');
+            Route::post('/users/{user}/reset-pin', [UserController::class, 'resetPin'])->middleware('can:users.manage')->name('users.reset-pin');
+            Route::delete('/users/{user}', [UserController::class, 'destroy'])->middleware('can:users.delete')->name('users.destroy');
+        });
+
+        Route::middleware('can:roles.manage')->group(function () {
+            Route::resource('roles', RoleController::class)->except('show');
+        });
+
+        Route::middleware('can:modules.manage')->group(function () {
+            Route::get('/modules', [ModuleController::class, 'index'])->name('modules.index');
+            Route::put('/modules/{key}', [ModuleController::class, 'update'])->name('modules.update');
+        });
+
+        Route::middleware('can:settings.manage')->group(function () {
+            Route::get('/settings', [SettingsController::class, 'edit'])->name('settings.edit');
+            Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');
+            Route::post('/settings/branding', [BrandingController::class, 'update'])->name('settings.branding');
+            Route::get('/mail', [MailSettingsController::class, 'edit'])->name('mail.edit');
+            Route::put('/mail', [MailSettingsController::class, 'update'])->name('mail.update');
+            Route::post('/mail/check', [MailSettingsController::class, 'check'])->name('mail.check');
+            Route::post('/mail/test', [MailSettingsController::class, 'test'])->middleware('throttle:10,1')->name('mail.test');
+            Route::get('/mail/preview', [MailSettingsController::class, 'preview'])->name('mail.preview');
+            Route::post('/mail/retry', [MailSettingsController::class, 'retry'])->name('mail.retry');
+        });
+
+        Route::get('/audit-log', [AuditLogController::class, 'index'])->middleware('can:audit.view')->name('audit-log');
     });
 });
-
-// public routes without authentication
-Route::prefix('public')->middleware('throttle:api')->group(function () {
-    Route::middleware(ActivePublicModule::class.':randomGenerator')->group(function () {
-        Route::get('/random-generator', [DashboardAdminRandomGeneratorController::class, 'display'])->name('public.randomGenerator');
-        Route::get('/api/random-generator/state', [ApiController::class, 'randomGeneratorState'])->name('public.api.randomGeneratorState');
-    });
-
-    Route::middleware(ActivePublicModule::class.':scoreSystem')->group(function () {
-        Route::get('/score-system', [DashboardAdminScoreSystemController::class, 'display'])->name('public.scoreSystem');
-        Route::get('/api/score-system/state', [ApiController::class, 'scoreSystemState'])->name('public.api.scoreSystemState');
-    });
-
-    Route::middleware(ActivePublicModule::class.':countdown')->group(function () {
-        Route::get('/countdown', [DashboardAdminCountdownController::class, 'display'])->name('public.countdown');
-        Route::get('/api/countdown/state', [ApiController::class, 'countdownState'])->name('public.api.countdownState');
-    });
-});
-
-// api routes with authentication
-Route::prefix('api')->middleware([Authenticate::class, 'throttle:api'])->group(function () {
-    Route::middleware(IsLoggedInTutor::class)->group(function () {
-        Route::get('/events/{event}/registrations-amount', [ApiController::class, 'eventRegistrationsAmount'])->name('api.event.registrationsAmount');
-        Route::get('/events/registrations-amount', [ApiController::class, 'eventsRegistrationsAmount'])->name('api.events.registrationsAmount');
-
-        Route::get('/events/{event}/registrations', [ApiController::class, 'eventRegistrationsShow'])->name('api.event.registrations.show');
-
-        Route::get('/registrations/{registration}/toggle-is-present', [ApiController::class, 'registrationsToggleIsPresent'])->name('api.event.registrations.toggleIsPresent');
-
-        Route::middleware('can:manage events')->group(function () {
-            Route::get('/registrations/{registration}/toggle-fulfils-requirements', [ApiController::class, 'registrationsToggleFulfilsRequirements'])->name('api.event.registrations.toggleFulfilsRequirements');
-            Route::delete('/registrations/{registration}', [ApiController::class, 'registrationsDestroy'])->name('api.event.registrations.destroy');
-
-            Route::get('/events/{event}/user-amount', [ApiController::class, 'coursesUserAmountPerEvent'])->name('api.event.coursesUserAmountPerEvent');
-            Route::get('/events/{event}/statistics', [ApiController::class, 'courseStatistics'])->name('api.event.courseStatistics');
-        });
-
-        Route::middleware('can:view statistics')->group(function () {
-            Route::get('/courses/user-amount', [ApiController::class, 'coursesUserAmount'])->name('api.courses.userAmount');
-        });
-
-        Route::middleware('can:manage users')->group(function () {
-            Route::get('/users', [ApiController::class, 'users'])->name('api.users');
-            Route::get('/users/{user}/registrations', [ApiController::class, 'userRegistrations'])->name('api.user.registrations');
-            Route::post('/user/presigned-avatar-url', [ApiController::class, 'generatePresignedUrlForAvatarUpload'])->name('api.user.presignedAvatarUrl');
-        });
-    });
-
-    Route::get('/registrations/{registration}', [ApiController::class, 'registrationsShow'])->name('api.registrations.show');
-
-    Route::middleware(ActiveModule::class.':randomGenerator', 'can:manage random generator')->group(function () {
-        Route::get('/random-generator/state', [ApiController::class, 'randomGeneratorState'])->name('api.randomGeneratorState');
-    });
-
-    Route::middleware(ActiveModule::class.':scoreSystem', 'can:manage score system')->group(function () {
-        Route::get('/score-system/state', [ApiController::class, 'scoreSystemState'])->name('api.scoreSystemState');
-    });
-
-    Route::middleware(ActiveModule::class.':countdown', 'can:manage countdown')->group(function () {
-        Route::get('/countdown/state', [ApiController::class, 'countdownState'])->name('api.countdownState');
-    });
-});
-
-Route::get('{any?}', [AppController::class, 'notFound'])->where('any', '^((?!api).)*');

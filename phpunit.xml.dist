@@ -12,13 +12,19 @@
         <testsuite name="Feature">
             <directory>tests/Feature</directory>
         </testsuite>
+        <testsuite name="Modules">
+            <directory>modules/*/tests</directory>
+        </testsuite>
     </testsuites>
     <source>
         <include>
             <directory>app</directory>
+            <directory>modules</directory>
         </include>
     </source>
     <php>
+        <!-- the whole suite runs in one process; 128M (default of PHP on Windows) is not enough -->
+        <ini name="memory_limit" value="1G"/>
         <env name="APP_ENV" value="testing" force="true"/>
         <env name="APP_KEY" value="base64:dGVzdGluZy1rZXktZm9yLXBob3VuaXQtb25seS0xMjM=" force="true"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
@@ -29,12 +35,13 @@
         <env name="DB_DATABASE" value=":memory:" force="true"/>
         <env name="DB_URL" value="" force="true"/>
         <env name="MAIL_MAILER" value="array"/>
+        <!-- tests check the mail setup themselves; the block of debug mode has its own tests -->
+        <env name="MAIL_SEND_IN_DEBUG" value="true" force="true"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array" force="true"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false" force="true"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
-        <env name="TUTOR_PASSWORD" value="tutor-secret" force="true"/>
-        <env name="ADMIN_PASSWORD" value="admin-secret" force="true"/>
+        <env name="SETUP_TOKEN" value="setup-secret" force="true"/>
     </php>
 </phpunit>

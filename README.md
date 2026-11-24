@@ -1,229 +1,294 @@
-<h1 align="center">Welcome to portals 👋</h1>
-<p>
-  <a href="https://github.com/fsr5-fhaachen/portals/blob/main/LICENSE" target="_blank">
-    <img alt="License: MIT" src="https://img.shields.io/github/license/fsr5-fhaachen/portals" />
-  </a>
-  <a href="https://twitter.com/fsr5_fhaachen" target="_blank">
-    <img alt="Twitter: fsr5_fhaachen" src="https://img.shields.io/twitter/follow/fsr5_fhaachen.svg?style=social" />
-  </a>
-</p>
+# Stocks
 
-> Group allocation tool for the first week of the Department of Electrical Engineering and Information Technology at the FH Aachen - University of Applied Sciences.
+Inventar- und Verleihsoftware für Fachschaften: was besitzen wir, wo liegt es, wer hat es gerade.
 
-## main
+Stocks baut auf der Struktur von [Portals](https://github.com/fsr5-fhaachen/portals) auf: Laravel 13, PHP 8.5, Inertia 3, Vue 3 mit TypeScript, Tailwind und Octane mit Swoole.
 
-<a href="https://github.com/fsr5-fhaachen/portals/actions/workflows/ci.yml" target="_blank">
-  <img alt="CI" src="https://github.com/fsr5-fhaachen/portals/actions/workflows/ci.yml/badge.svg" />
-</a>
+> **Stand:** Phase 5 mit Review. Kern, Inventar, Etiketten, Verleih mit Verleihseite für Entleiher, Benachrichtigungen per Mail und Push sowie das Modul Kiosk sind fertig. Als Nächstes folgt Phase 6 (öffentlicher Katalog und Anfragen).
 
-## dev
+## Inhalt
 
-<a href="https://github.com/fsr5-fhaachen/portals/actions/workflows/ci.yml" target="_blank">
-  <img alt="CI dev" src="https://github.com/fsr5-fhaachen/portals/actions/workflows/ci.yml/badge.svg?branch=dev" />
-</a>
+- [Entwicklungsumgebung aufsetzen](#entwicklungsumgebung-aufsetzen)
+  - [Welcher Weg?](#welcher-weg)
+  - [Weg A: Laravel Sail (empfohlen)](#weg-a-laravel-sail-empfohlen)
+  - [Weg B: DevContainer in VS Code](#weg-b-devcontainer-in-vs-code)
+  - [Weg C: Nativ auf dem Rechner](#weg-c-nativ-auf-dem-rechner)
+- [Nach dem ersten Start](#nach-dem-ersten-start)
+- [Vor dem Commit](#vor-dem-commit)
+- [Häufige Probleme](#häufige-probleme)
+- [Dokumentation](#dokumentation)
+- [Lizenz](#lizenz)
 
-## Install
+## Entwicklungsumgebung aufsetzen
 
-Clone the repository and install the dependencies:
+### Welcher Weg?
 
-```sh
-git clone git@github.com:fsr5-fhaachen/portals.git
-cd portals
-npm install
-composer install
+|                         | A: Sail (empfohlen)       | B: DevContainer                | C: Nativ                                   |
+| ----------------------- | ------------------------- | ------------------------------ | ------------------------------------------ |
+| Was läuft wo            | alles in Docker           | alles in Docker, VS Code darin | PHP und Node auf dem Rechner               |
+| Auf dem Rechner nötig   | Docker, Git               | Docker, Git, VS Code           | PHP 8.5, Composer, Node 24, Git            |
+| Datenbank, Redis, MinIO | starten mit               | starten mit                    | selbst, oder nur diese Dienste über Docker |
+| Queue und Scheduler     | laufen mit                | laufen mit                     | von Hand starten                           |
+| Windows                 | nur über WSL2             | nur über WSL2                  | direkt                                     |
+| Gut für                 | gleiche Umgebung für alle | wer ohnehin VS Code nutzt      | schnelle Tests, IDE mit lokalem PHP        |
+
+Alle Wege enden gleich: Stocks läuft im Browser, mit Demo-Daten und den [Demo-Konten](#nach-dem-ersten-start).
+
+### Weg A: Laravel Sail (empfohlen)
+
+Sail startet Stocks mit allen Diensten in Docker: App, MariaDB 11, Redis, MinIO (S3 für Fotos), Queue und Scheduler (`docker-compose.sail.yaml`). Auf dem Rechner braucht es nur Docker und Git.
+
+**Voraussetzungen**
+
+- macOS und Linux: [Docker Desktop](https://www.docker.com/products/docker-desktop/) oder Docker Engine mit Compose.
+- Windows: Docker Desktop mit **WSL2** (`wsl --install`, dann in Docker Desktop unter Settings › Resources › WSL Integration die Distribution einschalten). Das Repository **im Linux-Dateisystem** von WSL klonen (z. B. `~/stocks`), nicht unter `C:\` oder `/mnt/c`: Dort ist Docker sehr langsam. Alle Befehle unten in der WSL-Konsole ausführen.
+
+> [!IMPORTANT]
+> Sail ist ein Bash-Skript und läuft **nicht in PowerShell oder cmd**, auch `alias sail=…` gibt es dort nicht. Wer unter Windows ohne WSL arbeiten will, nimmt [Weg C](#weg-c-nativ-auf-dem-rechner); Datenbank, Redis und MinIO lassen sich dabei trotzdem über Docker starten (Variante C1, geht auch aus PowerShell).
+
+**1. Klonen**
+
+```bash
+git clone https://github.com/fsr5-fhaachen/stocks.git
+cd stocks
 ```
 
-Copy `.env.example` to `.env` and fill in the database credentials.
+**2. `.env` anlegen und auf die Dienste von Sail zeigen lassen**
 
-```sh
+```bash
 cp .env.example .env
 ```
 
-For a quick setup: Change the Database connection details in the .env to only the following. Create the file `database.sqlite` in the `database` folder.
+In der `.env` diese Zeilen ändern (die Dienste heißen im Docker-Netz `mariadb` und `redis`, MinIO steht schon richtig):
 
 ```env
-DB_CONNECTION=sqlite
+DB_HOST=mariadb
+REDIS_HOST=redis
 ```
 
-Generate the application key:
+Läuft auf dem Rechner schon etwas auf Port 80, 3306, 6379, 9000 oder 5173, hier ausweichen: `APP_PORT=8080` (dann auch `APP_URL=http://localhost:8080`), `FORWARD_DB_PORT=3307` usw.
 
-```sh
+**3. PHP-Pakete installieren, ohne PHP auf dem Rechner**
+
+Sail selbst kommt erst mit `composer install`. Deshalb einmal über einen Composer-Container:
+
+```bash
+docker run --rm -u "$(id -u):$(id -g)" -v "$(pwd):/app" -w /app composer:2 install --ignore-platform-reqs
+```
+
+**4. Starten**
+
+```bash
+./vendor/bin/sail up -d
+```
+
+Der erste Start baut das Image und dauert einige Minuten. Tipp: `alias sail='./vendor/bin/sail'` in die `~/.bashrc` bzw. `~/.zshrc` (nicht PowerShell), dann reicht `sail …`.
+
+**5. Schlüssel, Datenbank und Demo-Daten**
+
+```bash
+sail artisan key:generate
+sail artisan migrate:fresh --seed
+```
+
+**6. Oberfläche**
+
+```bash
+sail npm install
+sail npm run dev
+```
+
+`npm run dev` läuft im Vordergrund und baut die Oberfläche bei jeder Änderung neu; das Terminal offen lassen.
+
+**7. Formatier-Hook**
+
+`npm install` hat den Hook schon eingeschaltet (`core.hooksPath` zeigt auf `.githooks`). Er formatiert vor jedem Commit (siehe [Vor dem Commit](#vor-dem-commit)), läuft aber auf dem Rechner, nicht im Container: Dort braucht er Node (und für Pint PHP). Ohne Node bricht er bei JS- und Vue-Dateien mit einem Hinweis ab.
+
+**Fertig:** <http://localhost> öffnen (bzw. den Port aus `APP_PORT`).
+
+**Im Alltag**
+
+| Aufgabe                   | Befehl                                            |
+| ------------------------- | ------------------------------------------------- |
+| Starten / Stoppen         | `sail up -d` / `sail stop`                        |
+| Oberfläche im Dev-Modus   | `sail npm run dev`                                |
+| Artisan, Composer, npm    | `sail artisan …`, `sail composer …`, `sail npm …` |
+| Tests                     | `sail artisan test --compact`                     |
+| Logs                      | `sail logs -f laravel.test queue scheduler`       |
+| Shell im Container        | `sail shell`                                      |
+| Alles inkl. Daten löschen | `sail down -v`                                    |
+
+### Weg B: DevContainer in VS Code
+
+Der DevContainer (`.devcontainer/devcontainer.json`) nutzt dieselbe `docker-compose.sail.yaml`. VS Code läuft dann im Container, mit allen Erweiterungen des Projekts (Intelephense, Volar, Tailwind, Prettier, Xdebug …); PHP, Composer und Node gibt es nur dort.
+
+**Voraussetzungen:** Docker (unter Windows mit WSL2, Repository wie bei Weg A im WSL-Dateisystem), [VS Code](https://code.visualstudio.com/) mit der Erweiterung [Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers).
+
+1. Klonen und `.env` anlegen wie bei [Weg A, Schritt 1 und 2](#weg-a-laravel-sail-empfohlen).
+2. PHP-Pakete einmal installieren wie bei [Weg A, Schritt 3](#weg-a-laravel-sail-empfohlen): Die Compose-Datei baut das Image aus `vendor/laravel/sail`.
+3. Ordner in VS Code öffnen, unten links auf `><` klicken und **„Reopen in Container“** wählen. Der erste Start dauert einige Minuten.
+4. Im Terminal von VS Code (läuft schon im Container):
+
+   ```bash
+   php artisan key:generate
+   php artisan migrate:fresh --seed
+   npm install
+   npm run dev
+   ```
+
+5. <http://localhost> öffnen.
+
+Im DevContainer laufen Befehle ohne `sail`-Präfix, auch `git commit`.
+
+### Weg C: Nativ auf dem Rechner
+
+PHP und Node laufen direkt auf dem Rechner. Datenbank, Redis und MinIO kann man trotzdem bequem über Docker starten (C1) oder ganz ohne Docker arbeiten (C2).
+
+**Voraussetzungen**
+
+- **PHP 8.5** mit den Erweiterungen `bcmath`, `gd`, `mbstring`, `pdo_mysql` (oder `pdo_sqlite`), `zip`, optional `redis` und `gmp` (schnellerer Web-Push).
+  - Windows: [windows.php.net](https://windows.php.net/download/) oder [Laravel Herd](https://herd.laravel.com/); die Erweiterungen in der `php.ini` einschalten.
+  - macOS: `brew install php` oder Laravel Herd.
+  - Linux: Pakete der Distribution, z. B. `ppa:ondrej/php` unter Ubuntu.
+- [Composer 2](https://getcomposer.org/download/) und **Node 24** (z. B. über [nvm](https://github.com/nvm-sh/nvm) bzw. [nvm-windows](https://github.com/coreybutler/nvm-windows)).
+- Git. **Unter Windows** checkt Git dank `.gitattributes` alle Dateien mit LF aus; bei einem älteren Klon einmal neu auschecken, siehe [Häufige Probleme](#häufige-probleme).
+
+**1. Klonen, `.env`, Pakete**
+
+```bash
+git clone https://github.com/fsr5-fhaachen/stocks.git
+cd stocks
+cp .env.example .env
+composer install
+npm install
 php artisan key:generate
 ```
 
-Run the migrations:
+`npm install` schaltet auch den Formatier-Hook ein.
 
-```sh
-php artisan migrate
+**2a. Variante C1: Datenbank, Redis und MinIO über Docker**
+
+Nur die Dienste aus der Sail-Datei starten, die App selbst läuft nativ:
+
+```bash
+docker compose -f docker-compose.sail.yaml up -d mariadb redis minio minio-setup
 ```
 
-Run the seeders:
+In der `.env` die Dienste über `127.0.0.1` ansprechen:
 
-```sh
-php artisan db:seed
+```env
+DB_HOST=127.0.0.1
+REDIS_HOST=127.0.0.1
+AWS_ENDPOINT=http://127.0.0.1:9000
 ```
 
-If you need to reset the databse:
+**2b. Variante C2: ganz ohne Docker**
 
-```sh
+```env
+DB_CONNECTION=sqlite
+# DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME, DB_PASSWORD auskommentieren
+QUEUE_CONNECTION=database
+```
+
+```bash
+# Windows (PowerShell): New-Item database/database.sqlite
+touch database/database.sqlite
+```
+
+SQLite und die Queue in der Datenbank reichen für die Entwicklung. Ohne MinIO fehlen nur die Fotos (Hochladen schlägt fehl, die Demo-Daten lassen sie weg); wer Fotos braucht, nimmt C1 oder einen eigenen MinIO. Statt SQLite geht auch eine lokale MariaDB oder MySQL mit den Werten aus `.env.example`.
+
+**3. Datenbank und Demo-Daten**
+
+```bash
 php artisan migrate:fresh --seed
 ```
 
-## Usage
+**4. Starten**, jeweils in einem eigenen Terminal:
 
-### development
-
-For development, you can use the built-in PHP server:
-
-```sh
-php artisan serve
+```bash
+php artisan serve          # http://127.0.0.1:8000
+npm run dev                # Oberfläche mit Neuladen bei Änderungen
+php artisan queue:listen   # verschickt Mails und Push (sonst bleiben sie in der Queue)
+php artisan schedule:work  # Erinnerungen, Mailserver-Prüfung, Update-Prüfung (optional)
 ```
 
-and the vite dev server:
+**Fertig:** <http://127.0.0.1:8000> öffnen.
 
-```sh
-npm run dev
+## Nach dem ersten Start
+
+**Anmelden** mit einem der Demo-Konten, alle mit Passwort `correct horse battery` und Kiosk-PIN `482915`:
+
+| Konto               | Rolle           |
+| ------------------- | --------------- |
+| `admin@example.com` | Admin           |
+| `demo1@example.com` | Vorstand        |
+| `demo2@example.com` | FSR-Mitglied    |
+| `demo3@example.com` | Freies Mitglied |
+
+**Demo-Daten** kommen aus einem Generator mit festem Startwert, nicht aus Einträgen von Hand ([DEMO.md](documentation/DEMO.md)):
+
+```bash
+php artisan stocks:demo         # Datenbank leeren und neu erzeugen (= migrate:fresh --seed)
+php artisan stocks:demo-sheet   # A4-Blatt mit Testetiketten: documentation/demo/testetiketten.pdf
 ```
 
-Login to the demo system with the email adress `superadmin@example.com`
+Das Blatt mit Testetiketten lässt sich auch in der App herunterladen; damit kann man Scannen, Ausgabe und Rückgabe ohne Etikettendrucker durchspielen.
 
-### devcontainer
+**Gut zu wissen**
 
-If you want to use the provided devcontainer via laravel sail you need vscode and the devcontainer extension.
+- **Mails** gehen mit `APP_DEBUG=true` nie raus, sondern landen in `storage/logs/laravel.log`, auch mit eingetragenem Mailserver. Zum Prüfen des Mail-Designs `MAIL_SEND_IN_DEBUG=true` setzen oder die Vorschau unter Verwaltung › Einstellungen › Benachrichtigungen nutzen ([NOTIFICATIONS.md](documentation/NOTIFICATIONS.md)).
+- **MinIO-Konsole** (Sail und C1): <http://localhost:9001>, Zugang `minioadmin` / `minioadmin123`.
+- **Handy im WLAN testen** (Kamera, Direktdruck brauchen HTTPS): HTTPS-Modus von Vite, siehe [SETUP.md](documentation/SETUP.md#https-im-entwicklungsbetrieb-handy-im-wlan).
+- **Version im Menü** zeigt lokal `dev`; die echte Version kommt erst beim Bauen des Images ([DEPLOY.md](documentation/DEPLOY.md)).
+- **Telescope** (Anfragen, Queries, Jobs ansehen) unter `/telescope`, nur lokal.
 
-#### intial devcontainer setup
+## Vor dem Commit
 
-if you want to setup the devcontainer without installing tools to your host system, you can use the following steps:
+Der Hook in `.githooks/pre-commit` formatiert die gestagten Dateien automatisch mit Prettier und Pint. Eingeschaltet wird er mit `npm install` bzw. `npm run prepare`, auch über `sail npm install`. Details in [CONTRIBUTING.md](CONTRIBUTING.md), dort stehen auch Branches und das Format der Commit-Nachrichten (Conventional Commits).
 
-1. Install sail with `docker run --rm -it -v $PWD:/app bitnami/laravel -- composer install`
-2. Start the devcontainer, if you get the error message `groupadd: invalid group ID 'sail'`, add `WWWGROUP=1000` and `WWWUSER=1000` to your `.env` file and restart the devcontainer
-3. Start the devcontainer, delete the `/vendor` folder (because the step before downloaded the dependencies with the root user. this can cause permission errors later) and rerun `composer install` with the "sail" user in the devcontainer
-4. Run the mandatory setup (set app key (see [install](#install)), add db host to `.env` (in this case use `DB_CONNECTION=pgsql, DB_HOST=pgsql, DB_PORT=5432` and insert your `DB_USERNAME` and `DB_PASSWORD`) and run `npm install`, `php artisan migrate:fresh --seed` and `npm run dev`).
+Dieselben Prüfungen wie in der CI (bei Sail jeweils mit `sail` davor):
 
-### type generation
-
-To generate the typescript types for the frontend, run:
-
-> [!WARNING]
-> The command output changed with update to Laravel 11.x.
-> Please verify the output before using.
-
-```sh
-php artisan types:generate --namespace="App.Models" --outputDir="./resources/js/types/"
-```
-
-### linting
-
-You can lint the code with the following commands:
-
-```sh
+```bash
+php vendor/bin/phpunit      # oder: php artisan test --compact
+vendor/bin/pint --test
 npm run lint
-./vendor/bin/pint
-```
-
-and try to fix the errors with:
-
-```sh
-npm run lint:fix
-./vendor/bin/pint
-```
-
-### testing
-
-You can run the tests with:
-
-```sh
-vendor/bin/phpunit
-```
-
-### build
-
-You can build the application with:
-
-```sh
 npm run build
 ```
 
-### production
+## Häufige Probleme
 
-This project uses laravel octane with frankenphp (roadrunner in earlier releases) as production server. You can install the server with:
+| Problem                                                                                 | Lösung                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pint meldet unter Windows fast jede Datei mit `line_ending`                             | Der Klon hat noch CRLF. Einmal alles committen, dann `git rm --cached -r -q .` und `git reset --hard`: Git checkt danach alles mit LF aus (`.gitattributes`).                           |
+| PHPUnit bricht mit „Premature end of PHP process“ ab                                    | Zu wenig Speicher; `phpunit.xml.dist` setzt 1 GB. Mit einer älteren Kopie: `php -d memory_limit=1G vendor/bin/phpunit`.                                                                 |
+| `stocks:demo` bricht mit „Allowed memory size … exhausted“ ab (Telescope im Stacktrace) | Telescope zeichnete jede Abfrage des Generators auf; `config/telescope.php` schließt die Demo-Befehle jetzt aus. Mit einer älteren Kopie: `php -d memory_limit=1G artisan stocks:demo`. |
+| „Unable to locate file in Vite manifest“                                                | `npm run dev` läuft nicht. Starten oder einmal `npm run build`.                                                                                                                         |
+| Seite lädt ohne Styles, Konsole zeigt Fehler zu Port 5173                               | `APP_URL` passt nicht zur Adresse im Browser; Vite nimmt den Host aus `APP_URL`. Danach `npm run dev` neu starten.                                                                      |
+| Sail: „port is already allocated“                                                       | Anderen Port in der `.env` setzen (`APP_PORT`, `FORWARD_DB_PORT`, `FORWARD_REDIS_PORT`, `FORWARD_MINIO_PORT`, `VITE_PORT`).                                                             |
+| Sail: Verbindung zur Datenbank schlägt fehl                                             | `DB_HOST=mariadb` und `REDIS_HOST=redis` in der `.env`, dann `sail artisan config:clear`.                                                                                               |
+| Mails oder Push kommen nicht an                                                         | Läuft die Queue (`queue:listen` bzw. Dienst `queue`)? Steht `APP_DEBUG=true`, gehen Mails nur ins Log.                                                                                  |
+| Fotos fehlen                                                                            | MinIO läuft nicht oder `AWS_ENDPOINT` stimmt nicht (Sail: `http://minio:9000`, nativ: `http://127.0.0.1:9000`).                                                                         |
+| Commit bricht mit „node/npx not found“ ab                                               | Der Hook findet Node nicht (oft in GUI-Clients). Node installieren bzw. nvm einrichten; einmalig überspringen mit `git commit --no-verify`.                                             |
 
-This step will also ask you to download the frankenphp (roadrunner in earlier releases) binary.
+## Dokumentation
 
-```sh
-php artisan octane:install
-```
+| Datei                                                            | Inhalt                                                           |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------- |
+| [documentation/CORE.md](documentation/CORE.md)                   | Aufbau, Anmeldung, Rollen und Rechte, Oberflächen, Datenbank     |
+| [documentation/INVENTORY.md](documentation/INVENTORY.md)         | Standorte, Gegenstände, Boxen, Nummern, Umlagern, Fotos          |
+| [documentation/LABELS.md](documentation/LABELS.md)               | Etiketten, Vorlagen, Drucker, Kurzlinks, Scannen, Web-App        |
+| [documentation/LOANS.md](documentation/LOANS.md)                 | Verleih: Buchungen, Ausgabe, Rückgabe, Verleihseite              |
+| [documentation/NOTIFICATIONS.md](documentation/NOTIFICATIONS.md) | Mails, Push, Warteschlange und Zeitplan                          |
+| [documentation/KIOSK.md](documentation/KIOSK.md)                 | Modul Kiosk: Tablets koppeln, Sitzung, Vorgänge am Tablet        |
+| [documentation/INTERFACES.md](documentation/INTERFACES.md)       | Welche Vorgänge auf welcher Oberfläche (PC, Handy, Kiosk) fehlen |
+| [documentation/MODULES.md](documentation/MODULES.md)             | Module bauen, Erweiterungspunkte                                 |
+| [documentation/DEMO.md](documentation/DEMO.md)                   | Demo-Daten und Testetiketten                                     |
+| [documentation/TABLE_POLLING.md](documentation/TABLE_POLLING.md) | Tabellen mit seitenweisem Laden und Live-Update                  |
+| [documentation/SETUP.md](documentation/SETUP.md)                 | Instanz aufsetzen und aktualisieren, Umgebungsvariablen          |
+| [documentation/DEPLOY.md](documentation/DEPLOY.md)               | Dev-Instanz über GitHub Actions                                  |
+| [documentation/DECISIONS.md](documentation/DECISIONS.md)         | Entscheidungsprotokoll                                           |
+| [CONTRIBUTING.md](CONTRIBUTING.md)                               | Branches, Commits, Werkzeuge, Formatier-Hook                     |
 
-You can run the production server with:
-_Define the worker-count and max-requests to fit your needs._
+## Lizenz
 
-```sh
-php artisan octane:start --max-requests=512 --workers=4
-```
-
-### docker
-
-If you want to use docker, use the following commands:
-
-```sh
-docker build -t ghcr.io/fsr5-fhaachen/portals:latest .
-docker-compose up -d
-docker exec -it portals-web touch database/seeders/tutors.csv
-docker exec -it portals-web php artisan migrate:fresh --seed
-```
-
-### Kubernetes (Helm)
-
-You can deploy the application to kubernetes using the helm chart.
-
-See [fsr5-fhaachen/charts/portals](https://github.com/fsr5-fhaachen/charts/tree/main/charts/portals) for more information.
-
-If you want information about creating the kubernetes cluster, see [deploy information](./deploy).
-
-## Authors
-
-👤 **Titus Kirch (main author)**
-
-- Website: https://kirch.dev/
-- LinkedIn: [Titus Kirch](https://www.linkedin.com/in/tituskirch/)
-- Twitter: [@TitusKirch](https://twitter.com/TitusKirch)
-- GitHub: [@TitusKirch](https://github.com/TitusKirch)
-
-👤 **Benedikt Haas (main author)**
-
-- LinkedIn: [Benedikt Haas](https://www.linkedin.com/in/benedikt-haas-ab698924a/)
-- GitHub: [@BenediktHaas96](https://github.com/BenediktHaas96)
-
-👤 **Simon Ostendorf (main author)**
-
-- Website: https://simon-ostendorf.de/
-- LinkedIn: [Simon Ostendorf](https://www.linkedin.com/in/simonostendorf/)
-- GitHub: [@simonostendorf](https://github.com/simonostendorf)
-
-👤 **Martin Philemon Pinsdorf**
-
-- GitHub: [@PhilPinsdorf](https://github.com/PhilPinsdorf)
-
-👤 **Vitor Macedo**
-
-- GitHub: [@DontEdit](https://github.com/DontEdit)
-
-👤 **Patrik Schmolke**
-
-- LinkedIn: [Patrik Schmolke](https://www.linkedin.com/in/patrik-schmolke-612962175/)
-- GitHub: [@Rec0gnice](https://github.com/Rec0gnice)
-
-Show here to see the full list of [contributors](https://github.com/fsr5-fhaachen/portals/graphs/contributors) who participated in this project.
-
-## 🤝 Contributing
-
-Contributions, issues and feature requests are welcome!<br />Feel free to check [issues page](https://github.com/fsr5-fhaachen/portals/issues).
-
-## Show your support
-
-Give a ⭐️ if this project helped you!
-
-## 📝 License
-
-Copyright © 2022 [fsr5-fhaachen](https://github.com/fsr5-fhaachen).<br />
-This project is [MIT](https://github.com/fsr5-fhaachen/portals/blob/main/LICENSE) licensed.
+MIT, siehe [LICENSE](LICENSE). Portals © FH-Aachen FSR5.

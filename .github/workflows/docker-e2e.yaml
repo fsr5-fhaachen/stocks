@@ -3,9 +3,15 @@ name: Docker e2e Test
 on:
   pull_request: {}
 
+# a newer push to the same pull request replaces the running test; nothing retries
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   IMAGE_REGISTRY: ghcr.io
-  IMAGE_PATH: ${{ github.repository }}
+  # lower case, docker does not accept the upper case letters of the repository owner
+  IMAGE_PATH: fsr5-fhaachen/stocks
   IMAGE_TAG: ${{ github.ref_name }}
 
 jobs:
@@ -23,44 +29,33 @@ jobs:
       - name: Create Environment
         run: |
           cat > .env << EOF
-          APP_NAME="Erstiwoche FB5"
           APP_ENV=local
-          APP_KEY=1234567890ABCDEFGHIJ1234567890AB
+          # exactly 32 bytes (aes-256-cbc): "e2e-only-key-not-secret-32bytes!"
+          APP_KEY=base64:ZTJlLW9ubHkta2V5LW5vdC1zZWNyZXQtMzJieXRlcyE=
           APP_DEBUG=true
-          APP_URL=http://localhost
+          APP_URL=http://localhost:8000
           APP_FORCE_HTTPS=false
-          APP_EVENT_TYPE=demo
-          TUTOR_PASSWORD=password
-          ADMIN_PASSWORD=admin
-          LOG_CHANNEL=stack
-          LOG_LEVEL=debug
-          BROADCAST_CONNECTION=log
-          CACHE_STORE=file # TODO
-          FILESYSTEM_DRIVER=local
-          QUEUE_CONNECTION=sync
-          SESSION_DRIVER=file # TODO
-          SESSION_LIFETIME=120
-          MEMCACHED_HOST=127.0.0.1
           OCTANE_HTTPS=false
           OCTANE_WORKERS=1
-          OCTANE_MAX_REQUESTS=512
-          WWWGROUP=1000
-          WWWUSER=1000
-          OCTANE_SERVER=roadrunner
+          SETUP_TOKEN=e2e-setup
+          DB_PASSWORD=e2e-password
+          REDIS_PASSWORD=e2e-password
+          MAIL_MAILER=log
           EOF
       - name: Run Image
         uses: isbang/compose-action@v2.0.1
         with:
           compose-file: "docker-compose.yaml"
           down-flags: "--volumes"
-      - name: Wait
+      - name: Wait for the web server
         run: |
-          # wait 10 seconds for the docker container to start
-          sleep 10
-      - name: Run DB Seed
+          # Octane starts only after the migrations (see CMD in the Dockerfile), so any HTTP answer
+          # means the database is migrated. Timeout after 3 minutes
+          timeout 180 bash -c 'until [ "$(curl --silent --output /dev/null --write-out "%{http_code}" http://localhost:8000)" != "000" ]; do printf "."; sleep 5; done'
+      - name: Set up the instance
         run: |
-          # run "php artisan migrate:fresh --seed" inside docker container
-          docker exec portals-web php artisan migrate:fresh --seed
+          # the image migrates on start; set up the instance without the wizard
+          docker compose exec -T web php artisan stocks:install --name=E2E --admin-email=e2e@example.com --admin-password=e2e-long-password
       - name: Debug
         run: |
           curl http://localhost:8000
@@ -68,3 +63,7 @@ jobs:
         run: |
           # test every 10 seconds if http://localhost:8000 is reachable and has a OK status code. Timeout after 2 minutes
           timeout 120 bash -c 'until curl --output /dev/null --silent --head --fail http://localhost:8000; do printf "."; sleep 10; done'
+      - name: Logs on failure
+        if: failure()
+        run: |
+          docker compose logs --tail=200 web mariadb

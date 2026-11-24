@@ -1,4 +1,5 @@
-* text=auto
+# LF everywhere, also on Windows: pint and prettier expect LF
+* text=auto eol=lf
 *.css linguist-vendored
 *.scss linguist-vendored
 *.js linguist-vendored

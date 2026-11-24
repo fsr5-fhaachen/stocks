@@ -1,25 +1,23 @@
 {
-  "name": "fsr5-fhaachen/portals",
+  "name": "momithso/stocks",
   "type": "project",
-  "description": "Group allocation tool for the first week of the Department of Electrical Engineering and Information Technology at the FH Aachen - University of Applied Sciences.",
+  "description": "Inventory and lending software for student councils, based on the structure of Portals.",
   "keywords": [],
   "license": "MIT",
   "require": {
-    "php": "^8.4",
+    "php": "^8.5",
     "aws/aws-sdk-php": "^3.283",
     "bacon/bacon-qr-code": "^3.1",
     "barryvdh/laravel-dompdf": "^3.1",
     "inertiajs/inertia-laravel": "^3.3",
+    "laravel-notification-channels/webpush": "^13.0",
     "laravel/framework": "^13.0",
     "laravel/octane": "^2.3",
     "laravel/tinker": "^3.0",
     "league/flysystem-aws-s3-v3": "^3.16",
     "namoshek/laravel-redis-sentinel": "^1.1",
     "owen-it/laravel-auditing": "^14.0",
-    "spatie/laravel-permission": "^8.0",
-    "spiral/roadrunner": "^2025.1",
-    "spiral/roadrunner-cli": "^2.5.0",
-    "spiral/roadrunner-http": "^3.0.1"
+    "spatie/laravel-permission": "^8.0"
   },
   "require-dev": {
     "fakerphp/faker": "^1.23",
@@ -35,12 +33,15 @@
   "autoload": {
     "psr-4": {
       "App\\": "app/",
+      "Modules\\": "modules/",
       "Database\\Factories\\": "database/factories/",
       "Database\\Seeders\\": "database/seeders/"
     }
   },
   "autoload-dev": {
     "psr-4": {
+      "Modules\\Kiosk\\Tests\\": "modules/Kiosk/tests/",
+      "Modules\\Loans\\Tests\\": "modules/Loans/tests/",
       "Tests\\": "tests/"
     }
   },
@@ -69,7 +70,10 @@
   "config": {
     "optimize-autoloader": true,
     "preferred-install": "dist",
-    "sort-packages": true
+    "sort-packages": true,
+    "allow-plugins": {
+      "php-http/discovery": false
+    }
   },
   "minimum-stability": "stable",
   "prefer-stable": true

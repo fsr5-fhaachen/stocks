@@ -6,17 +6,15 @@ FROM node:24-alpine AS node
 WORKDIR /app
 
 # install dependencies (only copy package lock here to use docker caching)
-COPY ["package.json", "package-lock.json", "./"] 
-RUN npm install
+COPY ["package.json", "package-lock.json", "./"]
+RUN npm ci
 
 # copy project data
-COPY ["vite.config.js", "./"]
+COPY ["vite.config.js", "postcss.config.cjs", "tailwind.config.cjs", "./"]
 COPY ["./resources/js/", "./resources/js/"]
 COPY ["./resources/css/", "./resources/css/"]
-COPY ["./resources/views/", "./resources/view/"]
-COPY ["postcss.config.cjs", "./"]
-COPY ["tailwind.config.cjs", "./"]
-COPY ["./database", "./database"]
+COPY ["./resources/views/", "./resources/views/"]
+COPY ["./modules", "./modules"]
 
 # build project
 RUN npm run build
@@ -25,17 +23,37 @@ RUN npm run build
 #    STAGE 1.2: Setup PHP and Dependencies
 # --------------------------------------------
 
-FROM phpswoole/swoole:php8.4-alpine AS swoole
-LABEL maintainer="FSR5 FH-Aachen"
+FROM phpswoole/swoole:6.2-php8.5-alpine AS swoole
+LABEL maintainer="Stocks"
 
 # use workdir from swoole container
 WORKDIR /app
 
-# install php extensions
-RUN apk add libpq-dev linux-headers
-RUN docker-php-ext-configure pgsql -with-pgsql=/usr/local/pgsql
-RUN docker-php-ext-install bcmath pdo_mysql pdo pdo_pgsql pgsql pcntl sockets
-# RUN apk add --no-cache pcre-dev $PHPIZE_DEPS && pecl install redis && docker-php-ext-enable redis.so
+# install php extensions: MariaDB, Redis (cache, sessions, queue), signals and sockets for Octane,
+# gmp for the encryption of web push (works without, but slower);
+# newer swoole images already ship redis, then pecl would fail
+RUN apk add --no-cache \
+        gmp \
+        libpng \
+        libjpeg-turbo \
+        freetype \
+    && apk add --no-cache --virtual .build-deps \
+        $PHPIZE_DEPS \
+        linux-headers \
+        gmp-dev \
+        libpng-dev \
+        libjpeg-turbo-dev \
+        freetype-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install \
+        bcmath \
+        pdo_mysql \
+        pcntl \
+        sockets \
+        gmp \
+        gd \
+    && (php -m | grep -qi '^redis$' || (pecl install redis && docker-php-ext-enable redis)) \
+    && apk del .build-deps
 
 # install composer
 COPY --from=composer:latest /usr/bin/composer /usr/local/bin/composer
@@ -47,29 +65,39 @@ COPY ["./bootstrap", "./bootstrap"]
 COPY ["./config", "./config"]
 COPY ["./database", "./database"]
 COPY ["./lang", "./lang"]
+COPY ["./modules", "./modules"]
 COPY ["./public", "./public"]
 COPY ["./resources/css", "./resources/css"]
 COPY ["./resources/views", "./resources/views"]
 COPY ["./routes", "./routes"]
 COPY ["./storage", "./storage"]
 
-# install dependencies
-RUN composer install
+# install dependencies (without development packages like faker and telescope)
+RUN composer install --no-dev --optimize-autoloader --no-interaction
 
 # get data from previous build
 COPY --from=node ["/app/public/build/", "./public/build/"]
-COPY --from=node ["/app/public/css/", "./public/css/"]
 
 # fix storage folder
-RUN mkdir -p /app/storage/logs
+RUN mkdir -p /app/storage/logs /app/storage/fonts
 RUN chmod -R 777 ./storage
 
-# both are the default values
+# dompdf decodes photos with GD at full size, 128M (php default) is not enough for pdfs with photos
+RUN echo "memory_limit=512M" > /usr/local/etc/php/conf.d/zz-stocks.ini
+
+# defaults, overwritten by the environment of docker-compose.yaml
 ENV OCTANE_MAX_REQUESTS=500
 ENV OCTANE_WORKERS="auto"
 
 EXPOSE 8000
 
-CMD php artisan octane:start --server=swoole --host="0.0.0.0" --workers=${OCTANE_WORKERS} --max-requests=${OCTANE_MAX_REQUESTS}
+# version shown below the menu: tag of the release or "dev-<commit>", set by the workflows
+# (docker-release.yml, deploy-dev.yml); this late, so a new version does not rebuild earlier layers
+ARG STOCKS_VERSION=dev
+ENV STOCKS_VERSION=${STOCKS_VERSION}
+
+# migrations and the module sync run on every start, so an update only needs a new image
+# exec: Octane itself gets the stop signal and shuts down cleanly (needed for deploys)
+CMD ["sh", "-c", "php artisan migrate --force && php artisan stocks:sync && exec php artisan octane:start --server=swoole --host=0.0.0.0 --workers=${OCTANE_WORKERS} --max-requests=${OCTANE_MAX_REQUESTS}"]
 
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 CMD php artisan octane:status

@@ -1,13 +1,15 @@
 <?php
 
+use App\Http\Middleware\ApplyMailSettings;
+use App\Http\Middleware\EnsureModuleActive;
+use App\Http\Middleware\EnsureSetupCompleted;
+use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\HandleInertiaRequests;
-use App\Http\Middleware\IsAdmin;
-use App\Http\Middleware\IsStudent;
-use App\Http\Middleware\IsTutor;
-use App\Providers\AppServiceProvider;
+use App\Http\Middleware\KeepPreviousPage;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
 use OwenIt\Auditing\AuditingServiceProvider;
 use Spatie\Permission\PermissionServiceProvider;
 
@@ -18,23 +20,37 @@ return Application::configure(basePath: dirname(__DIR__))
     ])
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
-        api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
-        // channels: __DIR__.'/../routes/channels.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->redirectGuestsTo(fn () => route('app.login'));
-        $middleware->redirectUsersTo(AppServiceProvider::HOME);
+        // TRUSTED_PROXIES: addresses of the reverse proxy, comma separated (documentation/DEPLOY.md);
+        // with * anyone who reaches the port directly could fake X-Forwarded-For
+        $trustedProxies = env('TRUSTED_PROXIES', '*');
+        $middleware->trustProxies(
+            at: $trustedProxies === '*' ? '*' : array_map('trim', explode(',', $trustedProxies)),
+            headers: Request::HEADER_X_FORWARDED_FOR |
+            Request::HEADER_X_FORWARDED_HOST |
+            Request::HEADER_X_FORWARDED_PORT |
+            Request::HEADER_X_FORWARDED_PROTO
+        );
 
-        $middleware->throttleApi();
+        $middleware->redirectGuestsTo(fn () => route('login'));
+        $middleware->redirectUsersTo(fn () => route('dashboard'));
 
-        $middleware->web(HandleInertiaRequests::class);
+        // before the session starts: json requests do not become the previous page
+        $middleware->web(prepend: [
+            KeepPreviousPage::class,
+        ]);
+        $middleware->web(append: [
+            EnsureSetupCompleted::class,
+            EnsureUserIsActive::class,
+            ApplyMailSettings::class,
+            HandleInertiaRequests::class,
+        ]);
 
         $middleware->alias([
-            'isAdmin' => IsAdmin::class,
-            'isStudent' => IsStudent::class,
-            'isTutor' => IsTutor::class,
+            'module' => EnsureModuleActive::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

@@ -11,7 +11,7 @@ These are only recommendations and not mandatory.
 - [Visual Studio Code](https://code.visualstudio.com/) (for configuration see [`settings.json`](./.vscode/settings.json) and [`extensions.json`](./.vscode/extensions.json))
 - PostgreSQL, MariaDB or other DB that works with Laravel
 - PHP
-- Webserver (Apache, Nginx, Roadrunner, ...)
+- Webserver (Apache, Nginx, Swoole über Octane, ...)
 - Composer
 - Node.js
 - TypeScript
@@ -62,6 +62,14 @@ The resulting commit message should look like this:
 
 - `feat(devcontainer): add documentation`
 - `fix: remove typo`
+
+### Formatting hook
+
+`npm install` turns on the hook in [`.githooks/pre-commit`](./.githooks/pre-commit) (script `prepare` sets `core.hooksPath`).
+Before every commit it formats the staged files with Prettier (same files as `npm run lint`) and PHP files with Pint, and stages them again, so the lint steps of the CI pass.
+A file that also has unstaged changes is only checked; if it is not formatted, the commit stops with a hint.
+It also works in GUI clients like GitKraken (it loads Node from nvm or Homebrew itself). Pint needs a local `php`; with Sail only, the CI checks PHP.
+Skip it once with `git commit --no-verify` or "Commit and skip hooks" in GitKraken.
 
 ## Pull Requests
 
