@@ -47,6 +47,8 @@ jobs:
           push: true
           # one image per commit; re-running an old deploy brings back exactly that version
           tags: ${{ env.IMAGE }}:${{ github.sha }}, ${{ env.IMAGE }}:dev
+          # version below the menu: "dev-<commit>" (App\Support\AppVersion)
+          build-args: STOCKS_VERSION=dev-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

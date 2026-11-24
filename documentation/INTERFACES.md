@@ -25,6 +25,7 @@ Stocks hat mehrere Oberflächen für dieselben Vorgänge. Wenn ein Vorgang neu d
 | Favicon aus den Einstellungen | ✓ | ✓ | ✓ | ✓ |
 | Icon auf dem Home-Bildschirm: helles Logo auf Weiß, sonst weißes „S“ auf der Akzentfarbe | ✓ | ✓ | ✓ (eigenes Manifest) | n. v. |
 | Akzentfarbe aus den Einstellungen wirkt überall (Review Phase 5: vorher von `app.css` überschrieben) | ✓ | ✓ | ✓ | ✓ (auch Verleihseite) |
+| Version und „Update verfügbar“ (24.11.2026, `LayoutAppVersion`) | ✓ Seitenleiste zwischen Abmelden und Impressum/Datenschutz; eingeklappt nur Symbol mit Tooltip | ✓ Menü „Mehr“ unter Abmelden | n. v. | n. v. |
 
 ## Vorgänge des Inventars
 

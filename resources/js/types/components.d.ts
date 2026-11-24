@@ -23,6 +23,7 @@ declare module 'vue' {
     InventoryReservedConfirm: typeof import('./../components/inventory/ReservedConfirm.vue')['default']
     LabelsEditor: typeof import('./../components/labels/Editor.vue')['default']
     LabelsPublicContents: typeof import('./../components/labels/PublicContents.vue')['default']
+    LayoutAppVersion: typeof import('./../components/layout/AppVersion.vue')['default']
     LayoutBrand: typeof import('./../components/layout/Brand.vue')['default']
     LayoutMenuEntry: typeof import('./../components/layout/MenuEntry.vue')['default']
     LayoutOrganizationLogo: typeof import('./../components/layout/OrganizationLogo.vue')['default']

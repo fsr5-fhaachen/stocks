@@ -43,6 +43,8 @@ x-environment: &environment
   MAIL_FROM_NAME: '${MAIL_FROM_NAME:-Stocks}'
   # with APP_DEBUG=true mails only go to the log, unless this is true
   MAIL_SEND_IN_DEBUG: '${MAIL_SEND_IN_DEBUG:-false}'
+  # asks GitHub every 30 minutes for a newer release (menu); STOCKS_VERSION comes from the image
+  STOCKS_UPDATE_CHECK: '${STOCKS_UPDATE_CHECK:-true}'
   # web push, created once with "php artisan webpush:vapid"; empty: no push, only mails
   VAPID_PUBLIC_KEY: '${VAPID_PUBLIC_KEY:-}'
   VAPID_PRIVATE_KEY: '${VAPID_PRIVATE_KEY:-}'

@@ -22,6 +22,8 @@ php artisan stocks:demo-sheet         # schreibt documentation/demo/testetikette
 
 `stocks:demo` löscht alle Daten. In einer Produktivinstanz (`APP_ENV=production`) verweigert der Befehl ohne `--force`. Zeiten der Buchungen sind relativ zu heute; es gibt also immer etwas, das heute abgeholt wird, und etwas Überfälliges.
 
+Telescope zeichnet bei `stocks:demo`, `stocks:demo-sheet` und `db:seed` nichts auf (`ignore_commands` in `config/telescope.php`): Der Generator macht zehntausende Abfragen, deren Aufzeichnung den Speicher füllte (128 MB, PHP unter Windows) und den Lauf mit „Allowed memory size exhausted“ abbrach.
+
 ## Konten
 
 Alle mit Passwort „correct horse battery“ und Kiosk-PIN 482915.
