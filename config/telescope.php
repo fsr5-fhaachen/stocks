@@ -121,7 +121,11 @@ return [
     ],
 
     'ignore_commands' => [
-        //
+        // the demo generator runs tens of thousands of queries; recording them all fills the memory
+        // (documentation/DEMO.md); db:seed also covers "migrate:fresh --seed"
+        'stocks:demo',
+        'stocks:demo-sheet',
+        'db:seed',
     ],
 
     /*

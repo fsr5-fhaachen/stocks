@@ -91,6 +91,11 @@ ENV OCTANE_WORKERS="auto"
 
 EXPOSE 8000
 
+# version shown below the menu: tag of the release or "dev-<commit>", set by the workflows
+# (docker-release.yml, deploy-dev.yml); this late, so a new version does not rebuild earlier layers
+ARG STOCKS_VERSION=dev
+ENV STOCKS_VERSION=${STOCKS_VERSION}
+
 # migrations and the module sync run on every start, so an update only needs a new image
 # exec: Octane itself gets the stop signal and shuts down cleanly (needed for deploys)
 CMD ["sh", "-c", "php artisan migrate --force && php artisan stocks:sync && exec php artisan octane:start --server=swoole --host=0.0.0.0 --workers=${OCTANE_WORKERS} --max-requests=${OCTANE_MAX_REQUESTS}"]

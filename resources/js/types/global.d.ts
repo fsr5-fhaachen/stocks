@@ -43,6 +43,15 @@ declare global {
     serverTime: number;
     // surface of the page (e.g. the kiosk), null on the pc and the phone; see App\Support\Surface
     surface: Surface | null;
+    // version below the menu (App\Support\AppVersion); null when logged out and on the kiosk
+    app: {
+      // "v0.3.0", "dev-<commit>" or "dev"
+      version: string;
+      commit: string | null;
+      commit_url: string | null;
+      // newer release on GitHub, only for those who manage the instance
+      update: { tag: string; url: string } | null;
+    } | null;
   }
 
   interface NavigationSection {

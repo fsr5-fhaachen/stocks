@@ -2,6 +2,14 @@
 
 Warum Stocks so gebaut ist, wie es gebaut ist. Neue Einträge oben; jeder Eintrag mit Datum, Entscheidung, Grund und verworfener Alternative.
 
+## 2026-11-24 · Version und „Update verfügbar“ im Menü
+
+**Die Version kommt aus dem Image** (`STOCKS_VERSION`, Build-Argument der Workflows): der Tag des Releases oder `dev-<commit>`. Einzige Quelle sind die Git-Tags; `package.json` und `composer.json` bleiben unberührt. Verworfen: Version von Hand in einer Datei pflegen.
+
+**Neueres Release fragt der Scheduler alle 30 Minuten bei GitHub ab** (`stocks:update-check`, Entscheidung von Maurice), das Menü liest nur den Cache und wartet nie auf das Netz. Fehler beim Abruf behalten den letzten Stand. Drafts und Pre-Releases zählen nicht, dev-Stände bekommen nie einen Update-Hinweis. Ohne Token reichen 60 Abfragen pro Stunde. Verworfen: Abfrage im Browser (jeder Besucher fragt GitHub).
+
+**Version für alle, „Update verfügbar“ nur mit `settings.manage`**; nur eine Zeile „Stocks“, keine Modulversionen (Module gehören zum selben Release); der Knopf öffnet das Release auf GitHub. Sitzt in der Seitenleiste zwischen Abmelden und Impressum/Datenschutz, am Handy im Menü „Mehr“, nicht am Kiosk (Entscheidungen von Maurice).
+
 ## 2026-11-24 · Keine Mails im Debug-Modus
 
 **Mit `APP_DEBUG=true` verlässt keine Mail den Server** (Entscheidung von Maurice). Vorher stellte `MailSettings::apply()` auf SMTP um, sobald in den Einstellungen ein Mailserver eingetragen war, und überstimmte damit `MAIL_MAILER=log`; stocks-dev schickte deshalb echte Mails. Jetzt setzt `MailSettings::blockSendingInDebug()` im Debug-Modus `mail.default` auf `log`: beim Start (Konsole, Scheduler) und in `apply()` (Requests, Queue). Der Mailserver wird trotzdem vorbereitet, damit die Verbindungsprüfung weiter geht. Ausnahme nur ausdrücklich mit `MAIL_SEND_IN_DEBUG=true`, etwa zum Prüfen des Mail-Designs; die Tests setzen es, damit sie den Mailaufbau prüfen können. Push bleibt im Debug-Modus an. Verworfen: Kopplung an `APP_ENV` (dev läuft mit `production`).

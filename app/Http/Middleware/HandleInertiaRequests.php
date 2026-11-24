@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\AppVersion;
 use App\Support\Branding;
 use App\Support\Extensions\Navigation;
 use App\Support\Settings;
@@ -41,6 +42,8 @@ class HandleInertiaRequests extends Middleware
             'navigation' => fn () => $request->user() && ! Surface::current() ? app(Navigation::class)->forUser($request->user()) : [],
             // surface of the request (e.g. the kiosk) or null, see App\Support\Surface
             'surface' => fn () => Surface::shared(),
+            // version below the menu and a newer release on GitHub; not on the kiosk
+            'app' => fn () => $request->user() && ! Surface::current() ? app(AppVersion::class)->shared($request->user()) : null,
             'organization' => fn () => [
                 'name' => $settings->get('organization.name'),
                 'short_name' => $settings->get('organization.short_name'),

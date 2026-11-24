@@ -108,4 +108,22 @@ return [
 
     'mail_send_in_debug' => (bool) env('MAIL_SEND_IN_DEBUG', false),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Version and Updates
+    |--------------------------------------------------------------------------
+    |
+    | The version is set when the image is built (Dockerfile, STOCKS_VERSION):
+    | the tag of a release, "dev-<commit>" on the dev instance, "dev" without
+    | docker. The scheduler asks GitHub every 30 minutes for a newer release
+    | (App\Support\AppVersion); switch it off for instances without internet.
+    |
+    */
+
+    'version' => env('STOCKS_VERSION', 'dev'),
+
+    'repository' => env('STOCKS_REPOSITORY', 'fsr5-fhaachen/stocks'),
+
+    'update_check' => (bool) env('STOCKS_UPDATE_CHECK', true),
+
 ];

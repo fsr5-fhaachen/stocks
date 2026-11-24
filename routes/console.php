@@ -4,6 +4,7 @@ use App\Actions\Setup\InstallStocks;
 use App\Models\Item;
 use App\Models\User;
 use App\Notifications\TestNotification;
+use App\Support\AppVersion;
 use App\Support\Demo\DemoGenerator;
 use App\Support\Demo\TestSheet;
 use App\Support\MailSettings;
@@ -120,6 +121,17 @@ Artisan::command('stocks:mail-status', function (MailSettings $mailSettings) {
     $this->info(($status['ok'] ? 'verbunden: ' : 'getrennt: ').$status['message']);
 })->purpose('Test the connection to the mail server and keep the result for the menu badge');
 
+// not "$version": closure commands get options by name, and every command has --version
+Artisan::command('stocks:update-check', function (AppVersion $appVersion) {
+    if (! $appVersion->check()) {
+        $this->warn('GitHub war nicht erreichbar, der letzte Stand bleibt.');
+
+        return;
+    }
+    $latest = $appVersion->latestRelease();
+    $this->info('Installiert: '.$appVersion->current().', neuestes Release: '.($latest['tag'] ?? 'keins').'.');
+})->purpose('Ask GitHub for the newest release and keep it for the version in the menu');
+
 /*
 |--------------------------------------------------------------------------
 | Time plan of the core (service "scheduler")
@@ -127,4 +139,5 @@ Artisan::command('stocks:mail-status', function (MailSettings $mailSettings) {
 */
 
 // the menu only reads the cached status and never waits for the network
+Schedule::command('stocks:update-check')->everyThirtyMinutes()->withoutOverlapping()->when(fn () => (bool) config('stocks.update_check'));
 Schedule::command('stocks:mail-status')->everyFiveMinutes()->withoutOverlapping()->when(fn () => app(MailSettings::class)->isConfigured());

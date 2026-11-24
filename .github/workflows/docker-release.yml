@@ -56,3 +56,5 @@ jobs:
         with:
           push: true
           tags: ${{ steps.tags.outputs.tags }}
+          # version below the menu: the tag of the release (App\Support\AppVersion)
+          build-args: STOCKS_VERSION=${{ github.event.release.tag_name }}

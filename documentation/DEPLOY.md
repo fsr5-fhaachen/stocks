@@ -15,6 +15,7 @@ Reverse Proxy (anderer Host) ──NetBird──▶ Dev-Server:8000 (web)
 - Migrationen und `stocks:sync` laufen beim Start von `web` wie in jeder Instanz ([SETUP.md](SETUP.md)).
 - `deploy/dev/docker-compose.override.yaml` schließt die Ports von MariaDB und MinIO. Von außen ist nur `web` auf Port 8000 erreichbar.
 - Releases baut `docker-release.yml`: Tag des Releases, `:latest` nur für das neueste Release, das kein Pre-Release ist.
+- **Version im Image:** Beide Workflows geben `STOCKS_VERSION` als Build-Argument mit, Releases den Tag (`v0.3.0`), dev `dev-<commit>`. Stocks zeigt sie unter dem Menü; ohne Argument (lokal, e2e) steht dort `dev`. Ein neueres Release erfährt der Scheduler alle 30 Minuten von GitHub (`stocks:update-check`, abschaltbar mit `STOCKS_UPDATE_CHECK=false`).
 
 ## Einmalig einrichten
 

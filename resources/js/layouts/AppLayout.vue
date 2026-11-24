@@ -96,6 +96,7 @@
             <span v-if="!collapsed">Abmelden</span>
           </InertiaLink>
         </div>
+        <LayoutAppVersion :collapsed="collapsed" class="pt-1" />
         <div v-if="!collapsed" class="flex gap-3 px-2 pt-1 text-xs">
           <UiLink
             v-if="organization.imprint_url"
@@ -204,6 +205,7 @@
           >
             Abmelden
           </UiButton>
+          <LayoutAppVersion class="pt-2" />
         </div>
       </nav>
     </UiModal>
