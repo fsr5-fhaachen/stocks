@@ -2,10 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Notifications\TestNotification;
 use App\Support\MailSettings;
 use App\Support\Settings;
+use Illuminate\Mail\Transport\LogTransport;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 /**
@@ -58,6 +61,66 @@ class MailSettingsTest extends TestCase
 
             return $entries->firstWhere('title', 'Benachrichtigungen')['badge']['text'] === 'getrennt';
         }));
+    }
+
+    public function test_in_debug_mode_no_mail_leaves_the_server_even_with_a_server_in_the_settings(): void
+    {
+        config(['app.debug' => true, 'stocks.mail_send_in_debug' => false]);
+        app(Settings::class)->set(['mail.host' => 'smtp.example.org', 'mail.port' => 587]);
+
+        app(MailSettings::class)->apply();
+
+        $this->assertTrue(MailSettings::isSendingBlocked());
+        $this->assertSame('log', config('mail.default'));
+        $this->assertInstanceOf(LogTransport::class, Mail::mailer()->getSymfonyTransport());
+        // the server is still prepared, so the connection test can use it
+        $this->assertSame('smtp.example.org', config('mail.mailers.smtp.host'));
+
+        // a notification goes to the log instead of the server, so sending must not fail
+        Notification::route('mail', 'test@example.org')->notifyNow(new TestNotification('mail'));
+    }
+
+    public function test_in_debug_mode_the_environment_mailer_is_replaced_by_the_log(): void
+    {
+        config(['app.debug' => true, 'stocks.mail_send_in_debug' => false, 'mail.default' => 'smtp']);
+
+        app(MailSettings::class)->apply();
+
+        $this->assertSame('log', config('mail.default'));
+    }
+
+    public function test_mails_are_sent_in_debug_mode_when_switched_on(): void
+    {
+        config(['app.debug' => true, 'stocks.mail_send_in_debug' => true]);
+        app(Settings::class)->set(['mail.host' => 'smtp.example.org']);
+
+        app(MailSettings::class)->apply();
+
+        $this->assertFalse(MailSettings::isSendingBlocked());
+        $this->assertSame('smtp', config('mail.default'));
+    }
+
+    public function test_without_debug_mode_the_server_of_the_settings_is_used(): void
+    {
+        config(['app.debug' => false, 'stocks.mail_send_in_debug' => false]);
+        app(Settings::class)->set(['mail.host' => 'smtp.example.org']);
+
+        app(MailSettings::class)->apply();
+
+        $this->assertFalse(MailSettings::isSendingBlocked());
+        $this->assertSame('smtp', config('mail.default'));
+    }
+
+    public function test_the_status_and_the_test_mail_tell_that_debug_mode_blocks_sending(): void
+    {
+        Mail::fake();
+        config(['app.debug' => true, 'stocks.mail_send_in_debug' => false]);
+
+        $status = app(MailSettings::class)->status(fresh: true);
+        $this->assertStringContainsString('Debug-Modus', $status['message']);
+
+        $this->actingAs($this->admin())->post('/admin/mail/test', ['to' => 'test@example.org'])
+            ->assertSessionHas('success', fn (string $message) => str_contains($message, 'nur ins Log'));
     }
 
     public function test_a_test_mail_is_sent(): void

@@ -113,6 +113,8 @@ class AppServiceProvider extends ServiceProvider
 
         // queued mails use the mail server of the settings too
         Queue::before(fn () => app(MailSettings::class)->apply());
+        // in debug mode no mail leaves the server, also from the console and the scheduler
+        MailSettings::blockSendingInDebug();
 
         // notifications of Stocks may keep a log (e.g. the messages of a loan), and a device that
         // received a push was used (documentation/NOTIFICATIONS.md)

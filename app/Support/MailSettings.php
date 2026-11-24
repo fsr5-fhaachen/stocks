@@ -12,6 +12,9 @@ use Symfony\Component\Mailer\Transport\Smtp\EsmtpTransport;
  *
  * apply() runs before every request and every queued job (middleware ApplyMailSettings, queue
  * listener in AppServiceProvider), so a changed setting counts at once, also with Octane.
+ *
+ * In debug mode (APP_DEBUG=true) no mail leaves the server: every mail goes to the log, whatever
+ * the settings or MAIL_MAILER say (MAIL_SEND_IN_DEBUG=true allows sending again).
  */
 class MailSettings
 {
@@ -31,11 +34,33 @@ class MailSettings
     }
 
     /**
-     * Use the mail server of the settings for the next mails.
+     * Check if sending is blocked: in debug mode mails only go to the log.
+     */
+    public static function isSendingBlocked(): bool
+    {
+        return (bool) config('app.debug') && ! config('stocks.mail_send_in_debug');
+    }
+
+    /**
+     * Send every mail to the log while sending is blocked. Runs on boot (console, scheduler) and in
+     * apply() (requests, queued jobs).
+     */
+    public static function blockSendingInDebug(): void
+    {
+        if (self::isSendingBlocked()) {
+            config(['mail.default' => 'log']);
+        }
+    }
+
+    /**
+     * Use the mail server of the settings for the next mails. In debug mode the server is still
+     * prepared (the connection test uses it), but mails go to the log.
      */
     public function apply(): void
     {
         if (! $this->isConfigured()) {
+            self::blockSendingInDebug();
+
             return;
         }
 
@@ -51,6 +76,7 @@ class MailSettings
         ]);
         // the mailer is built again with the new values
         Mail::purge('smtp');
+        self::blockSendingInDebug();
     }
 
     /**
@@ -105,6 +131,21 @@ class MailSettings
      * @return array{ok: bool|null, message: string}
      */
     private function test(): array
+    {
+        $status = $this->testConnection();
+        if (self::isSendingBlocked()) {
+            $status['message'] .= ' Debug-Modus (APP_DEBUG) ist an: E-Mails werden nicht verschickt, nur ins Log geschrieben.';
+        }
+
+        return $status;
+    }
+
+    /**
+     * Open a connection to the server and log in, without the note on the debug mode.
+     *
+     * @return array{ok: bool|null, message: string}
+     */
+    private function testConnection(): array
     {
         if (! $this->isConfigured()) {
             $mailer = config('mail.default');

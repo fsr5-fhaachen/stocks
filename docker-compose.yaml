@@ -41,6 +41,8 @@ x-environment: &environment
   MAIL_PASSWORD: '${MAIL_PASSWORD}'
   MAIL_FROM_ADDRESS: '${MAIL_FROM_ADDRESS}'
   MAIL_FROM_NAME: '${MAIL_FROM_NAME:-Stocks}'
+  # with APP_DEBUG=true mails only go to the log, unless this is true
+  MAIL_SEND_IN_DEBUG: '${MAIL_SEND_IN_DEBUG:-false}'
   # web push, created once with "php artisan webpush:vapid"; empty: no push, only mails
   VAPID_PUBLIC_KEY: '${VAPID_PUBLIC_KEY:-}'
   VAPID_PRIVATE_KEY: '${VAPID_PRIVATE_KEY:-}'

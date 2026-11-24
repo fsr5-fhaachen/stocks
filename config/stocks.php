@@ -95,4 +95,17 @@ return [
 
     'check_leaked_passwords' => env('CHECK_LEAKED_PASSWORDS', false),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Mails in Debug Mode
+    |--------------------------------------------------------------------------
+    |
+    | With APP_DEBUG=true every mail goes to the log and none is sent, also when
+    | a mail server is set in the settings (App\Support\MailSettings). Set to
+    | true to send mails in debug mode anyway, e.g. to check the mail design.
+    |
+    */
+
+    'mail_send_in_debug' => (bool) env('MAIL_SEND_IN_DEBUG', false),
+
 ];
