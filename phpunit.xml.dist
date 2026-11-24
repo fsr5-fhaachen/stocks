@@ -23,6 +23,8 @@
         </include>
     </source>
     <php>
+        <!-- the whole suite runs in one process; 128M (default of PHP on Windows) is not enough -->
+        <ini name="memory_limit" value="1G"/>
         <env name="APP_ENV" value="testing" force="true"/>
         <env name="APP_KEY" value="base64:dGVzdGluZy1rZXktZm9yLXBob3VuaXQtb25seS0xMjM=" force="true"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
