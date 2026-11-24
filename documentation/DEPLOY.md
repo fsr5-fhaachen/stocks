@@ -4,7 +4,7 @@ Die Dev-Instanz läuft unter **https://stocks-dev.proxy.sntg.eu**. Jeder Push au
 
 ```
 GitHub (push auf dev) ──▶ build:  GitHub-Runner, docker build, push nach ghcr.io/fsr5-fhaachen/stocks
-                      └─▶ deploy: self-hosted Runner auf dem Dev-Server, docker compose up in /opt/stocks-dev
+                      └─▶ deploy: self-hosted Runner auf dem Dev-Server, docker compose up in /opt/stocks (Projekt "stocks")
 Reverse Proxy (anderer Host) ──NetBird──▶ Dev-Server:8000 (web)
 ```
 
@@ -26,8 +26,8 @@ Voraussetzungen: Docker mit Compose **2.24 oder neuer** (`docker compose version
 # eigener Benutzer für den Runner; darf Docker benutzen und ins Deploy-Verzeichnis schreiben
 sudo useradd -m -s /bin/bash github-runner
 sudo usermod -aG docker github-runner
-sudo mkdir -p /opt/stocks-dev
-sudo chown github-runner: /opt/stocks-dev
+sudo mkdir -p /opt/stocks
+sudo chown -R github-runner: /opt/stocks
 ```
 
 In GitHub unter *Organisation fsr5-fhaachen › Settings › Actions › Runner groups* eine Gruppe `stocks-dev` anlegen:
@@ -72,7 +72,7 @@ VAPID_PUBLIC_KEY=...                     # für den Push-Test, siehe NOTIFICATIO
 VAPID_PRIVATE_KEY=...
 ```
 
-`STOCKS_IMAGE` gehört nicht hinein, das setzt der Workflow. Er schreibt die Datei bei jedem Deploy nach `/opt/stocks-dev/.env`. Änderungen also immer im Secret machen und danach den Deploy neu starten.
+`STOCKS_IMAGE` gehört nicht hinein, das setzt der Workflow. Er schreibt die Datei bei jedem Deploy nach `/opt/stocks/.env`. Änderungen also immer im Secret machen und danach den Deploy neu starten.
 
 Das Image holt der Deploy mit dem Token des Laufs aus `ghcr.io`. Das Paket muss dem Repository zugeordnet sein (*Package settings › Manage Actions access*: `stocks` mit Rolle *Write*), sonst schlägt der Push im Build fehl.
 
@@ -87,18 +87,18 @@ Auf dem Proxy-Host `stocks-dev.proxy.sntg.eu` auf `http://<NetBird-IP des Dev-Se
 Auf `dev` pushen oder unter *Actions › Deploy dev › Run workflow* für `dev` starten. Danach einrichten, entweder im Browser unter `/setup` oder so:
 
 ```bash
-cd /opt/stocks-dev
+cd /opt/stocks
 sudo -u github-runner docker compose exec web php artisan stocks:install --name="..." --short-name="..." \
   --admin-firstname=... --admin-lastname=... --admin-email=...
 ```
 
-### GitLab abbauen
+### Umstellung von GitLab
 
-Falls noch eingerichtet: in GitLab den Pull-Mirror und das Projekt löschen, auf dem Server den alten Runner entfernen (`sudo gitlab-runner unregister --all-runners`, `sudo apt remove gitlab-runner`). Laufende Container in `/opt/stocks-dev` bleiben, der erste Deploy über GitHub ersetzt ihr Image.
+Erledigt am 24.11.2026: GitLab-Runner auf dem Server entfernt. Die Dev-Instanz lief vorher von Hand gestartet in `/opt/stocks` (Compose-Projekt `stocks`, Volumes `stocks_mariadb` und `stocks_minio_data`). Der Deploy nutzt bewusst denselben Ordner und Projektnamen, so bleiben Datenbank, Fotos und `APP_KEY` ohne Umzug erhalten. Die Sicherung vor der Umstellung liegt in `/root/stocks-backup` (`.env`, `db.sql`, `minio.tar.gz`).
 
 ## Im Betrieb
 
-| Aufgabe | Befehl in `/opt/stocks-dev` |
+| Aufgabe | Befehl in `/opt/stocks` |
 |---|---|
 | Logs | `docker compose logs -f web queue scheduler` |
 | Artisan | `docker compose exec web php artisan …` |

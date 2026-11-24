@@ -6,6 +6,8 @@ Warum Stocks so gebaut ist, wie es gebaut ist. Neue Einträge oben; jeder Eintra
 
 **GitLab fällt weg** (Entscheidung von Maurice). Der Pull-Mirror braucht eine GitLab-Lizenz, und zwei CI-Systeme bauten jeden Push auf `dev` doppelt. Jetzt baut `deploy-dev.yml` das Image auf einem GitHub-Runner nach `ghcr.io` und ein **self-hosted Runner auf dem Dev-Server** spielt es ein ([DEPLOY.md](DEPLOY.md)). Der Server bleibt ohne eingehende Verbindung. Der Runner steckt in einer Runner-Gruppe, die nur `deploy-dev.yml` auf `dev` ausführen darf, weil das Repository öffentlich ist. Verworfen: Timer auf dem Server, der `:dev` holt (kein Status in GitHub), SSH über NetBird von GitHub aus (Setup-Key als Secret, mehr bewegliche Teile).
 
+**Deploy in `/opt/stocks`, Compose-Projekt `stocks`** (24.11.). Dort lief die Dev-Instanz schon von Hand; gleicher Ordner und Projektname heißt gleiche Volumes, also kein Umzug von Datenbank und Fotos. Verworfen: neuer Ordner `/opt/stocks-dev` mit Dump und Import.
+
 **Kein automatisches Wiederholen** (Entscheidung von Maurice). Ein fehlgeschlagener Lauf bleibt fehlgeschlagen. Kein bauender Workflow hat einen Zeitplan; `concurrency` sorgt dafür, dass ein neuer Push einen alten Lauf ersetzt statt ihn zu stapeln.
 
 **`docker-release.yml` ohne `pozetroninc/github-action-get-latest-release`.** Die Action brach mit „No valid releases“ ab, wenn es nur Drafts oder Pre-Releases gab. Jetzt entscheidet der Workflow selbst: Tag des Releases immer, `:latest` nur wenn es kein Pre-Release ist und `releases/latest` genau dieses Release liefert.
