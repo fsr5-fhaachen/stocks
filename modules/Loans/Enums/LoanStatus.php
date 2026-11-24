@@ -60,6 +60,16 @@ enum LoanStatus: string
     }
 
     /**
+     * Statuses of a finished loan: it can be archived, and its contacts can be deleted.
+     *
+     * @return list<self>
+     */
+    public static function finished(): array
+    {
+        return [self::Closed, self::ClosedWithDefects, self::Cancelled];
+    }
+
+    /**
      * Check if positions and times can still be changed (nothing was issued yet).
      */
     public function isOpen(): bool

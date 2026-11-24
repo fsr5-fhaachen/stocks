@@ -2,11 +2,25 @@
   <UiPageHeader
     :title="location.full_code"
     :description="
-      [location.type_label, location.name].filter(Boolean).join(' · ')
+      [
+        location.type_label,
+        location.name,
+        location.type === 'building'
+          ? location.show_in_code
+            ? 'steht im Code'
+            : 'steht nicht im Code'
+          : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
     "
   >
     <UiButton
-      v-if="can('inventory.edit') && location.type !== 'address'"
+      v-if="
+        can('inventory.edit') &&
+        location.type !== 'address' &&
+        location.type !== 'building'
+      "
       icon="plus"
       :href="`/inventory/items/create?place=${encodeURIComponent(location.full_code)}`"
     >
@@ -64,6 +78,11 @@
           :key="child.id"
           class="flex items-center gap-2 px-4 py-3 sm:px-6"
         >
+          <FontAwesomeIcon
+            v-if="child.type === 'building'"
+            :icon="['fas', 'building']"
+            class="text-ink-muted"
+          />
           <UiLink
             :href="`/inventory/locations/${child.id}`"
             class="font-mono font-semibold"
@@ -121,11 +140,13 @@ import { ref } from "vue";
 
 type LocationSummary = {
   id: number;
-  type: "address" | "room" | "shelf" | "compartment";
+  parent_id: number | null;
+  type: LocationType;
   type_label: string;
   code: string;
   name: string | null;
   full_code: string;
+  show_in_code: boolean;
 };
 
 /**
@@ -134,7 +155,6 @@ type LocationSummary = {
  */
 defineProps<{
   location: LocationSummary & {
-    parent_id: number | null;
     description: string | null;
   };
   path: LocationSummary[];

@@ -5,6 +5,7 @@ namespace App\Support\Extensions;
 use App\Models\Item;
 use App\Models\User;
 use App\Support\Modules\ModuleRegistry;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
@@ -14,7 +15,8 @@ use Illuminate\Validation\ValidationException;
  * - tabs on the page of an item (Vue component of the module, gets the item as prop),
  * - notices and locks on items (ItemInfoProvider): shown on the item page, in the item list and
  *   on the scan card; a lock stops moving, splitting and retiring, a reservation asks first,
- * - sections on the public page of a box (PublicBoxSection).
+ * - sections on the public page of a box (PublicBoxSection),
+ * - items that are away on purpose (ItemAwayProvider), left out of "Ohne Platz".
  *
  * Entries of a switched off module are left out.
  */
@@ -34,6 +36,11 @@ class ItemExtensions
      * @var list<array{component: string, class: class-string<PublicBoxSection>, module: string|null}>
      */
     private array $publicBoxSections = [];
+
+    /**
+     * @var list<array{class: class-string<ItemAwayProvider>, module: string|null}>
+     */
+    private array $awayProviders = [];
 
     public function __construct(private readonly ModuleRegistry $modules) {}
 
@@ -67,6 +74,45 @@ class ItemExtensions
     public function addPublicBoxSection(string $component, string $class, ?string $module = null): void
     {
         $this->publicBoxSections[] = compact('component', 'class', 'module');
+    }
+
+    /**
+     * Add a provider of items that are away on purpose (e.g. lent).
+     *
+     * @param  class-string<ItemAwayProvider>  $class
+     */
+    public function addAway(string $class, ?string $module = null): void
+    {
+        $this->awayProviders[] = compact('class', 'module');
+    }
+
+    /**
+     * Leave out the items that an active module has away on purpose.
+     *
+     * @template TBuilder of Builder
+     *
+     * @param  TBuilder  $items  query on items
+     * @return TBuilder
+     */
+    public function withoutAway(Builder $items): Builder
+    {
+        foreach ($this->awayProviders as $provider) {
+            if ($this->isOn($provider['module'])) {
+                $items->whereNotIn($items->qualifyColumn('id'), app($provider['class'])->awayItemIds());
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * Items of "Ohne Platz": active, without place or away from their home, and not away on purpose.
+     *
+     * @return Builder<Item>
+     */
+    public function misplaced(): Builder
+    {
+        return $this->withoutAway(Item::query()->active()->misplaced());
     }
 
     /**

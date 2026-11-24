@@ -216,17 +216,21 @@ class LoanPageData
      */
     private function contacts(Loan $loan): array
     {
-        $person = fn (?Contact $contact) => $contact ? [
+        // a deleted contact is only its name, kept as text
+        $person = fn (?Contact $contact, ?string $keptName) => $contact ? [
             'name' => $contact->name,
             'phone' => $contact->phone,
             'email' => $contact->email,
             'address' => $contact->address() ?: null,
             'affiliation' => $contact->council?->name,
-        ] : null;
+        ] : ($keptName ? ['name' => $keptName, 'phone' => null, 'email' => null, 'address' => null, 'affiliation' => null] : null);
+        $sameContact = $loan->borrower_contact_id !== null
+            ? $loan->borrower_contact_id === $loan->responsible_contact_id
+            : $loan->borrower_name === $loan->responsible_name;
 
         return [
-            'responsible' => $person($loan->responsible),
-            'borrower' => $loan->borrower_contact_id !== $loan->responsible_contact_id ? $person($loan->borrower) : null,
+            'responsible' => $person($loan->responsible, $loan->responsible_name),
+            'borrower' => $sameContact ? null : $person($loan->borrower, $loan->borrower_name),
             'organization' => [
                 'name' => $this->settings->get('organization.name'),
                 'phone' => $this->settings->get('organization.phone'),

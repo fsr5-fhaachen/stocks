@@ -3,11 +3,8 @@
   <span
     :class="['flex min-w-0 items-center', size === 'nav' ? 'gap-4' : 'gap-2']"
   >
-    <img
-      v-if="organization.logo_url"
-      :src="organization.logo_url"
-      alt=""
-      :class="['shrink-0 object-contain', sizes[size]]"
+    <LayoutOrganizationLogo
+      :img-class="`shrink-0 object-contain ${sizes[size]}`"
     />
     <span v-if="!logoOnly" class="truncate">
       {{ text ?? organization.short_name }}
@@ -20,7 +17,8 @@ import { computed, type PropType } from "vue";
 import { usePage } from "@inertiajs/vue3";
 
 /**
- * Logo (if one was uploaded in the settings) and name of the organization, e.g. top left in the
+ * Logo (if one was uploaded in the settings, light or dark by the colour mode) and name of the
+ * organization, e.g. top left in the
  * sidebar, on the login page and in the kiosk.
  */
 defineProps({

@@ -21,7 +21,10 @@ Stocks hat mehrere Oberflächen für dieselben Vorgänge. Wenn ein Vorgang neu d
 | Was | Web PC | Web Handy | Kiosk | Anmeldeseite |
 |---|---|---|---|---|
 | Logo aus den Einstellungen | ✓ oben links, Quadrat 64 px mit Name | ✓ obere Leiste, klein mit Name | ✓ Kopfzeile, klein mit Name | ✓ Quadrat 250 px mittig über dem Namen |
+| Logo für helle Hintergründe im hellen Modus, sonst das Logo für dunkle (Review Phase 5) | ✓ | ✓ | ✓ | ✓ (auch Verleihseite) |
 | Favicon aus den Einstellungen | ✓ | ✓ | ✓ | ✓ |
+| Icon auf dem Home-Bildschirm: helles Logo auf Weiß, sonst weißes „S“ auf der Akzentfarbe | ✓ | ✓ | ✓ (eigenes Manifest) | n. v. |
+| Akzentfarbe aus den Einstellungen wirkt überall (Review Phase 5: vorher von `app.css` überschrieben) | ✓ | ✓ | ✓ | ✓ (auch Verleihseite) |
 
 ## Vorgänge des Inventars
 
@@ -30,6 +33,9 @@ Stocks hat mehrere Oberflächen für dieselben Vorgänge. Wenn ein Vorgang neu d
 | Vorgang | Web PC | Web Handy | Kiosk | Anmerkung für spätere Oberflächen |
 |---|---|---|---|---|
 | Gegenstände suchen und ansehen | ✓ | ✓ | nur Scan-Karte | Suche nimmt Artikelnummer und Kennziffer, mit und ohne Bindestrich |
+| „Nach Boxen gruppieren“ in „Gegenstände“ und „Ohne Platz“ (Review Phase 5) | ✓ | ✓ | n. v. | Schalter in der Filterleiste, je Gerät und Liste gemerkt; Boxen mit Pfeil und „N Teile“ klappen ihren Inhalt auf (auch Boxen in Boxen); bei Suche und Filtern flach; am Handy Inhalt mit Strich links statt Einrückung. Tabellen-Slot `after-row` in `UiTable` |
+| „Ohne Platz“ ohne ausgegebene Gegenstände (Review Phase 5) | ✓ | ✓ | n. v. | ausgegebene stehen nur in der Gesamtliste mit „ausgegeben bis …“; zurück, aber nicht eingeräumt, und vermisst bleiben in „Ohne Platz“; gilt auch für die Dashboard-Zahl |
+| Gebäude als Standort-Stufe (Review Phase 5) | ✓ | ✓ | n. v. | Standorte: an einer Adresse „+ Raum“ und „+ Gebäude“, Schalter „Im Code zeigen“ mit Rückfrage, wie viele Kennziffern sich ändern; Gebäude mit eigenem Symbol im Baum und in „Darin“; Gegenstände liegen nicht in Gebäuden (auch nicht in der Ortswahl, am Kiosk ebenso); Kiosk-Standortwahl braucht nichts Neues |
 | Gegenstand anlegen, mit Fotos | ✓ | ✓ | n. v. | Fotos werden im Browser verkleinert (`useImageCompression`) |
 | Umlagern per Scan (zwei Schritte) | ✓ | ✓ | ✓ | auf der Seite „Scannen“; die Seite „Umlagern“ gibt es am Kiosk nicht |
 | Umlagern über den Gegenstand | ✓ | ✓ | n. v. | Dialog mit Ortsvorschlägen |
@@ -40,7 +46,9 @@ Stocks hat mehrere Oberflächen für dieselben Vorgänge. Wenn ein Vorgang neu d
 | Ausmustern, auch Teilmengen | ✓ | ✓ | n. v. | Recht `inventory.retire` |
 | Verlaufseintrag löschen | ✓ | ✓ | n. v. | nur Admin |
 | Zustände und Einheiten verwalten | ✓ | ✓ | n. v. | Untermenü Verwaltung › Einstellungen |
-| Mailserver einstellen, Status, Test-Mail | ✓ | ✓ | n. v. | Verwaltung › Einstellungen › Benachrichtigungen (bis Phase 4 „E-Mail“); Status als Badge im Menü, unter dem Titel |
+| Mailserver einstellen, Status, Test-Mail | ✓ | ✓ | n. v. | Verwaltung › Einstellungen › Benachrichtigungen (bis Phase 4 „E-Mail“); Status als Badge im Menü, unter dem Titel; seit Review Phase 5 prüft der Scheduler alle 5 Minuten, das Badge steht ohne Aufruf der Seite; die Test-Mail hat das Design aller Mails |
+| Vorschau der Mails (Test-Mail, Einladung) | ✓ | ✓ | n. v. | Links unter „Test-Mail“, öffnen im neuen Tab, verschickt nichts |
+| Logos hochladen (dunkle und helle Hintergründe, Druck-Logo, Favicon) | ✓ | ✓ | n. v. | Verwaltung › Einstellungen › Allgemein, Karte „Logo und Symbol“; Vorschau auf dem passenden Hintergrund |
 | Hinweis fürs Etikett pflegen | ✓ | ✓ | n. v. | Feld im Formular des Gegenstands |
 | Box-Inhaltsliste als PDF | ✓ | ✓ | n. v. | Knopf auf der Box, wahlweise als Brief (DIN 5008) mit eingegebenem Empfänger, Vorschaubilder wählbar; nicht in der öffentlichen Ansicht |
 
@@ -59,6 +67,7 @@ Seit Phase 2, siehe [LABELS.md](LABELS.md); am Kiosk seit Phase 4.
 | Etiketten auf Vorrat, Reservierungen freigeben | ✓ | ✓ | n. v. | n. v. | Verwaltung › Einstellungen › Etiketten auf Vorrat |
 | Gegenstand aus reservierter Nummer anlegen | ✓ | ✓ | n. v. | n. v. | Scan oder Kurzlink öffnet das Formular mit der Nummer |
 | Vorlagen gestalten, Drucker verwalten | ✓ | eingeschränkt | n. v. | n. v. | Editor am Handy bedienbar, aber eng; gedacht für den PC |
+| Testdruck im Editor (Review Phase 5) | ✓ | eingeschränkt | n. v. | n. v. | Karte „Testdruck“ neben der Vorlage: Papier, Niimbot direkt oder als Bild, mit erfundenen Daten (Code TEST); vermerkt nichts als gedruckt. Druckwege gemeinsam mit „Drucken“ (`useLabelPrinting`) |
 | Filter „Noch ohne Etikett“ | ✓ | ✓ | n. v. | n. v. | Gegenstandsliste und Standortliste |
 | Gescanntes Etikett ohne Konto ansehen | n. v. | n. v. | n. v. | ✓ | Name, Nummer, Foto, Eigentümer, Kontakt; Box-Inhalt zum Abhaken |
 
@@ -90,6 +99,8 @@ Seit Phase 3, siehe [LOANS.md](LOANS.md). Ausgabe, Rückgabe, Prüfung und Einr�
 | Mängel abschließen | ✓ | ✓ | ✓ | n. v. | Mängel sichtbar | Recht `loans.cancel`; was noch vermisst ist, wird als verloren ausgemustert; am Kiosk im Fenster der Buchung (Liste „Mit Mängeln“) |
 | Vermisstes „Wieder da“ | ✓ | ✓ | ✓ | n. v. | n. v. | auf der Buchung (Abschnitt „Vermisst“), Hinweis mit Link auf Seite und Scan-Karte des Gegenstands; Recht `loans.issue`; am Kiosk im Fenster der Buchung |
 | Kontakte, Fachschaften, Veranstaltungen | ✓ | ✓ | n. v. | n. v. | n. v. | Fachschaften unter Verwaltung › Einstellungen › Verleih |
+| Kontakt mit Buchungen löschen (Review Phase 5) | ✓ | ✓ | n. v. | n. v. | zeigt danach den Namen ohne Kontaktdaten | Knopf „Löschen“ auf der Kontaktseite mit Rückfrage (wie viele Buchungen den Namen behalten), Recht `loans.contacts.delete`; ohne Buchungen weiter mit `loans.manage`; nicht bei offener Buchung |
+| Buchungen archivieren und zurückholen (Review Phase 5) | ✓ | ✓ | n. v. | n. v. | n. v. | Knopf „Archivieren“ auf der Buchung, Mehrfachauswahl in der Liste, Schalter „Archiv“ in den Filtern, Hinweis mit „Aus dem Archiv holen“; Recht `loans.archive`; Abzeichen „archiviert“ in Kontaktseite, Gegenstand, Veranstaltung, Kalender |
 | Leihvertrag und Verleiher einstellen | ✓ | eingeschränkt | n. v. | n. v. | n. v. | langes Textfeld, gedacht für den PC |
 | Dashboard-Kachel | ✓ | ✓ | Kacheln | n. v. | n. v. | heute abholen, heute zurück, überfällig; mit `loans.issue` dazu Prüfung, Mängel, nicht eingeräumt; am Kiosk die Kacheln „Ausgabe“, „Rückgabe“ und „Einräumen“ |
 | Verleihseite: Link kopieren, QR-Code, sperren, neu ausstellen | ✓ | ✓ | n. v. | n. v. | n. v. | Karte „Verleihseite“ auf der Buchung, `loans.manage`; „Neu ausstellen“ beendet den alten Link und Push an seine Geräte |

@@ -8,7 +8,6 @@ use Database\Factories\UserFactory;
 use Modules\Kiosk\Models\KioskDevice;
 use Modules\Loans\Enums\LoanStatus;
 use Modules\Loans\Models\Loan;
-use Illuminate\Support\Carbon;
 
 /**
  * Issue, return and inspection on the kiosk: the pages of the pc under /kiosk, the person of the

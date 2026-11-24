@@ -4,6 +4,37 @@
 - Pages and components that also run on the kiosk build every address with `url()` of `useSurface()`, and controllers use `Surface::route()`, `Surface::link()` and `Surface::finish()` instead of fixed routes; a route exists on the kiosk only if the `routes/kiosk.php` of its module lists it. `tests/Feature/SurfacePathsTest.php` lists the files used on the kiosk. See `documentation/KIOSK.md`.
 - Every phase extends the demo data generator with its new data and states and writes the test label sheet again (`php artisan stocks:demo && php artisan stocks:demo-sheet`). Demo data come from building blocks and a fixed seed, never from entries written out by hand. See `documentation/DEMO.md`.
 
+## Map of the code
+
+Where to look first; details in `documentation/` (German). Search there before reading code.
+
+**Core (`app/`)**
+- Business logic lives in actions (`app/Actions/<Area>`, `modules/<Module>/Actions`), controllers stay thin. Inventory: `CreateItem`, `UpdateItem`, `MoveItem` (also `takeAway()` for modules), `MergeItem`, `RetireItem`, `ChangeItemCondition`, `SaveLocation` (levels, full codes of the subtree), `DeleteLocation`.
+- Rules without a database write: `app/Support/Inventory` (`Placement::check`, `CodeLookup` finds items and locations by code, `ItemNumbers`).
+- Lists with infinite scroll, search, sorting and live update: `app/Support/Table/Table.php`, one subclass per list (`ItemsTable`, `UsersTable`, `Modules\Loans\Support\LoansTable`), frontend `components/ui/Table.vue` (`UiTable`). See `documentation/TABLE_POLLING.md`.
+- Extension points for modules: `app/Support/Extensions` (`Navigation`, `DashboardTiles`, `ItemExtensions` with `ItemInfoProvider` and `ItemAwayProvider`, `SurfaceRoutes`, `DemoData`). The core never imports a module; modules register in their service provider. See `documentation/MODULES.md`.
+- Settings: `App\Support\Settings` (key/value with defaults in the class), logos and icons `App\Support\Branding`, mail server `MailSettings`, audit log `app/Support/Audit` (models implement `AuditSubject`).
+- Notifications: base class `App\Notifications\StocksNotification` (one `NotificationMessage` for mail and push), events in `NotificationEvents`, mail frame `MailLayout` with theme `resources/views/mail/stocks.blade.php`.
+- Labels: data of a label `app/Support/Labels/LabelData`, short links `ShortLink` (`/s/{code}`), drawing and printing in the browser `resources/js/labels` (`render.ts`, `drivers/`), shared print flow `composables/useLabelPrinting.ts`.
+- Kiosk and other surfaces: `App\Support\Surface` (`Surface::route()`, `link()`, `finish()`); pages use `useSurface()`.
+- Demo data: `app/Support/Demo` (`DemoGenerator`, `DemoContext`, `InventoryDemo`, `TestSheet`), module parts `modules/*/Support/*Demo.php`.
+
+**Modules (`modules/<Name>`)**: `module.json` (permissions, start roles), `<Name>ServiceProvider.php` (registers everything), `routes/web.php` (and `kiosk.php`, `public.php`), `resources/js/pages`, `tests/`. `modules/Example` is the template.
+- Loans: actions per step (`SaveLoan`, `ConfirmLoan`, `IssueLoan`, `ReturnLoan`, `StowItem`, `ArchiveLoan`, `DeleteContact` …); availability `Support/Availability`; documents and PDFs `Support/LoanDocuments`; borrower page `Support/LoanPage` (link) and `LoanPageData` (content); reminders `Support/Reminders` (`loans:remind`); messages `Notifications/*` on `LoanEventNotification`, sent through `LoanNotifier`; notices on items `Support/LoanItemInfo`.
+- Kiosk: devices, pairing and lock `Http/KioskController`, `Support/KioskSession`.
+
+**Frontend (`resources/js`)**: pages `pages/<Area>/<Page>.vue` (Inertia), components auto-imported with folder prefix (`components/ui/Table.vue` → `UiTable`, `components/inventory/ItemCell.vue` → `InventoryItemCell`), composables auto-imported from `composables/`, global types `types/*.d.ts`, icons must be listed in `icons.ts` (module icons in `modules/<Module>/resources/js/icons.ts`). Colours only as tokens (`bg-surface`, `text-ink-muted`, `accent`), see `tailwind.config.cjs`.
+
+**Pitfalls**
+- Names of loan contacts always through `Loan::borrowerName()` / `responsibleName()` and `Event::responsibleName()`: a deleted contact leaves only its name as text.
+- "Ohne Platz" is `ItemExtensions::misplaced()`, not `Item::misplaced()` alone (lent items are left out).
+- Full codes of locations come from `Location::fullCodeOf()`; a building without "Im Code zeigen" passes on the code of its address.
+- New permissions go into `module.json`; existing instances only give them to Admin (`stocks:sync`).
+- Logo kinds: `logo` (dark backgrounds), `logo_light` (light mode, home screen icon), `print_logo` (paper, mails). Mails never use `logo`.
+- The accent colour is only defined in `resources/views/app.blade.php`, never in css.
+
+**Checks before handing over**: `php vendor/bin/phpunit`, `vendor/bin/pint --test`, `npm run lint`, `npm run build`.
+
 <laravel-boost-guidelines>
 === foundation rules ===
 

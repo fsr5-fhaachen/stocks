@@ -55,6 +55,20 @@ abstract class LoanEventNotification extends StocksNotification
     }
 
     /**
+     * {@inheritDoc}
+     *
+     * Borrowers choose their messages on the borrower page.
+     */
+    protected function settingsLink(object $notifiable): ?array
+    {
+        if ($notifiable instanceof Loan) {
+            return LoanPage::exists($notifiable) ? ['text' => 'Benachrichtigungen auf der Verleihseite ändern', 'url' => LoanPage::url($notifiable)] : null;
+        }
+
+        return parent::settingsLink($notifiable);
+    }
+
+    /**
      * Write the log: one row per receiver and channel.
      */
     public function sent(object $notifiable, string $channel, mixed $response): void
@@ -124,7 +138,7 @@ abstract class LoanEventNotification extends StocksNotification
     {
         $this->loan->loadMissing('borrower');
         $names = array_values(array_unique(array_filter([
-            $this->loan->responsible?->name,
+            $this->loan->responsibleName(),
             $this->loan->borrower_contact_id !== $this->loan->responsible_contact_id && filled($this->loan->borrower?->email) ? $this->loan->borrower->name : null,
         ])));
 
@@ -188,7 +202,7 @@ abstract class LoanEventNotification extends StocksNotification
             '{number}' => $this->loan->number,
             '{pickup}' => self::time($this->loan->pickup_at),
             '{return}' => self::time($this->loan->return_at),
-            '{responsible}' => (string) $this->loan->responsible?->name,
+            '{responsible}' => (string) $this->loan->responsibleName(),
         ]);
     }
 }

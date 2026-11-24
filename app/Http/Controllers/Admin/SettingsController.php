@@ -28,6 +28,7 @@ class SettingsController extends Controller
             'appUrl' => config('app.url'),
             'branding' => [
                 'logo' => $branding->url('logo'),
+                'logo_light' => $branding->url('logo_light'),
                 'favicon' => $settings->get('organization.favicon_path') ? $branding->url('favicon') : null,
                 'print_logo' => $branding->url('print_logo'),
             ],

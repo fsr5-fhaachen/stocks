@@ -283,14 +283,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
 import { router } from "@inertiajs/vue3";
-import { loadImages } from "../../labels/render";
-import {
-  downloadImages,
-  printPaper,
-  renderForPrinter,
-  type PrintLabel,
-} from "../../labels/drivers";
-import * as niimbot from "../../labels/drivers/niimbot";
+import type { PrintLabel } from "../../labels/drivers";
 
 /**
  * Print preview and printing of one label or a batch. Every target (item, box, location, stock)
@@ -309,7 +302,7 @@ const props = defineProps<{
 }>();
 
 const { can } = usePermissions();
-const { surface, kiosk, url } = useSurface();
+const { kiosk, url } = useSurface();
 
 const targetLabels: Record<LabelTargetName, string> = {
   item: "Gegenstand",
@@ -425,25 +418,6 @@ const printLabels = (): (PrintLabel & { name: string })[] =>
       name: label.code,
     }));
 
-const busy = ref(false);
-const printError = ref<string | null>(null);
-const printed = ref<string | null>(null);
-
-const render = async (crop: boolean) => {
-  const labels = printLabels();
-  const images = await loadImages(
-    Object.values(designs),
-    labels.map((label) => label.data),
-    props.logoUrl,
-  );
-  return labels.map((label) => ({
-    ...renderForPrinter(label, printer.value!, images, props.logoUrl, crop),
-    name: label.name,
-    width_mm: label.template.width_mm,
-    height_mm: label.template.height_mm,
-  }));
-};
-
 // remember when the labels were printed (filter "noch ohne Etikett")
 const markPrinted = () => {
   const ids = (targets: LabelTargetName[]) =>
@@ -457,79 +431,26 @@ const markPrinted = () => {
   );
 };
 
-const run = async (job: () => Promise<string>) => {
-  if (!toPrint().length) {
-    printError.value = "Wähle mindestens ein Etikett aus.";
-    return;
-  }
-  busy.value = true;
-  printError.value = null;
-  printed.value = null;
-  try {
-    printed.value = await job();
-    markPrinted();
-  } catch (error) {
-    printError.value = error instanceof Error ? error.message : String(error);
-  } finally {
-    busy.value = false;
-  }
-};
-
-const printOnPaper = () =>
-  run(async () => {
-    await printPaper(await render(false), copyCount(), printer.value!);
-    return "An den Druckdialog übergeben.";
-  });
-
-const downloadPng = () =>
-  run(async () => {
-    await downloadImages(await render(false));
-    return "Heruntergeladen. In der Niimbot-App das Bild öffnen und drucken.";
-  });
-
-// niimbot directly by bluetooth or usb
-// the platform of a kiosk device can rule it out (iPad: Safari has neither bluetooth nor usb)
-const connections =
-  surface.value?.direct_print === false ? [] : niimbot.directConnections();
-const connected = ref(niimbot.isConnected());
-const deviceName = ref<string | null>(null);
-const connectPrinter = async (connection: niimbot.Connection) => {
-  busy.value = true;
-  printError.value = null;
-  try {
-    deviceName.value = await niimbot.connect(connection);
-    connected.value = true;
-  } catch (error) {
-    printError.value = `Verbinden ging nicht: ${error instanceof Error ? error.message : error}`;
-  } finally {
-    busy.value = false;
-  }
-};
-
-const progress = ref<{ done: number; total: number } | null>(null);
-let abort: AbortController | null = null;
-const printNiimbot = () =>
-  run(async () => {
-    const canvases = await render(true);
-    abort = new AbortController();
-    progress.value = { done: 0, total: canvases.length };
-    try {
-      await niimbot.printDirect(
-        canvases.map((entry) => entry.canvas),
-        copyCount(),
-        printer.value!,
-        (done, total) => (progress.value = { done, total }),
-        abort.signal,
-      );
-      return abort.signal.aborted
-        ? `Abgebrochen nach ${progress.value.done} Etiketten.`
-        : "Gedruckt.";
-    } finally {
-      progress.value = null;
-      connected.value = niimbot.isConnected();
-    }
-  });
-const cancel = () => abort?.abort();
+const {
+  busy,
+  printError,
+  printed,
+  printOnPaper,
+  downloadPng,
+  connections,
+  connected,
+  deviceName,
+  connectPrinter,
+  progress,
+  printNiimbot,
+  cancel,
+} = useLabelPrinting(
+  printer,
+  () => props.logoUrl,
+  printLabels,
+  copyCount,
+  markPrinted,
+);
 
 // keep the changes of the preview in the template
 const saveTemplate = () => {

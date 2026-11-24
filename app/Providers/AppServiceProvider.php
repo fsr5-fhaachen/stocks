@@ -26,13 +26,16 @@ use App\Support\Extensions\Navigation;
 use App\Support\Extensions\SurfaceRoutes;
 use App\Support\MailSettings;
 use App\Support\Modules\ModuleRegistry;
+use App\Support\Notifications\MailLayout;
 use App\Support\Notifications\NotificationEvents;
 use App\Support\Settings;
+use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Mail\Events\MessageSending;
 use Illuminate\Notifications\Events\NotificationSending;
 use Illuminate\Notifications\Events\NotificationSent;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
@@ -88,6 +91,17 @@ class AppServiceProvider extends ServiceProvider
         foreach ([User::class, Role::class, Invitation::class, Module::class, Setting::class, Location::class, Category::class, Item::class, ItemCondition::class, ItemUnit::class, LabelTemplate::class, Printer::class, PrinterModel::class] as $class) {
             $auditSubjects->register($class);
         }
+
+        // every mail in the look of Stocks (App\Support\Notifications\MailLayout)
+        config(['mail.markdown.theme' => 'stocks']);
+        ResetPassword::toMailUsing(fn (User $user, string $token) => MailLayout::apply(
+            (new MailMessage)
+                ->subject('Passwort zurücksetzen')
+                ->greeting('Hallo!')
+                ->line('Jemand möchte das Passwort deines Kontos bei Stocks zurücksetzen. Warst du das, setze hier ein neues:')
+                ->action('Neues Passwort setzen', route('password.reset', ['token' => $token, 'email' => $user->getEmailForPasswordReset()]))
+                ->line('Der Link gilt '.config('auth.passwords.'.config('auth.defaults.passwords').'.expire').' Minuten. Warst du es nicht, musst du nichts tun.'),
+        ));
 
         // the sender of the settings replaces MAIL_FROM_ADDRESS of the environment, if it is set
         Event::listen(MessageSending::class, function (MessageSending $event) {

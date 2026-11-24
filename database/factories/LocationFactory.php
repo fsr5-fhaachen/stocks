@@ -43,8 +43,8 @@ class LocationFactory extends Factory
     {
         return $this->state([
             'parent_id' => $parent->id,
-            'type' => $parent->type->childType(),
-            'full_code' => fn (array $attributes) => Location::fullCodeOf($parent, $parent->type->childType(), $attributes['code']),
+            'type' => $parent->type->childTypes()[0],
+            'full_code' => fn (array $attributes) => Location::fullCodeOf($parent, $parent->type->childTypes()[0], $attributes['code']),
         ]);
     }
 }

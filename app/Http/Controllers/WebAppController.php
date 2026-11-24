@@ -10,7 +10,8 @@ use Illuminate\Support\Facades\Cache;
 
 /**
  * Web app: manifest and icons, so Stocks can be added to the home screen of a phone and runs in full
- * screen there. The icons are made from the logo of the organization. There is no offline mode.
+ * screen there. The icons are made from the logo for light backgrounds, without it they show a white
+ * "S" on the accent colour. There is no offline mode.
  */
 class WebAppController extends Controller
 {
@@ -26,7 +27,7 @@ class WebAppController extends Controller
      */
     public function manifest(Settings $settings, Branding $branding): JsonResponse
     {
-        $version = pathinfo((string) $branding->path('logo'), PATHINFO_FILENAME) ?: 'default';
+        $version = $branding->iconVersion();
 
         return response()->json([
             'name' => $settings->get('organization.name'),
@@ -36,7 +37,7 @@ class WebAppController extends Controller
             'display' => 'fullscreen',
             'display_override' => ['fullscreen', 'standalone'],
             'orientation' => 'portrait',
-            'background_color' => '#ffffff',
+            'background_color' => $branding->iconBackground(),
             'theme_color' => $settings->get('organization.accent_color'),
             'icons' => array_map(fn (int $size) => [
                 'src' => route('web-app.icon', ['size' => $size, 'v' => $version], absolute: false),
@@ -48,21 +49,28 @@ class WebAppController extends Controller
     }
 
     /**
-     * Deliver an icon: the logo in the middle of a white square, or a box on the accent colour
-     * without logo. Made once per logo, colour and size.
+     * Font of the "S" (only this letter, Inter Bold, licence next to it).
+     *
+     * @var string
+     */
+    private const FONT = 'fonts/Inter-Bold-S.ttf';
+
+    /**
+     * Deliver an icon: the logo for light backgrounds in the middle of a white square, or a white
+     * "S" on the accent colour without it. Made once per logo, colour and size.
      */
     public function icon(Settings $settings, Branding $branding, int $size): Response
     {
         abort_unless(in_array($size, self::ICON_SIZES, true), 404);
 
         $accent = (string) $settings->get('organization.accent_color');
-        $key = 'stocks.web-app-icon.'.md5($branding->path('logo').$accent.$size);
+        $key = 'stocks.web-app-icon.'.md5($branding->path('logo_light').$accent.$size);
 
         $png = Cache::get($key);
         if ($png === null) {
-            $png = $this->draw($size, $branding->contents('logo'), $accent);
+            $png = $this->draw($size, $branding->contents('logo_light'), $accent);
             // without S3 the default icon is shown, but not kept
-            if ($branding->path('logo') === null || $png !== null) {
+            if ($branding->path('logo_light') === null || $png !== null) {
                 Cache::put($key, $png, now()->addWeek());
             }
         }
@@ -91,7 +99,7 @@ class WebAppController extends Controller
         } else {
             [$red, $green, $blue] = sscanf($accent, '#%02x%02x%02x') ?: [34, 148, 140];
             imagefill($image, 0, 0, imagecolorallocate($image, $red, $green, $blue));
-            $this->drawBox($image, $size, imagecolorallocate($image, 255, 255, 255));
+            $this->drawLetter($image, $size, imagecolorallocate($image, 255, 255, 255));
         }
 
         ob_start();
@@ -101,14 +109,19 @@ class WebAppController extends Controller
     }
 
     /**
-     * A simple box (front and lid) in the middle of the icon.
+     * A white "S" in the middle of the icon, about 60 % of its height.
      */
-    private function drawBox(\GdImage $image, int $size, int $color): void
+    private function drawLetter(\GdImage $image, int $size, int $color): void
     {
-        $unit = $size / 100;
-        $points = fn (array $coordinates) => array_map(fn (float $value) => (int) round($value * $unit), $coordinates);
-
-        imagefilledpolygon($image, $points([24, 40, 34, 28, 66, 28, 76, 40]), $color);
-        imagefilledrectangle($image, ...[...$points([28, 44, 72, 74]), $color]);
+        $font = resource_path(self::FONT);
+        // measured once, then scaled, so the letter is 60 % high whatever the font metrics
+        $points = $size * 0.6;
+        $box = imagettfbbox($points, 0, $font, 'S');
+        $points *= $size * 0.6 / max(1, $box[1] - $box[7]);
+        // centre the drawn letter by its bounding box, not by the baseline
+        $box = imagettfbbox($points, 0, $font, 'S');
+        $width = $box[2] - $box[0];
+        $height = $box[1] - $box[7];
+        imagettftext($image, $points, 0, (int) round(($size - $width) / 2 - $box[0]), (int) round(($size + $height) / 2 - $box[1]), $color, $font, 'S');
     }
 }

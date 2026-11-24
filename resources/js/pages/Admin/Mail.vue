@@ -129,6 +129,21 @@
             >Test-Mail senden</UiButton
           >
         </form>
+        <!-- preview of the design in a new tab, sends nothing -->
+        <div class="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+          <a
+            href="/admin/mail/preview"
+            target="_blank"
+            class="text-accent underline"
+            >Vorschau Test-Mail</a
+          >
+          <a
+            href="/admin/mail/preview?mail=invitation"
+            target="_blank"
+            class="text-accent underline"
+            >Vorschau Einladung</a
+          >
+        </div>
       </UiCard>
 
       <UiCard title="Warteschlange">

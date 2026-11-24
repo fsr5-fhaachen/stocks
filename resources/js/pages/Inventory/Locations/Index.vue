@@ -1,7 +1,7 @@
 <template>
   <UiPageHeader
     title="Standorte"
-    description="Adresse, Raum, Lagerplatz und Fach. Die Kennziffer setzt sich aus den Kürzeln zusammen."
+    description="Adresse, Gebäude (optional), Raum, Lagerplatz und Fach. Die Kennziffer setzt sich aus den Kürzeln zusammen; ein Gebäude nur, wenn es „im Code“ steht."
   >
     <UiButton
       v-if="can('locations.manage')"
@@ -62,6 +62,11 @@
             />
           </button>
           <span v-else class="w-4" />
+          <FontAwesomeIcon
+            v-if="location.type === 'building'"
+            :icon="['fas', 'building']"
+            class="text-ink-muted"
+          />
           <UiLink
             :href="`/inventory/locations/${location.id}`"
             class="font-mono font-semibold"
@@ -76,13 +81,14 @@
         </div>
         <div v-if="can('locations.manage')" class="flex gap-2">
           <UiButton
-            v-if="location.type !== 'compartment'"
+            v-for="child in childTypes[location.type]"
+            :key="child"
             variant="ghost"
             size="sm"
             icon="plus"
-            @click="openCreate(location)"
+            @click="openCreate(location, child)"
           >
-            {{ childLabel[location.type] }}
+            {{ typeLabels[child] }}
           </UiButton>
           <UiButton
             variant="ghost"
@@ -101,6 +107,7 @@
     v-if="editing"
     :location="editing.location"
     :parent-id="editing.parentId"
+    :type="editing.type"
     :locations="locations"
     @close="editing = null"
   />
@@ -112,31 +119,63 @@ import { computed, ref } from "vue";
 type LocationRow = {
   id: number;
   parent_id: number | null;
-  type: "address" | "room" | "shelf" | "compartment";
+  type: LocationType;
   type_label: string;
   code: string;
   name: string | null;
   full_code: string;
+  show_in_code: boolean;
   description: string | null;
   items_count: number;
   label_printed_at: string | null;
 };
 
 /**
- * Tree of all locations. The server sorts them by full code, so every location comes after its
- * parent and the tree is a list with indentation.
+ * Tree of all locations as a list with indentation: every location after its parent, siblings by
+ * full code. The order is built here, because a building that is not in the code does not sort
+ * its rooms below itself by the full code.
  */
 const props = defineProps<{ locations: LocationRow[] }>();
 const { can } = usePermissions();
 
-const levels = ["address", "room", "shelf", "compartment"];
-const depth = (location: LocationRow) => levels.indexOf(location.type);
-const childLabel = {
-  address: "Raum",
-  room: "Lagerplatz",
-  shelf: "Fach",
-  compartment: "",
+const typeLabels: Record<LocationType, string> = {
+  address: "Adresse",
+  building: "Gebäude",
+  room: "Raum",
+  shelf: "Lagerplatz",
+  compartment: "Fach",
 };
+// levels a child can have (App\Enums\LocationType::childTypes)
+const childTypes: Record<LocationType, LocationType[]> = {
+  address: ["room", "building"],
+  building: ["room"],
+  room: ["shelf"],
+  shelf: ["compartment"],
+  compartment: [],
+};
+
+const tree = computed(() => {
+  const children = new Map<number | null, LocationRow[]>();
+  for (const location of props.locations) {
+    children.set(location.parent_id, [
+      ...(children.get(location.parent_id) ?? []),
+      location,
+    ]);
+  }
+  const rows: { location: LocationRow; depth: number }[] = [];
+  const walk = (parentId: number | null, depth: number) => {
+    for (const location of children.get(parentId) ?? []) {
+      rows.push({ location, depth });
+      walk(location.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return rows;
+});
+const depths = computed(
+  () => new Map(tree.value.map((row) => [row.location.id, row.depth])),
+);
+const depth = (location: LocationRow) => depths.value.get(location.id) ?? 0;
 
 const parents = computed(
   () => new Set(props.locations.map((location) => location.parent_id)),
@@ -171,15 +210,20 @@ const unlabeled = computed(() =>
 const visible = computed(() =>
   onlyUnlabeled.value
     ? unlabeled.value
-    : props.locations.filter((location) => !isHidden(location)),
+    : tree.value
+        .map((row) => row.location)
+        .filter((location) => !isHidden(location)),
 );
 
 const editing = ref<{
   location: LocationRow | null;
   parentId: number | null;
+  type: LocationType | null;
 } | null>(null);
-const openCreate = (parent: LocationRow | null) =>
-  (editing.value = { location: null, parentId: parent?.id ?? null });
+const openCreate = (
+  parent: LocationRow | null,
+  type: LocationType | null = null,
+) => (editing.value = { location: null, parentId: parent?.id ?? null, type });
 const openEdit = (location: LocationRow) =>
-  (editing.value = { location, parentId: location.parent_id });
+  (editing.value = { location, parentId: location.parent_id, type: null });
 </script>

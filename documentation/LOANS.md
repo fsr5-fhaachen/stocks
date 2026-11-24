@@ -18,6 +18,7 @@ Das Modul `modules/Loans` (Schlüssel `loans`) verwaltet, wer was von wann bis w
 - [Rückgabe](#rückgabe)
 - [Prüfung und Einräumen](#prüfung-und-einräumen)
 - [Am Gegenstand](#am-gegenstand)
+- [Archiv](#archiv)
 - [Einstellungen](#einstellungen)
 - [Rechte](#rechte)
 - [Datenbank](#datenbank)
@@ -45,7 +46,9 @@ Den Status ändern nur die Actions in `modules/Loans/Actions`. Entwürfe lassen 
 
 ## Kontakte, Fachschaften, Veranstaltungen
 
-**Kontakt** (`contacts`): Entleiher und Verantwortliche haben kein Konto. Name, E-Mail, Telefon, Anschrift, Fachschaft oder privat, Notiz. „Vollständig“ heißt Name, E-Mail, Telefon, Straße, PLZ und Ort (`Contact::REQUIRED`); nur ein vollständiger Kontakt kann eine Buchung verantworten. Kontakte legt man auch im Formular der Buchung an (Dialog, JSON an `POST /loans/contacts`). Ein Kontakt mit Buchungen oder Veranstaltungen lässt sich nicht löschen; Aufbewahrungsfristen kommen mit Phase 7. Kontaktdaten sieht nur, wer `loans.manage` hat, alle anderen sehen in Buchungen nur den Namen (`Contact::summary(false)`).
+**Kontakt** (`contacts`): Entleiher und Verantwortliche haben kein Konto. Name, E-Mail, Telefon, Anschrift, Fachschaft oder privat, Notiz. „Vollständig“ heißt Name, E-Mail, Telefon, Straße, PLZ und Ort (`Contact::REQUIRED`); nur ein vollständiger Kontakt kann eine Buchung verantworten. Kontakte legt man auch im Formular der Buchung an (Dialog, JSON an `POST /loans/contacts`).
+
+**Kontakt löschen** (`DeleteContact`, seit Review Phase 5): Ohne Buchungen und Veranstaltungen reicht `loans.manage`. Mit ihnen braucht es `loans.contacts.delete`, und jede Buchung des Kontakts muss abgeschlossen, mit Mängeln abgeschlossen oder storniert sein; sonst nennt die Meldung die offenen Nummern (ein Entwurf ist offen). Beim Löschen kommt der Name, bei einer Fachschaft als „Name (Fachschaft)“, als Text an die Buchungen (`borrower_name`, `responsible_name`) und Veranstaltungen (`responsible_name`); die Verweise werden leer (`nullOnDelete`). E-Mail, Telefon, Anschrift und Notiz sind weg, auch aus dem Protokoll (frühere Einträge werden bereinigt, der Eintrag „gelöscht“ behält nur den Namen). Push-Abos der Verleihseiten dieser Buchungen enden. Danach zeigen Buchung, Liste, Verleihseite und Veranstaltung den Namen ohne Link und ohne Kontaktdaten (`Loan::borrowerName()`, `responsibleName()`); unterschriebene PDFs kommen aus dem Snapshot und bleiben, wie sie sind. Kein Papierkorb. Aufbewahrungsfristen kommen später. Kontaktdaten sieht nur, wer `loans.manage` hat, alle anderen sehen in Buchungen nur den Namen (`Contact::summary(false)`).
 
 **Fachschaft** (`councils`): Nummer, Name, aktiv. Die Migration legt FSR 1 bis FSR 10 an. Gepflegt unter Verwaltung › Einstellungen › Verleih; eine Fachschaft mit Kontakten lässt sich nur ausschalten. Ist keine aktiv, bleibt nur „privat“.
 
@@ -226,6 +229,8 @@ Schritte: **Material → Übersicht → Unterschriften**. Die Übersicht zeigt, 
 
 ## Am Gegenstand
 
+Ausgegebene Gegenstände stehen nicht unter „Ohne Platz“ (`LoanAwayItems`, siehe [INVENTORY.md](INVENTORY.md)); zurück, aber nicht eingeräumt, und vermisst stehen dort wieder.
+
 Über die Erweiterungspunkte des Kerns ([MODULES.md](MODULES.md#gegenstände), `Support\LoanItemInfo`):
 
 | Hinweis | Wo | Sperre | Aktion auf der Scan-Karte |
@@ -237,6 +242,10 @@ Schritte: **Material → Übersicht → Unterschriften**. Die Übersicht zeigt, 
 | – | Scan-Karte eines verleihbaren Gegenstands | – | Zur Buchung hinzufügen (`loans.manage`) |
 
 Die öffentliche Ansicht zeigt nichts davon (kein Entleiher, keine Buchung).
+
+## Archiv
+
+Seit Review Phase 5. Fertige Buchungen (abgeschlossen, mit Mängeln, storniert; `LoanStatus::finished()`) lassen sich von Hand archivieren (`ArchiveLoan`): Knopf „Archivieren“ auf der Buchung oder Mehrfachauswahl in der Liste. Das Archiv nimmt sie nur aus der Buchungsliste, der Schalter „Archiv“ zeigt dann nur archivierte. Kontaktseite, Reiter „Verleih“ am Gegenstand, Veranstaltung, Kalender und Dashboard bleiben unverändert und zeigen das Abzeichen „archiviert“; Verleihseite, Dokumente und Erinnerungen laufen wie vorher. „Aus dem Archiv holen“ steht im Hinweis oben auf der Buchung. Kein automatisches Archivieren. Recht `loans.archive`; beides steht im Protokoll (`archived_at`, `archived_by`).
 
 ## Einstellungen
 
@@ -266,8 +275,10 @@ Dazu die Liste der Fachschaften und eine Vorschau des Vertrags mit Beispielwerte
 | `loans.issue` | Ausgabe, Rückgabe, Prüfung, Einräumen, Liste „Rückgaben“ | – | ja | ja | ja |
 | `loans.cancel` | Stornieren, Mängel abschließen | – | – | ja | ja |
 | `loans.settings` | Leihvertrag, Verleiher, Puffer, Präfix, Fachschaften | – | – | ja | ja |
+| `loans.archive` | Fertige Buchungen archivieren und zurückholen (Review Phase 5) | – | – | ja | ja |
+| `loans.contacts.delete` | Kontakte mit Buchungen löschen, der Name bleibt an den Buchungen (Review Phase 5) | – | – | ja | ja |
 
-Die Vorgaben stehen unter `start_roles` in `module.json` und gelten bei der Einrichtung; in bestehenden Instanzen vergibt man sie in der Rollenverwaltung. Die Pack-PIN braucht kein Recht, nur die PIN; die Verleihseite nur den Link. Phase 5 bringt keine neuen Rechte.
+Die Vorgaben stehen unter `start_roles` in `module.json` und gelten bei der Einrichtung; in bestehenden Instanzen vergibt man sie in der Rollenverwaltung (Admin bekommt neue Rechte über `stocks:sync`). Die Pack-PIN braucht kein Recht, nur die PIN; die Verleihseite nur den Link. Phase 5 brachte keine neuen Rechte, Review Phase 5 die beiden letzten.
 
 ## Datenbank
 
@@ -275,7 +286,7 @@ Die Vorgaben stehen unter `start_roles` in `module.json` und gelten bei der Einr
 |---|---|
 | `councils` | `number`, `name`, `is_active` |
 | `contacts` | `name`, `email`, `phone`, `street`, `zip`, `city`, `council_id` (leer = privat), `notes` |
-| `events` | `name`, `starts_at`, `ends_at`, `place`, `responsible_contact_id`, `notes` |
+| `events` | `name`, `starts_at`, `ends_at`, `place`, `responsible_contact_id`, `responsible_name` (Name eines gelöschten Kontakts), `notes` |
 | `loans` | `number`, `status`, `kind`, `borrower_contact_id`, `responsible_contact_id`, `responsible_user_id`, `issuer_id`, `event_id`, `pickup_at`, `return_at`, `confirmed_at`, `issued_at`, `returned_at`, `inspected_at`, `defects_closed_at`, `defects_note`, `purpose`, `notes`, `pack_pin` (verschlüsselt), `pin_attempts`, `contract_text`, `cancelled_at`, `cancelled_reason`, `created_by` |
 | `loan_items` | `loan_id`, `parent_id` (Zeile einer Box), `item_id`, `quantity`, `issued_item_id` (abgeteilter Teil), `condition_at_issue`, `checked_at`/`_by`/`_by_scan` (Ausgabe), `return_checked_at`/`_by`/`_by_scan` (Rückgabe oder Prüfung, noch nicht gebucht), `returned_quantity`, `return_state` (ok, missing, damaged, dirty, incomplete), `return_note`, `issued_at` und `issue_document_id` (mit welcher Materialliste die Zeile ging; leer: Rest), `issue_state` und `issue_note` (Mangel bei der Ausgabe), `returned_at`, `return_document_id`, `inspected_at`, `inspected_by`, `stowed_at` |
 | `loan_documents` | `loan_id`, `type` (confirmation, contract, list, return_receipt, paper_scan), `snapshot` (JSON), `hash`, `path` (nur Papier-Scan), `created_by` |
@@ -283,6 +294,7 @@ Die Vorgaben stehen unter `start_roles` in `module.json` und gelten bei der Einr
 | `loan_box_checks` | `loan_item_id`, `name`, `ticks` (JSON), `total`, `checked_at` |
 | `loans` (Phase 5) | `access_version` (Version des Schlüssels), `access_blocked_at`, `notification_preferences` (JSON, Einstellungen der Verleihseite, nur Abweichungen) |
 | `loan_items` (Phase 5) | `borrower_checked_at` (Checkliste der Verleihseite) |
+| `loans` (Review Phase 5) | `archived_at`, `archived_by`; `borrower_name`, `responsible_name` (Name eines gelöschten Kontakts); Kontakt-Verweise jetzt `nullOnDelete` |
 | `loan_messages` | `loan_id`, `sender` (contact, user, system), `user_id`, `author_name`, `body`, `read_by_staff_at`, `read_by_contact_at` |
 | `loan_extension_requests` | `loan_id`, `requested_return_at`, `note`, `status` (open, accepted, declined, done), `answer`, `decided_by`, `decided_at`; auditiert |
 | `loan_notifications` | `loan_id`, `type`, `stage`, `due_at` (Termin einer Erinnerung), `channel` (mail, push, trigger), `recipient`, `sent_by` (leer = automatisch), `sent_at` |
@@ -298,6 +310,7 @@ Alle unter `/loans` hinter `auth` und `module:loans`; ausgeschaltet antworten si
 | Bereich | Adressen |
 |---|---|
 | Buchungen | `/loans`, `/loans/create`, `/loans/{id}`, `/loans/{id}/edit`, `confirm` (mit `notify`), `extend`, `cancel`, `pin`, `close-defects`, `positions`, `/loans/search-items`, `/loans/add-item/{item}` |
+| Archiv (`loans.archive`) | `POST`/`DELETE /loans/{id}/archive`, `POST /loans/archive` (`ids`) |
 | Chat, Verleihseite, Nachrichten (`loans.manage`) | `GET`/`POST /loans/{id}/messages`, `page/block`, `page/reissue`, `extension-requests/{id}/accept`, `extension-requests/{id}/decline`, `remind` |
 | Ausgabe | `/loans/{id}/issue`, `issue/check`, `issue/rows/{row}/uncheck`, `issue/rows/{row}/defect`, `issue/rows/{row}/reset-defect`, `issue/rows/{row}/drop`, `issue/responsible`, `issue/complete`, `/loans/{id}/preview/{contract,list}.pdf` |
 | Rückgabe, Prüfung | `/loans/{id}/return`, `/loans/{id}/inspect`, je `check`, `rows/{row}/defect`, `rows/{row}/reset`; `return/complete`, `return/unchecked`, `inspect/complete` |
@@ -318,6 +331,7 @@ Alle unter `/loans` hinter `auth` und `module:loans`; ausgeschaltet antworten si
 - Unterschriften nur als geprüftes PNG bis rund 400 KB; Vertragstext maskiert, bevor er ausgezeichnet wird.
 - Unterschriebene Dokumente (Vertrag, Materialliste, Rückgabebeleg, Foto des Blatts) und Unterschriftsbilder nur mit `loans.issue` oder `loans.manage` (`LoanController::canSeeDocuments()`); wer nur `loans.view` hat, sieht Positionen und Status. Die Buchungsbestätigung mit PIN nur mit `loans.manage`.
 - Die Prüfsumme der Dokumente liegt neben ihrem Inhalt: Sie zeigt versehentliche Änderungen, schützt aber nicht vor jemandem mit Schreibzugriff auf die Datenbank.
+- Archivieren und Löschen von Kontakten mit Buchungen prüfen ihr Recht auf dem Server, nicht nur am Knopf. Das Protokoll eines gelöschten Kontakts behält keine Kontaktdaten (`Contact::transformAudit()`, `DeleteContact`).
 - Ausgegebene Gegenstände sind gegen Umlagern und Ausmustern gesperrt; die Sperre prüfen die Actions des Kerns, nicht nur die Oberfläche.
 - Verleihseite: Schlüssel 256 Bit, nicht gespeichert, Vergleich mit `hash_equals`, 404 bei jedem Fehler, `noindex` und `no-referrer`, eigene Rate Limits. Routen binden Dokument, Zeile und Nachricht immer an die Buchung des Links. Push-Endpunkte nur von bekannten Push-Diensten (https), höchstens 10 Geräte je Buchung. Push-Inhalte ohne Anschrift und Pack-PIN.
 

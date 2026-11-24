@@ -32,6 +32,8 @@ class Settings
         'organization.accent_color' => '#22948c',
         // paths of logo and favicon on S3, see App\Support\Branding
         'organization.logo_path' => null,
+        // logo for light backgrounds (light mode, icon of the web app), see App\Support\Branding
+        'organization.logo_light_path' => null,
         'organization.favicon_path' => null,
         // logo for labels and pdf, see App\Support\Branding
         'organization.print_logo_path' => null,

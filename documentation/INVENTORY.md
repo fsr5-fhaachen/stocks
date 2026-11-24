@@ -21,7 +21,7 @@ Etiketten, Kurzlinks, Kamera-Scan und die Box-Inhaltsliste als PDF stehen in [LA
 
 | Begriff | Bedeutung |
 |---|---|
-| Standort | Adresse, Raum, Lagerplatz oder Fach |
+| Standort | Adresse, Gebäude (optional), Raum, Lagerplatz oder Fach |
 | Kennziffer | Pfad eines Standorts aus den Kürzeln, z. B. `EU-014-R03.4` |
 | Gegenstand | alles Inventarisierte, auch Boxen |
 | Box | Gegenstand mit „ist Behälter“, kann andere Gegenstände enthalten |
@@ -32,13 +32,25 @@ Etiketten, Kurzlinks, Kamera-Scan und die Box-Inhaltsliste als PDF stehen in [LA
 
 ## Standorte und Kennziffern
 
-Vier Ebenen, jede liegt in der davor: Adresse → Raum → Lagerplatz → Fach. Die Ebene ergibt sich aus dem übergeordneten Standort.
+Fünf Ebenen: Adresse → (Gebäude) → Raum → Lagerplatz → Fach. Das Gebäude ist optional (seit Review Phase 5): Ein Raum liegt in einer Adresse oder in einem Gebäude. Die Ebene ergibt sich aus dem übergeordneten Standort (`LocationType::childTypes()`); unter einer Adresse wird beim Anlegen gewählt, ob ein Raum oder ein Gebäude entsteht. Danach bleibt die Ebene fest, ein Raum darf aber zwischen Adresse und Gebäude wechseln.
 
 - Kürzel bestehen nur aus Buchstaben und Ziffern und werden groß geschrieben.
 - Die Kennziffer verbindet die Kürzel mit `-`, das Fach mit `.`: `EU` · `EU-014` · `EU-014-R03` · `EU-014-R03.4`.
 - Die Kennziffer ist gespeichert (`locations.full_code`, eindeutig) und wird bei jeder Umbenennung oder Verschiebung für alle Standorte darunter neu berechnet (`SaveLocation`). Eindeutige Kennziffern bedeuten: Ein Kürzel gibt es unter demselben Standort nur einmal.
 - Ein Standort lässt sich mit allem darunter löschen, wenn dort nichts liegt und nichts seinen Stammplatz hat (`DeleteLocation`).
-- Gegenstände liegen in einem Raum, auf einem Lagerplatz oder in einem Fach, z. B. ein Beamer direkt im Raum, aber nie direkt an einer Adresse (`Placement::check`).
+- Gegenstände liegen in einem Raum, auf einem Lagerplatz oder in einem Fach, z. B. ein Beamer direkt im Raum, aber nie direkt an einer Adresse oder in einem Gebäude (`Placement::check`, `LocationType::holdsItems()`).
+
+**Gebäude und Kennziffer.** Je Gebäude gibt es den Schalter „Im Code zeigen“ (`locations.show_in_code`, Vorgabe aus):
+
+| Gebäude | Kennziffer des Gebäudes | Raum darin |
+|---|---|---|
+| im Code | `EU-A` | `EU-A-014`, darunter `EU-A-014-R03.4` |
+| nicht im Code | `EU-A` (für sein Etikett) | `EU-014`, als läge er direkt an der Adresse |
+
+- `Location::fullCodeOf()` rechnet die Kinder eines Gebäudes ohne Code vom Code der Adresse weiter.
+- Umlegen des Schalters oder Verschieben eines Raums rechnet alle Kennziffern darunter neu. `SaveLocation` prüft vorher alle neuen Kennziffern; gibt es eine schon (zwei Räume `014`, einer an der Adresse, einer im Gebäude ohne Code), bricht es mit „Die Kennziffer … gibt es schon.“ ab, ohne etwas zu ändern.
+- Alte Kennziffern werden nicht aufgelöst: Etiketten mit dem alten Text neu drucken. QR-Codes auf Standort-Etiketten zeigen auf die Id (`location-{id}`) und gehen weiter.
+- Die Oberfläche fragt vor dem Umlegen nach und sagt, wie viele Kennziffern sich ändern. Pfad und Baum zeigen das Gebäude immer, auch wenn es nicht im Code steht.
 
 ## Gegenstände, Boxen, Mengenartikel
 
@@ -56,7 +68,9 @@ Ort und Stammplatz zeigen jeweils auf einen Standort **oder** eine Box (`locatio
 
 **Zurückbuchen.** Ein abgeteilter Teil lässt sich zu seinem Ursprung zurückbuchen (`MergeItem`), ganz oder teilweise: auf seiner Seite über „Zurückbuchen“ oder auf der Seite „Umlagern“, indem man als Ziel die Nummer des Ursprungs scannt. Die Menge kommt beim Ursprung dazu, beide bekommen eine Bewegung `merge`. Ein ganz zurückgebuchter Teil wird mit Grund „zurückgebucht“ ausgemustert und behält seine Nummer und seinen Verlauf. Ist der Ursprung selbst schon zurückgebucht (ein Teil von einem Teil, z. B. fehlende Stücke eines verliehenen Teils), geht es weiter zu dessen Ursprung (`Item::mergeTarget()`). Recht: `inventory.move`.
 
-**„Ohne Platz“** listet Gegenstände ohne Ort und solche mit Stammplatz, die nicht dort liegen (`Item::misplaced()`).
+**„Ohne Platz“** listet Gegenstände ohne Ort und solche mit Stammplatz, die nicht dort liegen (`Item::misplaced()`). Gegenstände, die ein Modul bewusst unterwegs hat, fehlen dort (seit Review Phase 5, `ItemExtensions::misplaced()` mit `withoutAway()`): der Verleih nimmt ausgegebene Gegenstände heraus. Zurück, aber noch nicht eingeräumt, und vermisst stehen wieder dort. Dasselbe gilt für die Zahl auf dem Dashboard.
+
+**Nach Boxen gruppieren.** Schalter in „Gegenstände“ und „Ohne Platz“ (je Gerät und Liste gemerkt, `localStorage`). An: oben stehen nur Gegenstände, deren Box nicht selbst in der Liste steht, Boxen mit der Zahl ihres direkten Inhalts; der Pfeil klappt den Inhalt auf (`GET /inventory/items/{box}/contents`, höchstens 200 Zeilen, danach „… und N weitere“ mit Link zur Box), auch Boxen in Boxen. Mit Suche oder Filter ist die Liste flach (`ItemsTable::isGrouped()`). Der Inhalt wird neu geladen, wenn sich die Zeile der Box ändert oder sie neu aufgeklappt wird.
 
 ## Artikelnummern
 

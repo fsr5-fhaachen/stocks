@@ -70,45 +70,51 @@
               </tr>
             </thead>
             <tbody :id="tbodyId" class="divide-y divide-line">
-              <tr
-                v-for="row in rows"
-                :key="idFunction(row)"
-                :class="[
-                  rowClass(row),
-                  stacked ? 'block px-4 py-3 sm:table-row sm:p-0' : '',
-                ]"
-              >
-                <td
-                  v-for="column in columns"
-                  :key="column.name"
-                  :class="
-                    stacked
-                      ? 'block py-0.5 sm:table-cell sm:whitespace-nowrap sm:px-6 sm:py-3'
-                      : 'whitespace-nowrap px-4 py-3 sm:px-6'
-                  "
+              <template v-for="row in rows" :key="idFunction(row)">
+                <tr
+                  :class="[
+                    rowClass(row),
+                    stacked ? 'block px-4 py-3 sm:table-row sm:p-0' : '',
+                  ]"
                 >
-                  <slot :name="`cell-${column.name}`" :row="row">
-                    {{ column.value?.(row) }}
-                  </slot>
-                </td>
-                <td
-                  v-if="$slots.actions"
-                  :class="
-                    stacked
-                      ? 'block pt-2 sm:table-cell sm:whitespace-nowrap sm:px-6 sm:py-3 sm:text-right'
-                      : 'whitespace-nowrap px-4 py-3 text-right sm:px-6'
-                  "
-                >
-                  <div
-                    :class="[
-                      'flex gap-2',
-                      stacked ? 'sm:justify-end' : 'justify-end',
-                    ]"
+                  <td
+                    v-for="column in columns"
+                    :key="column.name"
+                    :class="
+                      stacked
+                        ? 'block py-0.5 sm:table-cell sm:whitespace-nowrap sm:px-6 sm:py-3'
+                        : 'whitespace-nowrap px-4 py-3 sm:px-6'
+                    "
                   >
-                    <slot name="actions" :row="row" />
-                  </div>
-                </td>
-              </tr>
+                    <slot :name="`cell-${column.name}`" :row="row">
+                      {{ column.value?.(row) }}
+                    </slot>
+                  </td>
+                  <td
+                    v-if="$slots.actions"
+                    :class="
+                      stacked
+                        ? 'block pt-2 sm:table-cell sm:whitespace-nowrap sm:px-6 sm:py-3 sm:text-right'
+                        : 'whitespace-nowrap px-4 py-3 text-right sm:px-6'
+                    "
+                  >
+                    <div
+                      :class="[
+                        'flex gap-2',
+                        stacked ? 'sm:justify-end' : 'justify-end',
+                      ]"
+                    >
+                      <slot name="actions" :row="row" />
+                    </div>
+                  </td>
+                </tr>
+                <!-- more rows below the row, e.g. the contents of an opened box -->
+                <slot
+                  name="after-row"
+                  :row="row"
+                  :columns="columns.length + ($slots.actions ? 1 : 0)"
+                />
+              </template>
               <tr v-if="!rows.length">
                 <td
                   :colspan="columns.length + ($slots.actions ? 1 : 0)"
@@ -145,7 +151,8 @@ type Row = Record<string, any> & { _version?: number };
  * live update. See documentation/TABLE_POLLING.md.
  *
  * Cells show the value of the column as text; the slot "cell-<column name>" replaces a cell, the
- * slot "actions" adds buttons per row. Nothing is rendered as html.
+ * slot "actions" adds buttons per row, the slot "after-row" (props: row, columns = number of
+ * cells of a row) adds more <tr> right below a row. Nothing is rendered as html.
  */
 const props = defineProps({
   // name of the infinite scroll prop of the page (see app/Support/Table)

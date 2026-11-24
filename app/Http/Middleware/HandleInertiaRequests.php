@@ -45,7 +45,9 @@ class HandleInertiaRequests extends Middleware
                 'name' => $settings->get('organization.name'),
                 'short_name' => $settings->get('organization.short_name'),
                 'accent_color' => $settings->get('organization.accent_color'),
+                // logo for dark backgrounds (dark mode) and for light ones (light mode)
                 'logo_url' => app(Branding::class)->url('logo'),
+                'logo_light_url' => app(Branding::class)->url('logo_light'),
                 'imprint_url' => $settings->get('legal.imprint_url'),
                 'privacy_url' => $settings->get('legal.privacy_url'),
             ],

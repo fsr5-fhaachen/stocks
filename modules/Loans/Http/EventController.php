@@ -55,7 +55,7 @@ class EventController extends Controller
         $loans = $event->loans()->with('responsible', 'responsibleUser', 'borrower')->get();
 
         return Inertia::render('Loans::Events/Show', [
-            'event' => [...$this->summary($event), 'responsible' => $event->responsible?->summary($request->user()->can('loans.manage'))],
+            'event' => [...$this->summary($event), 'responsible' => $event->responsible?->summary($request->user()->can('loans.manage')) ?? ($event->responsible_name ? ['id' => null, 'name' => $event->responsible_name] : null)],
             'loans' => $loans->map(fn (Loan $loan) => $loan->summary()),
             // what the loans of the event take along, cancelled ones left out
             'materials' => $loans->reject(fn (Loan $loan) => $loan->status === LoanStatus::Cancelled)
@@ -96,7 +96,7 @@ class EventController extends Controller
             ...$event->only(['id', 'name', 'place', 'notes', 'responsible_contact_id']),
             'starts_at' => $event->starts_at->toIso8601String(),
             'ends_at' => $event->ends_at->toIso8601String(),
-            'responsible_name' => $event->responsible?->name,
+            'responsible_name' => $event->responsibleName(),
             'loans_count' => $event->loans_count ?? $event->loans()->count(),
         ];
     }

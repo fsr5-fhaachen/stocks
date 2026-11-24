@@ -3,14 +3,25 @@
 
   <UiCard
     title="Logo und Symbol"
-    description="Das Logo steht oben links, auf der Anmeldeseite und am Kiosk. Das Symbol (Favicon) zeigt der Browser im Tab. Das Druck-Logo kommt auf Etiketten und die Inhaltsliste; ohne eigenes gilt das Logo."
+    description="Die Logos stehen oben links, auf der Anmeldeseite, am Kiosk und auf der Verleihseite: im hellen Modus das Logo für helle Hintergründe, im dunklen das für dunkle. Gibt es nur eines, gilt es in beiden. Das Logo für helle Hintergründe wird auch das Icon auf dem Home-Bildschirm, ohne steht dort ein „S“ auf der Akzentfarbe. Das Symbol (Favicon) zeigt der Browser im Tab. Das Druck-Logo kommt auf Etiketten, PDFs und Mails."
     class="mb-6"
   >
-    <form class="grid gap-6 sm:grid-cols-3" @submit.prevent="saveBranding">
+    <form
+      class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4"
+      @submit.prevent="saveBranding"
+    >
       <div v-for="kind in brandingKinds" :key="kind.key" class="space-y-3">
         <p class="text-sm font-medium">{{ kind.label }}</p>
+        <!-- preview on the background the logo is made for, so a white logo is visible -->
         <div
-          class="flex h-20 items-center justify-center rounded-md bg-surface-muted p-2"
+          :class="[
+            'flex h-20 items-center justify-center rounded-md p-2 ring-1 ring-line',
+            kind.background === 'dark'
+              ? 'bg-gray-900 text-gray-400'
+              : kind.background === 'light'
+                ? 'bg-white text-gray-500'
+                : 'bg-surface-muted text-ink-muted',
+          ]"
         >
           <img
             v-if="previews[kind.key]"
@@ -18,7 +29,7 @@
             alt=""
             class="max-h-full max-w-full object-contain"
           />
-          <span v-else class="text-sm text-ink-muted">Standard</span>
+          <span v-else class="text-sm">Standard</span>
         </div>
         <input
           type="file"
@@ -40,7 +51,7 @@
           Standard verwenden
         </UiButton>
       </div>
-      <div class="flex justify-end sm:col-span-3">
+      <div class="flex justify-end sm:col-span-2 lg:col-span-4">
         <UiButton
           type="submit"
           :disabled="brandingForm.processing || !brandingForm.isDirty"
@@ -158,6 +169,7 @@ const props = defineProps<{
   settings: Record<string, string | null>;
   branding: {
     logo: string | null;
+    logo_light: string | null;
     favicon: string | null;
     print_logo: string | null;
   };
@@ -165,18 +177,35 @@ const props = defineProps<{
 }>();
 
 // logo and favicon have their own form, files can not be sent with PUT
-type BrandingKind = "logo" | "favicon" | "print_logo";
+type BrandingKind = "logo" | "logo_light" | "favicon" | "print_logo";
 const brandingKinds: {
   key: BrandingKind;
   label: string;
   accept: string;
   hint: string;
+  // background of the preview
+  background?: "dark" | "light";
 }[] = [
   {
     key: "logo",
-    label: "Logo",
+    label: "Logo für dunkle Hintergründe",
     accept: "image/png,image/jpeg,image/webp",
-    hint: "PNG, JPG oder WebP, höchstens 2 MB. Am besten quadratisch und mit durchsichtigem Hintergrund.",
+    hint: "Für den dunklen Modus, z. B. weiß. PNG, JPG oder WebP, höchstens 2 MB. Am besten quadratisch und mit durchsichtigem Hintergrund.",
+    background: "dark",
+  },
+  {
+    key: "logo_light",
+    label: "Logo für helle Hintergründe",
+    accept: "image/png,image/jpeg,image/webp",
+    hint: "Für den hellen Modus und das Icon auf dem Home-Bildschirm. Ein schon abgelegtes Icon ändert sich erst, wenn die App neu zum Home-Bildschirm hinzugefügt wird.",
+    background: "light",
+  },
+  {
+    key: "print_logo",
+    label: "Druck-Logo",
+    accept: "image/png,image/jpeg,image/webp",
+    hint: "Für Papier und Etiketten: dunkel auf hellem Grund. Der Niimbot druckt nur Schwarz und Weiß. Ohne Druck-Logo gilt auf Papier das Logo für dunkle Hintergründe, in Mails das für helle.",
+    background: "light",
   },
   {
     key: "favicon",
@@ -184,21 +213,17 @@ const brandingKinds: {
     accept: "image/png,image/x-icon,.ico",
     hint: "PNG oder ICO, quadratisch, höchstens 512 KB.",
   },
-  {
-    key: "print_logo",
-    label: "Druck-Logo",
-    accept: "image/png,image/jpeg,image/webp",
-    hint: "Für Papier und Etiketten: dunkel auf hellem Grund. Der Niimbot druckt nur Schwarz und Weiß.",
-  },
 ];
 const brandingForm = useForm({
   logo: null as File | null,
+  logo_light: null as File | null,
   favicon: null as File | null,
   print_logo: null as File | null,
   remove: [] as BrandingKind[],
 });
 const previews = ref<Record<BrandingKind, string | null>>({
   logo: props.branding.logo,
+  logo_light: props.branding.logo_light,
   favicon: props.branding.favicon,
   print_logo: props.branding.print_logo,
 });

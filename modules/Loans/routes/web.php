@@ -70,6 +70,13 @@ Route::prefix('loans')->name('loans.')->group(function () {
         Route::delete('/events/{event}', [EventController::class, 'destroy'])->name('events.destroy');
     });
 
+    // archive of finished loans (documentation/LOANS.md)
+    Route::middleware('can:loans.archive')->group(function () {
+        Route::post('/archive', [LoanController::class, 'archiveMany'])->name('archive.many');
+        Route::post('/{loan}/archive', [LoanController::class, 'archive'])->name('archive');
+        Route::delete('/{loan}/archive', [LoanController::class, 'restore'])->name('archive.restore');
+    });
+
     Route::middleware('can:loans.issue')->group(function () {
         Route::get('/returns', [ReturnsController::class, 'index'])->name('returns');
         Route::post('/returns/stow', [ReturnsController::class, 'stow'])->name('returns.stow');

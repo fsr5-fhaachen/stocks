@@ -96,6 +96,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/lookup', [ItemController::class, 'lookup'])->name('lookup');
         Route::get('/places', [ItemController::class, 'places'])->name('places');
         Route::get('/stats', [ItemController::class, 'stats'])->name('stats');
+        Route::get('/items/{item}/contents', [ItemController::class, 'contents'])->name('items.contents');
         Route::get('/photos/{photo}', [ItemPhotoController::class, 'show'])->name('photos.show');
         Route::get('/scan', [ScanController::class, 'show'])->name('scan');
         Route::get('/items/{item}/contents.pdf', [ContentsPdfController::class, 'show'])->name('items.contents-pdf');
@@ -220,6 +221,7 @@ Route::middleware('auth')->group(function () {
             Route::put('/mail', [MailSettingsController::class, 'update'])->name('mail.update');
             Route::post('/mail/check', [MailSettingsController::class, 'check'])->name('mail.check');
             Route::post('/mail/test', [MailSettingsController::class, 'test'])->middleware('throttle:10,1')->name('mail.test');
+            Route::get('/mail/preview', [MailSettingsController::class, 'preview'])->name('mail.preview');
             Route::post('/mail/retry', [MailSettingsController::class, 'retry'])->name('mail.retry');
         });
 

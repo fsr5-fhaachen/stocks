@@ -6,6 +6,7 @@ use App\Support\Branding;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -31,16 +32,17 @@ class BrandingController extends Controller
     }
 
     /**
-     * Upload or remove logo and favicon. SVG is not allowed, because it can contain scripts.
+     * Upload or remove logos and favicon. SVG is not allowed, because it can contain scripts.
      */
     public function update(Request $request, Branding $branding): RedirectResponse
     {
         $request->validate([
             'logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
+            'logo_light' => ['nullable', 'file', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
             'favicon' => ['nullable', 'file', 'mimes:png,ico', 'max:512'],
             'print_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
             'remove' => ['array'],
-            'remove.*' => ['in:logo,favicon,print_logo'],
+            'remove.*' => [Rule::in(array_keys(Branding::KINDS))],
         ]);
 
         foreach (array_keys(Branding::KINDS) as $kind) {
@@ -51,6 +53,6 @@ class BrandingController extends Controller
             }
         }
 
-        return back()->with('success', 'Logo und Symbol wurden gespeichert.');
+        return back()->with('success', 'Logos und Symbol wurden gespeichert.');
     }
 }

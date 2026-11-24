@@ -6,10 +6,10 @@ use App\Http\Middleware\EnsureSetupCompleted;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\KeepPreviousPage;
-use Illuminate\Http\Request;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
 use OwenIt\Auditing\AuditingServiceProvider;
 use Spatie\Permission\PermissionServiceProvider;
 
@@ -24,8 +24,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // TRUSTED_PROXIES: addresses of the reverse proxy, comma separated (documentation/DEPLOY.md);
+        // with * anyone who reaches the port directly could fake X-Forwarded-For
+        $trustedProxies = env('TRUSTED_PROXIES', '*');
         $middleware->trustProxies(
-            at: '*',
+            at: $trustedProxies === '*' ? '*' : array_map('trim', explode(',', $trustedProxies)),
             headers: Request::HEADER_X_FORWARDED_FOR |
             Request::HEADER_X_FORWARDED_HOST |
             Request::HEADER_X_FORWARDED_PORT |

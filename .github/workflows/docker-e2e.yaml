@@ -3,6 +3,11 @@ name: Docker e2e Test
 on:
   pull_request: {}
 
+# a newer push to the same pull request replaces the running test; nothing retries
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   IMAGE_REGISTRY: ghcr.io
   # lower case, docker does not accept the upper case letters of the repository owner

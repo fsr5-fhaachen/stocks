@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\User;
+use App\Support\Notifications\MailLayout;
 use App\Support\Notifications\NotificationEvents;
 use App\Support\Notifications\NotificationMessage;
 use App\Support\Notifications\WebPush;
@@ -83,7 +84,18 @@ abstract class StocksNotification extends Notification implements ShouldQueue
             $mail->attachData($content(), $name, ['mime' => str_ends_with($name, '.pdf') ? 'application/pdf' : 'application/octet-stream']);
         }
 
-        return $mail;
+        return MailLayout::apply($mail, $this->settingsLink($notifiable));
+    }
+
+    /**
+     * Where the receiver changes which messages it gets, for the foot of the mail; null for none.
+     * Members: their profile.
+     *
+     * @return array{text: string, url: string}|null
+     */
+    protected function settingsLink(object $notifiable): ?array
+    {
+        return $notifiable instanceof User ? ['text' => 'Benachrichtigungen im Profil ändern', 'url' => route('profile.edit')] : null;
     }
 
     public function toWebPush(object $notifiable, mixed $notification = null): WebPushMessage

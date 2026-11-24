@@ -33,9 +33,8 @@ class LoanItemInfo implements ItemInfoProvider
         $notices = [];
 
         // issued: the part that left, the item itself or a row of a box
-        $issued = LoanItem::whereNotNull('issued_at')->whereNull('returned_at')
+        $issued = LoanAwayItems::issuedRows()
             ->where(fn (Builder $query) => $query->whereIn('issued_item_id', $ids)->orWhere(fn (Builder $query) => $query->whereNull('issued_item_id')->whereIn('item_id', $ids)))
-            ->whereHas('loan', fn (Builder $query) => $query->where('status', LoanStatus::Issued))
             ->with('loan.responsible', 'loan.responsibleUser')->get();
         foreach ($issued as $row) {
             $loan = $row->loan;

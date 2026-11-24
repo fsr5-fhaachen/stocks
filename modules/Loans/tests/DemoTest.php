@@ -33,7 +33,9 @@ class DemoTest extends LoansTestCase
     {
         app(DemoGenerator::class)->run();
 
-        $this->assertSame(80, Contact::count());
+        $this->assertSame(79, Contact::count());
+        $this->assertTrue(Loan::whereNotNull('archived_at')->exists(), 'archiviert');
+        $this->assertTrue(Loan::whereNull('responsible_contact_id')->whereNotNull('responsible_name')->exists(), 'Kontakt gelöscht');
         $this->assertSame(12, Event::count());
         $this->assertSame(120, Loan::count());
         foreach (LoanStatus::cases() as $status) {

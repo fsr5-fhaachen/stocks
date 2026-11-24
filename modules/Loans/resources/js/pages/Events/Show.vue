@@ -110,7 +110,10 @@ import LoansEventForm, { type EventData } from "../../components/EventForm.vue";
  * An event with its loans and their common material list.
  */
 defineProps<{
-  event: EventData & { responsible: Contact | null };
+  // a deleted contact is only its name
+  event: EventData & {
+    responsible: Contact | { id: null; name: string } | null;
+  };
   loans: LoanSummary[];
   materials: {
     number: string;

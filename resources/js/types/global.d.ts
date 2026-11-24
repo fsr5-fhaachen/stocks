@@ -5,6 +5,11 @@ declare global {
   const __PACKAGE_REPOSITORY_URL__: string;
 
   /**
+   * Level of a location (App\Enums\LocationType); the building is optional.
+   */
+  type LocationType = "address" | "building" | "room" | "shelf" | "compartment";
+
+  /**
    * Props every page gets, see app/Http/Middleware/HandleInertiaRequests.php.
    */
   interface SharedProps {
@@ -23,8 +28,10 @@ declare global {
       name: string;
       short_name: string;
       accent_color: string;
-      // null while no logo was uploaded (Admin › Einstellungen › Allgemein)
+      // null while no logo was uploaded (Admin › Einstellungen › Allgemein); logo_url is the logo
+      // for dark backgrounds, logo_light_url the one for light backgrounds
       logo_url: string | null;
+      logo_light_url: string | null;
       imprint_url: string | null;
       privacy_url: string | null;
     };

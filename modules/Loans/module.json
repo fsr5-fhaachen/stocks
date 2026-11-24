@@ -10,10 +10,12 @@
     "loans.manage": "Buchungen, Kontakte und Veranstaltungen anlegen und ändern",
     "loans.issue": "Ausgeben, zurücknehmen, prüfen und einräumen",
     "loans.cancel": "Buchungen stornieren und Mängel abschließen",
-    "loans.settings": "Leihvertrag, Fachschaften und Puffer einstellen"
+    "loans.settings": "Leihvertrag, Fachschaften und Puffer einstellen",
+    "loans.archive": "Abgeschlossene Buchungen archivieren und zurückholen",
+    "loans.contacts.delete": "Kontakte mit Buchungen löschen (Name bleibt an den Buchungen)"
   },
   "start_roles": {
-    "Vorstand": ["loans.view", "loans.manage", "loans.issue", "loans.cancel", "loans.settings"],
+    "Vorstand": ["loans.view", "loans.manage", "loans.issue", "loans.cancel", "loans.settings", "loans.archive", "loans.contacts.delete"],
     "FSR-Mitglied": ["loans.view", "loans.manage", "loans.issue"],
     "Freies Mitglied": ["loans.view"]
   }

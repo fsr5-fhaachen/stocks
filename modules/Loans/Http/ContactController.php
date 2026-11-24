@@ -7,9 +7,10 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use Modules\Loans\Actions\DeleteContact;
+use Modules\Loans\Enums\LoanStatus;
 use Modules\Loans\Models\Contact;
 use Modules\Loans\Models\Council;
 use Modules\Loans\Models\Event;
@@ -75,6 +76,12 @@ class ContactController extends Controller
             'contact' => $contact->load('council')->summary(true),
             'loans' => $contact->allLoans()->with('responsible', 'responsibleUser', 'borrower')->limit(200)->get()->map(fn (Loan $loan) => $loan->summary()),
             'councils' => Council::options(),
+            // what deleting means: how many loans and events keep the name, which loans are open
+            'deletion' => [
+                'loans' => $contact->allLoans()->count(),
+                'events' => Event::where('responsible_contact_id', $contact->id)->count(),
+                'open' => $contact->allLoans()->whereNotIn('status', LoanStatus::finished())->pluck('number'),
+            ],
         ]);
     }
 
@@ -91,14 +98,11 @@ class ContactController extends Controller
     }
 
     /**
-     * Delete a contact without loans. Retention periods follow in phase 7.
+     * Delete a contact; with loans the name stays at them (Modules\Loans\Actions\DeleteContact).
      */
-    public function destroy(Contact $contact): RedirectResponse
+    public function destroy(Request $request, Contact $contact, DeleteContact $deleteContact): RedirectResponse
     {
-        if ($contact->allLoans()->exists() || Event::where('responsible_contact_id', $contact->id)->exists()) {
-            throw ValidationException::withMessages(['contact' => "{$contact->name} hat Buchungen oder Veranstaltungen und bleibt gespeichert."]);
-        }
-        $contact->delete();
+        $deleteContact->handle($request->user(), $contact);
 
         return to_route('loans.contacts.index')->with('success', "{$contact->name} wurde gelöscht.");
     }

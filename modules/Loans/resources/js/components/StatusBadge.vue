@@ -5,6 +5,7 @@
       {{ loan.overdue_days }} {{ loan.overdue_days === 1 ? "Tag" : "Tage" }}
       überfällig
     </UiBadge>
+    <UiBadge v-if="loan.archived">archiviert</UiBadge>
   </span>
 </template>
 
@@ -12,9 +13,10 @@
 import type { LoanSummary } from "../http";
 
 /**
- * Status of a loan; an overdue loan also shows the days.
+ * Status of a loan; an overdue loan also shows the days, an archived one says so.
  */
 defineProps<{
-  loan: Pick<LoanSummary, "status_label" | "status_variant" | "overdue_days">;
+  loan: Pick<LoanSummary, "status_label" | "status_variant" | "overdue_days"> &
+    Partial<Pick<LoanSummary, "archived">>;
 }>();
 </script>

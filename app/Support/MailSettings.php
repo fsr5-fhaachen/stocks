@@ -18,7 +18,7 @@ class MailSettings
     /**
      * Seconds a connection test is kept, so the settings page does not open a connection on every visit.
      */
-    private const STATUS_SECONDS = 300;
+    private const STATUS_SECONDS = 900;
 
     public function __construct(private readonly Settings $settings) {}
 
@@ -62,8 +62,9 @@ class MailSettings
     }
 
     /**
-     * Connection status: whether the server answers and accepts the login. Kept for a few minutes;
-     * $fresh tests again.
+     * Connection status: whether the server answers and accepts the login. Kept for 15 minutes, the
+     * scheduler tests again every 5 minutes (stocks:mail-status), so the menu badge stays filled
+     * even when a scheduler run is missed; $fresh tests again.
      *
      * @return array{ok: bool|null, message: string, checked_at: string}
      */

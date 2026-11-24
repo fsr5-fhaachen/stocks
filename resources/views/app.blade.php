@@ -16,7 +16,7 @@
     {{-- web app: added to the home screen it runs in full screen (App\Http\Controllers\WebAppController) --}}
     {{-- a surface (kiosk) and the borrower page of a loan bring their own web app, which starts on their own page --}}
     <link rel="manifest" href="{{ $manifest ?? \App\Support\Surface::current()['manifest'] ?? '/manifest.webmanifest' }}">
-    <link rel="apple-touch-icon" href="/web-app/icon-180.png?v={{ pathinfo((string) app(\App\Support\Branding::class)->path('logo'), PATHINFO_FILENAME) ?: 'default' }}">
+    <link rel="apple-touch-icon" href="/web-app/icon-180.png?v={{ app(\App\Support\Branding::class)->iconVersion() }}">
     <meta name="theme-color" content="{{ app(\App\Support\Settings::class)->get('organization.accent_color') }}">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
