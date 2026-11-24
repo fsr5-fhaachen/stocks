@@ -12,7 +12,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "npx prettier --check \"./resources/js/**/*.{ts,vue}\" \"./modules/*/resources/js/**/*.{ts,vue}\" \"./README.md\"",
-    "lint:fix": "npx prettier --write \"./resources/js/**/*.{ts,vue}\" \"./modules/*/resources/js/**/*.{ts,vue}\" \"./README.md\""
+    "lint:fix": "npx prettier --write \"./resources/js/**/*.{ts,vue}\" \"./modules/*/resources/js/**/*.{ts,vue}\" \"./README.md\"",
+    "prepare": "git config core.hooksPath \"$(git rev-parse --show-toplevel)/.githooks\" || true"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.15",

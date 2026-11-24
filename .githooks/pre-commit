@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# Formats the staged files before every commit, so the lint steps of the CI (prettier, pint) pass.
+# Turned on by "npm install" (script "prepare" sets core.hooksPath). Skip once with
+# "git commit --no-verify" or "Commit and skip hooks" in GitKraken.
+#
+# Fully staged files are fixed and staged again. A file that also has unstaged changes is only
+# checked: fixing it would stage the unstaged part as well.
+set -o pipefail
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+# GUI clients (GitKraken) start without the login shell, so node from nvm or Homebrew is missing
+export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
+if ! command -v npx >/dev/null 2>&1; then
+  export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+  # shellcheck disable=SC1091
+  [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1
+fi
+
+failed=0
+
+# staged files (added, copied, modified, renamed) matching the given pathspecs, one per line
+staged_files() {
+  git diff --cached --name-only --diff-filter=ACMR -- "$@"
+}
+
+# true if the file has changes that are not staged
+has_unstaged_changes() {
+  ! git diff --quiet -- "$1"
+}
+
+# $1 label, $2 fix command, $3 check command, rest: files
+format_files() {
+  local label=$1 fix=$2 check=$3
+  shift 3
+  local file
+  for file in "$@"; do
+    if has_unstaged_changes "$file"; then
+      if ! $check "$file" >/dev/null 2>&1; then
+        echo "pre-commit: $file is not formatted ($label) and partly staged."
+        echo "            Run the formatter, stage the file again and commit."
+        failed=1
+      fi
+    else
+      $fix "$file" >/dev/null 2>&1 || { echo "pre-commit: $label failed on $file"; failed=1; continue; }
+      git add -- "$file"
+    fi
+  done
+}
+
+# same files as "npm run lint" in package.json
+IFS=$'\n'
+js_files=($(staged_files 'resources/js/*.ts' 'resources/js/*.vue' 'modules/*/resources/js/*.ts' 'modules/*/resources/js/*.vue' 'README.md'))
+php_files=($(staged_files '*.php'))
+unset IFS
+
+if [ ${#js_files[@]} -gt 0 ]; then
+  if command -v npx >/dev/null 2>&1; then
+    format_files prettier "npx --no-install prettier --write --ignore-unknown" "npx --no-install prettier --check --ignore-unknown" "${js_files[@]}"
+  else
+    echo "pre-commit: node/npx not found (nvm or Homebrew), cannot run prettier."
+    failed=1
+  fi
+fi
+
+if [ ${#php_files[@]} -gt 0 ]; then
+  if command -v php >/dev/null 2>&1 && [ -x vendor/bin/pint ]; then
+    format_files pint "php vendor/bin/pint --quiet" "php vendor/bin/pint --test --quiet" "${php_files[@]}"
+  else
+    # without a local php (only Sail) the CI still checks with pint
+    echo "pre-commit: php or vendor/bin/pint not found, PHP files are not formatted."
+  fi
+fi
+
+exit $failed
