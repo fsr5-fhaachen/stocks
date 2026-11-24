@@ -2,6 +2,8 @@
 
 namespace Modules\Loans\Tests;
 
+use App\Actions\Inventory\RetireItem;
+use App\Enums\RetireReason;
 use App\Models\Item;
 use App\Models\Location;
 use Modules\Loans\Actions\StowItem;
@@ -36,6 +38,19 @@ class StowTest extends LoansTestCase
 
         $this->assertSame($this->shelf->id, $item->refresh()->location_id);
         $this->assertSame(0, StowItem::pending()->count());
+    }
+
+    public function test_an_item_retired_before_it_is_put_back_is_no_longer_waiting(): void
+    {
+        $item = $this->item();
+        $row = $this->returned([$item])->positions()->first();
+        $this->assertSame(1, StowItem::pending()->count());
+
+        app(RetireItem::class)->handle($this->admin(), $item->refresh(), RetireReason::Lost, null);
+
+        $this->assertSame(0, StowItem::pending()->count());
+        $this->actingAs($this->admin())->get('/loans/returns')->assertInertia(fn ($page) => $page->has('pending', 0));
+        $this->actingAs($this->admin())->post('/loans/returns/stow', ['row_id' => $row->id, 'code' => 'R1'])->assertSessionHasErrors();
     }
 
     public function test_another_place_than_the_home_is_said(): void

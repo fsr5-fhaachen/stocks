@@ -97,9 +97,29 @@
       @click="deleteOpen = true"
       >Löschen</UiButton
     >
+    <UiButton
+      v-if="loan.archivable && !loan.archived_at && can('loans.archive')"
+      variant="ghost"
+      icon="box-archive"
+      @click="archive"
+      >Archivieren</UiButton
+    >
   </UiPageHeader>
 
   <div class="space-y-4">
+    <UiAlert v-if="loan.archived_at" type="info">
+      Archiviert am <UiDateTime :value="loan.archived_at" />
+      <template v-if="loan.archiver"> von {{ loan.archiver }}</template
+      >. Die Buchungsliste zeigt sie nur mit „Archiv“.
+      <button
+        v-if="can('loans.archive')"
+        type="button"
+        class="ml-1 font-bold underline"
+        @click="restore"
+      >
+        Aus dem Archiv holen
+      </button>
+    </UiAlert>
     <UiAlert v-if="errorMessages.length" type="error">{{
       errorMessages.join(" ")
     }}</UiAlert>
@@ -446,8 +466,13 @@
               </template>
             </dd>
           </div>
+          <!-- a deleted contact has no id any more, then the kept names are compared -->
           <div
-            v-if="loan.borrower && loan.borrower.id !== loan.responsible?.id"
+            v-if="
+              loan.borrower &&
+              (loan.borrower.id ?? loan.borrower.name) !==
+                (loan.responsible?.id ?? loan.responsible?.name)
+            "
           >
             <dt class="text-ink-muted">Entleiher</dt>
             <dd>
@@ -731,7 +756,8 @@ const props = defineProps<{
     kind_label: string;
     cancelled_reason: string | null;
     defects_note: string | null;
-    borrower: Contact | null;
+    // a deleted contact is only its name
+    borrower: Contact | { id: null; name: string; affiliation?: null } | null;
     responsible: Contact | { id: null; name: string | null } | null;
     issuer: string | null;
     creator: string | null;
@@ -739,6 +765,9 @@ const props = defineProps<{
     issued_at: string | null;
     cancelled_at: string | null;
     defects_closed_at: string | null;
+    archived_at: string | null;
+    archiver: string | null;
+    archivable: boolean;
     pack_pin: string | null;
   };
   positions: {
@@ -859,6 +888,11 @@ const setQuantity = (id: number, quantity: string) =>
     { quantity: Number(quantity) },
     options,
   );
+
+const archive = () =>
+  router.post(`/loans/${props.loan.id}/archive`, {}, { preserveScroll: true });
+const restore = () =>
+  router.delete(`/loans/${props.loan.id}/archive`, { preserveScroll: true });
 
 const cancelOpen = ref(false);
 const cancelForm = useForm({ reason: "" });

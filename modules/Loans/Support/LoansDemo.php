@@ -10,13 +10,16 @@ use App\Support\Demo\DemoPart;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
+use Modules\Loans\Actions\ArchiveLoan;
 use Modules\Loans\Actions\ChangePositions;
 use Modules\Loans\Actions\CheckBox;
 use Modules\Loans\Actions\ConfirmLoan;
+use Modules\Loans\Actions\DeleteContact;
 use Modules\Loans\Actions\IssueLoan;
 use Modules\Loans\Actions\ReturnLoan;
 use Modules\Loans\Actions\SaveLoan;
 use Modules\Loans\Actions\StowItem;
+use Modules\Loans\Enums\LoanStatus;
 use Modules\Loans\Enums\ReturnState;
 use Modules\Loans\Models\Contact;
 use Modules\Loans\Models\Council;
@@ -36,7 +39,8 @@ use Modules\Loans\Models\LoanMessage;
  * of their own.
  *
  * The borrower page (Phase 5) gets chats, ticks of the checklist, extension requests, a log of
- * messages and a blocked link; the generator itself sends nothing.
+ * messages and a blocked link; the generator itself sends nothing. The oldest finished loans are
+ * archived, and one contact whose loans are all finished is deleted (its name stays as text).
  */
 class LoansDemo implements DemoPart
 {
@@ -89,6 +93,8 @@ class LoansDemo implements DemoPart
         private readonly ReturnLoan $returnLoan,
         private readonly StowItem $stowItem,
         private readonly CheckBox $checkBox,
+        private readonly ArchiveLoan $archiveLoan,
+        private readonly DeleteContact $deleteContact,
     ) {}
 
     /**
@@ -106,6 +112,7 @@ class LoansDemo implements DemoPart
             $this->createPastLoans();
             $this->createCurrentLoans();
             $this->createPageData();
+            $this->archiveAndDelete();
         } finally {
             Carbon::setTestNow();
         }
@@ -595,6 +602,29 @@ class LoansDemo implements DemoPart
         } while ($contact->isComplete());
 
         return $contact;
+    }
+
+    /**
+     * Archive the oldest finished loans (closed, with defects, cancelled), and delete one contact
+     * whose loans are all finished: its loans keep the name as text.
+     */
+    private function archiveAndDelete(): void
+    {
+        foreach (['closed' => 8, 'defects' => 2, 'cancelled' => 2] as $status => $count) {
+            foreach (Loan::where('status', $status)->orderBy('pickup_at')->limit($count)->get() as $loan) {
+                $this->at($loan->return_at->toImmutable()->addWeeks(2), fn () => $this->archiveLoan->archive($this->demo->actor, $loan));
+            }
+        }
+
+        $finished = array_map(fn (LoanStatus $status) => $status->value, LoanStatus::finished());
+        $contact = Contact::whereHas('loans')
+            ->whereDoesntHave('loans', fn ($query) => $query->whereNotIn('status', $finished))
+            ->whereNotIn('id', Loan::whereNotIn('status', $finished)->whereNotNull('borrower_contact_id')->select('borrower_contact_id'))
+            ->whereNotIn('id', Event::whereNotNull('responsible_contact_id')->select('responsible_contact_id'))
+            ->orderBy('id')->first();
+        if ($contact !== null) {
+            $this->tryTo(fn () => $this->deleteContact->handle($this->demo->actor, $contact));
+        }
     }
 
     /**

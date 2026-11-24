@@ -45,6 +45,15 @@ class InventoryDemo implements DemoPart
     ];
 
     /**
+     * Buildings of the first address (code => name, shown in the code, rooms): one in the codes,
+     * one not; their rooms stay empty.
+     */
+    private const BUILDINGS = [
+        'A' => ['name' => 'Hauptgebäude', 'show_in_code' => true, 'rooms' => ['201' => 'Seminarraum']],
+        'W' => ['name' => 'Werkstatt', 'show_in_code' => false, 'rooms' => ['W01' => 'Halle']],
+    ];
+
+    /**
      * Building blocks of single pieces: category => [kinds of devices, makers].
      */
     private const SINGLES = [
@@ -114,6 +123,11 @@ class InventoryDemo implements DemoPart
 
     private int $created = 0;
 
+    /**
+     * Room in the building that is in the codes ("EU-A-201"), on the test sheet as target.
+     */
+    private ?Location $buildingRoom = null;
+
     public function __construct(
         private readonly SaveLocation $saveLocation,
         private readonly CreateItem $createItem,
@@ -143,7 +157,8 @@ class InventoryDemo implements DemoPart
     }
 
     /**
-     * Two addresses, six rooms, sixteen shelves and 36 compartments.
+     * Two addresses, six rooms, sixteen shelves and 36 compartments; in the first address also two
+     * buildings with a room each (one building in the codes, one not), one shelf in the first.
      */
     private function createLocations(DemoContext $demo): void
     {
@@ -164,6 +179,18 @@ class InventoryDemo implements DemoPart
                         $this->places[] = $compartment;
                         $demo->tag('compartment', $compartment);
                     }
+                }
+            }
+        }
+
+        $address = Location::where('code', array_key_first(self::ROOMS))->whereNull('parent_id')->firstOrFail();
+        foreach (self::BUILDINGS as $code => $building) {
+            $parent = $this->saveLocation->handle(null, ['parent_id' => $address->id, 'type' => 'building', 'code' => $code, 'name' => $building['name'], 'show_in_code' => $building['show_in_code']]);
+            foreach ($building['rooms'] as $roomCode => $roomName) {
+                $room = $this->saveLocation->handle(null, ['parent_id' => $parent->id, 'code' => (string) $roomCode, 'name' => $roomName]);
+                if ($building['show_in_code']) {
+                    $this->saveLocation->handle(null, ['parent_id' => $room->id, 'code' => 'R01', 'name' => 'Steckregal']);
+                    $this->buildingRoom = $room;
                 }
             }
         }
@@ -207,7 +234,9 @@ class InventoryDemo implements DemoPart
     {
         [$first, $second] = $demo->tagged('compartment');
         $demo->label($first->full_code, $first->full_code, 'Fach', 'Öffnet das Fach mit seinen Gegenständen; im Scan-Tab „Hierher umlagern“.');
-        $demo->label($second->full_code, $second->full_code, 'Fach, Ziel zum Umlagern', 'Als zweiter Scan beim Umlagern: der Gegenstand liegt danach hier.');
+        // the target of moving is the room in the building, so its code and path are on the sheet too
+        $room = $this->buildingRoom;
+        $demo->label($room->full_code, $room->full_code, 'Raum im Gebäude mit Code, Ziel zum Umlagern', 'Als zweiter Scan beim Umlagern: der Gegenstand liegt danach hier. Der Pfad zeigt Adresse › Gebäude › Raum.');
 
         for ($round = 0; $round < 2; $round++) {
             $single = $this->createSingle($demo, 'Audio', $first);

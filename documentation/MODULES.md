@@ -94,6 +94,7 @@ public function boot(Navigation $navigation, DashboardTiles $dashboardTiles, Sur
 | Einstellungen | `Settings::addDefaults()` und `Navigation::add(..., group: 'settings')` | eigene Schlüssel mit Präfix des Moduls und eine eigene Seite unter Verwaltung › Einstellungen; `Settings::module('<key>')` liefert alle Werte des Moduls |
 | Reiter am Gegenstand | `ItemExtensions::addTab()` | Reiter neben „Verlauf“ auf der Seite eines Gegenstands; die Komponente bekommt `item` |
 | Hinweis und Sperre am Gegenstand | `ItemExtensions::addInfo()` | siehe [Gegenstände](#gegenstände) |
+| Gegenstände bewusst unterwegs | `ItemExtensions::addAway()` | fehlen in „Ohne Platz“, siehe [Gegenstände](#gegenstände) |
 | Öffentliche Box-Seite | `ItemExtensions::addPublicBoxSection()` | Abschnitt unter der Inhaltsliste auf `/s/{code}` |
 | Demo-Daten | `DemoData::add()` | eigener Teil des Generators, siehe [DEMO.md](DEMO.md#neue-daten-in-einer-phase) |
 | Benachrichtigungen | `NotificationEvents::add()` | Ereignis mit Empfängern (Mitglieder oder Kontakte), Recht, Vorgabe-Kanälen und Pflicht-Mail; erscheint im Profil bzw. auf der Verleihseite; Klassen leiten von `StocksNotification` ab, siehe [NOTIFICATIONS.md](NOTIFICATIONS.md) |
@@ -114,6 +115,8 @@ Ein Modul sagt über eine Klasse mit dem Interface `App\Support\Extensions\ItemI
 | `actions` | Knöpfe auf der Scan-Karte (`title`, `href`, `icon`); nur Aktionen, deren Seite es auf der Oberfläche gibt |
 
 Der Kern fragt die Hinweise für eine ganze Seite der Liste auf einmal ab (`Table::prepareRows()`). Für Sperren ruft er `ItemExtensions::lockOf()` mit `$user = null`; der Provider kann dann alles außer der Sperre weglassen. Ein Modul, das einen Gegenstand selbst wegnimmt (Ausgabe), nutzt `MoveItem::takeAway()`, das keine Sperren prüft.
+
+Ein Gegenstand, den ein Modul bewusst wegnimmt, hat keinen Platz, ist aber nicht verloren. Eine Klasse mit `App\Support\Extensions\ItemAwayProvider` liefert mit `awayItemIds()` eine Abfrage auf die Ids dieser Gegenstände (eine Spalte); `ItemExtensions::addAway(Klasse, Modul)` meldet sie an. „Ohne Platz“ und die Zahl auf dem Dashboard nehmen sie heraus (`ItemExtensions::misplaced()`, `withoutAway()`), solange das Modul an ist. Beispiel: `Modules\Loans\Support\LoanAwayItems` (ausgegeben, noch nicht zurück).
 
 `reservations(Item $item)` nennt Buchungen, die später mit dem Gegenstand rechnen, als Sätze (z. B. „B-2026-0042, ab 14.11., 16:00 Uhr.“). Ausmustern, Verbrauchen, Abteilen und ein Zustand, der als Schaden gilt, fragen dann vorher nach: Die Controller rufen `ItemExtensions::ensureConfirmed()`, das ohne `confirmed` mit dem Fehler `confirm` abbricht; die Seite zeigt ihn mit „Ja, trotzdem“ (`InventoryReservedConfirm`) und schickt den Vorgang bestätigt noch einmal. Die Actions selbst prüfen das nicht, damit Module wie der Verleih ihre eigenen Buchungen ohne Rückfrage bearbeiten.
 

@@ -49,7 +49,7 @@ class StowItem
             ->whereHas('loan', fn (Builder $query) => $query->where('status', '!=', LoanStatus::Cancelled))
             ->where(fn (Builder $query) => $query
                 ->whereHas('issuedItem', fn (Builder $query) => $query->whereNull('retired_at'))
-                ->orWhere(fn (Builder $query) => $query->whereNull('issued_item_id')->whereHas('item', fn (Builder $query) => $query->whereNull('location_id')->whereNull('container_id'))));
+                ->orWhere(fn (Builder $query) => $query->whereNull('issued_item_id')->whereHas('item', fn (Builder $query) => $query->whereNull('retired_at')->whereNull('location_id')->whereNull('container_id'))));
     }
 
     /**

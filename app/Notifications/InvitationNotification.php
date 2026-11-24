@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Support\Notifications\MailLayout;
 use App\Support\Settings;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -35,11 +36,11 @@ class InvitationNotification extends Notification implements ShouldQueue
     {
         $organization = app(Settings::class)->get('organization.name');
 
-        return (new MailMessage)
+        return MailLayout::apply((new MailMessage)
             ->subject("Einladung zu Stocks von {$organization}")
             ->greeting('Hallo!')
             ->line("{$this->invitedBy} hat dich zu Stocks eingeladen, der Inventar- und Verleihverwaltung von {$organization}.")
             ->action('Konto anlegen', route('invitation.show', ['token' => $this->token]))
-            ->line('Der Link gilt '.config('stocks.invitation_lifetime_days').' Tage und funktioniert nur einmal.');
+            ->line('Der Link gilt '.config('stocks.invitation_lifetime_days').' Tage und funktioniert nur einmal.'));
     }
 }

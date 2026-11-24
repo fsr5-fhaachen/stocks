@@ -15,7 +15,7 @@ class Placement
     /**
      * Check that the item may lie at the place, otherwise throw a validation error for the field.
      *
-     * Items lie in a room, a shelf or a compartment, never directly at an address. A box can only
+     * Items lie in a room, a shelf or a compartment, never directly at an address or a building. A box can only
      * hold items if it is marked as box and not retired, and a box can not be put into itself or
      * into a box of its own contents.
      *
@@ -23,8 +23,8 @@ class Placement
      */
     public static function check(Item $item, Location|Item|null $place, string $field): void
     {
-        if ($place instanceof Location && $place->type === LocationType::Address) {
-            throw ValidationException::withMessages([$field => "{$place->full_code} ist eine Adresse. Gegenstände liegen in einem Raum, Lagerplatz oder Fach."]);
+        if ($place instanceof Location && ! $place->type->holdsItems()) {
+            throw ValidationException::withMessages([$field => "{$place->full_code} ist ein".($place->type === LocationType::Address ? 'e' : '')." {$place->type->label()}. Gegenstände liegen in einem Raum, Lagerplatz oder Fach."]);
         }
         if (! $place instanceof Item) {
             return;

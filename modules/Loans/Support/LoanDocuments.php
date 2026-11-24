@@ -9,7 +9,6 @@ use App\Support\Settings;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Cache;
 use Modules\Loans\Enums\DocumentType;
 use Modules\Loans\Enums\LoanStatus;
 use Modules\Loans\Enums\ReturnState;
@@ -328,36 +327,15 @@ class LoanDocuments
      */
     private function render(string $view, array $snapshot, array $signatures, ?string $hash, ?string $qr = null): string
     {
-        $logo = $this->branding->contents($this->branding->printKind());
+        // as png of at most 400 px: dompdf can not read every format, a big logo would fill the memory
+        $logo = $this->branding->pngFor($this->branding->printKind());
 
         return Pdf::setPaper('a4')->loadView($view, [
             'doc' => $snapshot,
             'signatures' => $signatures,
             'hash' => $hash,
             'qr' => $qr,
-            'logo' => $logo !== null ? 'data:image/png;base64,'.base64_encode($this->png($logo)) : null,
+            'logo' => $logo !== null ? 'data:image/png;base64,'.base64_encode($logo) : null,
         ])->output();
-    }
-
-    /**
-     * Image as png scaled down to 400 px (dompdf can not read every format, a big logo would fill
-     * the memory on every document), cached by content so it is decoded only once.
-     */
-    private function png(string $content): string
-    {
-        return Cache::rememberForever('loan-documents.logo.'.md5($content), function () use ($content): string {
-            $source = @imagecreatefromstring($content);
-            if ($source === false) {
-                return '';
-            }
-            $scale = min(1, 400 / max(imagesx($source), imagesy($source)));
-            $image = imagescale($source, max(1, (int) round(imagesx($source) * $scale)), max(1, (int) round(imagesy($source) * $scale)));
-            unset($source);
-            imagesavealpha($image, true);
-            ob_start();
-            imagepng($image);
-
-            return (string) ob_get_clean();
-        });
     }
 }

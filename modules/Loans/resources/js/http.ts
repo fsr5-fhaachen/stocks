@@ -91,6 +91,8 @@ export type LoanSummary = {
   // confirmed, but the return time passed without a pickup
   not_picked_up: boolean;
   responsible: string | null;
+  // in the archive (Modules\Loans\Actions\ArchiveLoan), only listed with "Archiv"
+  archived: boolean;
 };
 
 /**

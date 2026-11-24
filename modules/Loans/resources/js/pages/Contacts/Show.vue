@@ -4,7 +4,7 @@
       >Bearbeiten</UiButton
     >
     <UiButton
-      v-if="!loans.length"
+      v-if="canDelete"
       variant="ghost"
       icon="trash"
       @click="deleteOpen = true"
@@ -80,25 +80,58 @@
   <UiConfirmModal
     v-if="deleteOpen"
     title="Kontakt löschen"
-    :message="`${contact.name} wird gelöscht.`"
+    :message="deleteMessage"
     @close="deleteOpen = false"
     @confirm="router.delete(`/loans/contacts/${contact.id}`)"
   />
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { router, usePage } from "@inertiajs/vue3";
 import { formatDateTime, type Contact, type LoanSummary } from "../../http";
 import LoansContactForm from "../../components/ContactForm.vue";
 import LoansStatusBadge from "../../components/StatusBadge.vue";
 
 /**
- * A contact with its loans. A contact with loans can not be deleted.
+ * A contact with its loans. A contact without loans is deleted with "loans.manage"; with loans it
+ * needs "loans.contacts.delete" and all of them finished, the name stays at the loans.
  */
-defineProps<{ contact: Contact; loans: LoanSummary[]; councils: Option[] }>();
+const props = defineProps<{
+  contact: Contact;
+  loans: LoanSummary[];
+  councils: Option[];
+  deletion: { loans: number; events: number; open: string[] };
+}>();
 
 const page = usePage<SharedProps>();
+const { can } = usePermissions();
+const hasLoans = computed(
+  () => props.deletion.loans > 0 || props.deletion.events > 0,
+);
+// with open loans the button stays, the server says which ones are open
+const canDelete = computed(
+  () => !hasLoans.value || can("loans.contacts.delete"),
+);
+const deleteMessage = computed(() => {
+  if (props.deletion.open.length) {
+    return `${props.contact.name} hat noch offene Buchungen (${props.deletion.open.join(", ")}). Erst wenn sie abgeschlossen oder storniert sind, lässt sich der Kontakt löschen.`;
+  }
+  if (!hasLoans.value) {
+    return `${props.contact.name} wird gelöscht.`;
+  }
+  const kept = [
+    props.deletion.loans
+      ? `${props.deletion.loans} ${props.deletion.loans === 1 ? "Buchung" : "Buchungen"}`
+      : null,
+    props.deletion.events
+      ? `${props.deletion.events} ${props.deletion.events === 1 ? "Veranstaltung" : "Veranstaltungen"}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" und ");
+  return `${props.contact.name} wird gelöscht. ${kept} behalten den Namen als Text. E-Mail, Telefon, Anschrift und Notiz gehen verloren, auch im Protokoll. Die Verleihseiten schicken der Person keine Push-Nachrichten mehr.`;
+});
 const editing = ref(false);
 const deleteOpen = ref(false);
 const saved = () => {

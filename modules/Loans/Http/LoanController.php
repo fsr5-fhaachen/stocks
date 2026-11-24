@@ -18,6 +18,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use Modules\Loans\Actions\ArchiveLoan;
 use Modules\Loans\Actions\CancelLoan;
 use Modules\Loans\Actions\ChangePositions;
 use Modules\Loans\Actions\ConfirmLoan;
@@ -70,7 +71,7 @@ class LoanController extends Controller
             'loans' => $table->scroll(),
             'statuses' => [['value' => 'open', 'label' => 'Offen (alles außer abgeschlossen)'], ['value' => 'overdue', 'label' => 'Überfällig'], ['value' => 'unread', 'label' => 'Ungelesene Nachricht'], ...LoanStatus::options()],
             'events' => Event::options(),
-            'filters' => $request->only(['status', 'from', 'to', 'contact', 'event']),
+            'filters' => $request->only(['status', 'from', 'to', 'contact', 'event', 'archive']),
             'contact' => $request->integer('contact') ? Contact::find($request->integer('contact'))?->only(['id', 'name']) : null,
         ]);
     }
@@ -113,7 +114,7 @@ class LoanController extends Controller
      */
     public function show(Request $request, Loan $loan, Availability $availability, LoanDocuments $documents, ConfirmLoan $confirmLoan, LoanPage $page, LoanPageData $pageData): Response
     {
-        $loan->load(['borrower.council', 'responsible.council', 'responsibleUser', 'issuer', 'event', 'creator', 'documents.signatures']);
+        $loan->load(['borrower.council', 'responsible.council', 'responsibleUser', 'issuer', 'event', 'creator', 'archiver', 'documents.signatures']);
         $canManage = $request->user()->can('loans.manage');
         $checks = $loan->status->isOpen() ? $availability->forLoan($loan) : [];
         // signed papers carry contact data and signatures: only for those who issue or manage
@@ -124,8 +125,9 @@ class LoanController extends Controller
                 ...$loan->summary(),
                 ...$loan->only(['purpose', 'notes', 'cancelled_reason', 'defects_note']),
                 'kind_label' => $loan->kind->label(),
-                'borrower' => $loan->borrower?->summary($canManage),
-                'responsible' => $loan->isInternal() ? ['id' => null, 'name' => $loan->responsibleUser?->name] : $loan->responsible?->summary($canManage),
+                // a deleted contact: only its name, kept as text
+                'borrower' => $loan->borrower?->summary($canManage) ?? ($loan->borrower_name ? ['id' => null, 'name' => $loan->borrower_name] : null),
+                'responsible' => $loan->isInternal() ? ['id' => null, 'name' => $loan->responsibleUser?->name] : ($loan->responsible?->summary($canManage) ?? ($loan->responsible_name ? ['id' => null, 'name' => $loan->responsible_name] : null)),
                 'issuer' => $loan->issuer?->name,
                 'creator' => $loan->creator?->name,
                 'event' => $loan->event?->only(['id', 'name']),
@@ -135,6 +137,9 @@ class LoanController extends Controller
                 'inspected_at' => $loan->inspected_at?->toIso8601String(),
                 'cancelled_at' => $loan->cancelled_at?->toIso8601String(),
                 'defects_closed_at' => $loan->defects_closed_at?->toIso8601String(),
+                'archived_at' => $loan->archived_at?->toIso8601String(),
+                'archiver' => $loan->archiver?->name,
+                'archivable' => $loan->isArchivable(),
                 // the pin is only for members who manage loans
                 'pack_pin' => $canManage && in_array($loan->status, LoanStatus::reserving(), true) ? $loan->pack_pin : null,
             ],
@@ -329,6 +334,40 @@ class LoanController extends Controller
         $cancelLoan->handle($loan, $validated['reason']);
 
         return back()->with('success', "{$loan->number} wurde storniert.");
+    }
+
+    /**
+     * Archive a finished loan.
+     */
+    public function archive(Request $request, Loan $loan, ArchiveLoan $archiveLoan): RedirectResponse
+    {
+        $archiveLoan->archive($request->user(), $loan);
+
+        return back()->with('success', "{$loan->number} ist im Archiv.");
+    }
+
+    /**
+     * Archive several finished loans of the list at once; others are skipped.
+     */
+    public function archiveMany(Request $request, ArchiveLoan $archiveLoan): RedirectResponse
+    {
+        $validated = $request->validate(['ids' => ['required', 'array', 'max:500'], 'ids.*' => ['integer']]);
+        $loans = Loan::whereIn('id', $validated['ids'])->whereNull('archived_at')->whereIn('status', LoanStatus::finished())->get();
+        foreach ($loans as $loan) {
+            $archiveLoan->archive($request->user(), $loan);
+        }
+
+        return back()->with('success', $loans->count() === 1 ? '1 Buchung ist im Archiv.' : "{$loans->count()} Buchungen sind im Archiv.");
+    }
+
+    /**
+     * Take a loan back out of the archive.
+     */
+    public function restore(Loan $loan, ArchiveLoan $archiveLoan): RedirectResponse
+    {
+        $archiveLoan->restore($loan);
+
+        return back()->with('success', "{$loan->number} ist nicht mehr im Archiv.");
     }
 
     /**

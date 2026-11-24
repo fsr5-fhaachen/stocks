@@ -82,7 +82,7 @@ class LoanPageController extends Controller
 
         $message = $loan->messages()->create([
             'sender' => LoanMessage::CONTACT,
-            'author_name' => 'Entleiher'.($loan->responsible ? " ({$loan->responsible->name})" : ''),
+            'author_name' => 'Entleiher'.($loan->responsibleName() ? " ({$loan->responsibleName()})" : ''),
             'body' => trim($validated['body']),
         ]);
         $message->forceFill(['read_by_contact_at' => now()])->save();
@@ -191,7 +191,7 @@ class LoanPageController extends Controller
     public function manifest(Loan $loan, Settings $settings, Branding $branding): JsonResponse
     {
         $path = LoanPage::path($loan);
-        $version = pathinfo((string) $branding->path('logo'), PATHINFO_FILENAME) ?: 'default';
+        $version = $branding->iconVersion();
 
         return response()->json([
             'id' => $path,
@@ -200,7 +200,7 @@ class LoanPageController extends Controller
             'start_url' => $path,
             'scope' => $path,
             'display' => 'standalone',
-            'background_color' => '#ffffff',
+            'background_color' => $branding->iconBackground(),
             'theme_color' => $settings->get('organization.accent_color'),
             'icons' => array_map(fn (int $size) => [
                 'src' => route('web-app.icon', ['size' => $size, 'v' => $version], absolute: false),

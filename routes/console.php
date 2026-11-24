@@ -6,11 +6,13 @@ use App\Models\User;
 use App\Notifications\TestNotification;
 use App\Support\Demo\DemoGenerator;
 use App\Support\Demo\TestSheet;
+use App\Support\MailSettings;
 use App\Support\Modules\ModuleRegistry;
 use App\Support\Notifications\WebPush;
 use Database\Factories\UserFactory;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Schedule;
 
 /*
 |--------------------------------------------------------------------------
@@ -106,3 +108,23 @@ Artisan::command('stocks:notify-test {email : E-Mail-Adresse eines Kontos} {--ch
         ? 'Push an '.$user->pushSubscriptions()->count().' Gerät(e) von '.$user->name.' geschickt.'
         : "Testmail an {$user->email} geschickt.");
 })->purpose('Send a test notification by mail or push to an account');
+
+Artisan::command('stocks:mail-status', function (MailSettings $mailSettings) {
+    if (! $mailSettings->isConfigured()) {
+        $this->info('Kein Mailserver eingestellt.');
+
+        return;
+    }
+
+    $status = $mailSettings->status(fresh: true);
+    $this->info(($status['ok'] ? 'verbunden: ' : 'getrennt: ').$status['message']);
+})->purpose('Test the connection to the mail server and keep the result for the menu badge');
+
+/*
+|--------------------------------------------------------------------------
+| Time plan of the core (service "scheduler")
+|--------------------------------------------------------------------------
+*/
+
+// the menu only reads the cached status and never waits for the network
+Schedule::command('stocks:mail-status')->everyFiveMinutes()->withoutOverlapping()->when(fn () => app(MailSettings::class)->isConfigured());

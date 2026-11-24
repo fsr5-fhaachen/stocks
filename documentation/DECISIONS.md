@@ -2,11 +2,39 @@
 
 Warum Stocks so gebaut ist, wie es gebaut ist. Neue Einträge oben; jeder Eintrag mit Datum, Entscheidung, Grund und verworfener Alternative.
 
-## 2026-11-12 · Dev-Instanz über GitLab CI/CD
+## 2026-11-24 · Dev-Instanz über GitHub Actions statt GitLab
+
+**GitLab fällt weg** (Entscheidung von Maurice). Der Pull-Mirror braucht eine GitLab-Lizenz, und zwei CI-Systeme bauten jeden Push auf `dev` doppelt. Jetzt baut `deploy-dev.yml` das Image auf einem GitHub-Runner nach `ghcr.io` und ein **self-hosted Runner auf dem Dev-Server** spielt es ein ([DEPLOY.md](DEPLOY.md)). Der Server bleibt ohne eingehende Verbindung. Der Runner steckt in einer Runner-Gruppe, die nur `deploy-dev.yml` auf `dev` ausführen darf, weil das Repository öffentlich ist. Verworfen: Timer auf dem Server, der `:dev` holt (kein Status in GitHub), SSH über NetBird von GitHub aus (Setup-Key als Secret, mehr bewegliche Teile).
+
+**Kein automatisches Wiederholen** (Entscheidung von Maurice). Ein fehlgeschlagener Lauf bleibt fehlgeschlagen. Kein bauender Workflow hat einen Zeitplan; `concurrency` sorgt dafür, dass ein neuer Push einen alten Lauf ersetzt statt ihn zu stapeln.
+
+**`docker-release.yml` ohne `pozetroninc/github-action-get-latest-release`.** Die Action brach mit „No valid releases“ ab, wenn es nur Drafts oder Pre-Releases gab. Jetzt entscheidet der Workflow selbst: Tag des Releases immer, `:latest` nur wenn es kein Pre-Release ist und `releases/latest` genau dieses Release liefert.
+
+## 2026-11-23 · Review Phase 5 (Code-Review und Rückmeldungen von stocks-dev)
+
+Gehört zu Phase 5, keine neue Phase. Entscheidungen von Maurice vom 15.11. und 23.11.2026; Plan: Übergabedokument „Stocks – Review Phase 5“.
+
+**Zwei Logos.** Das bisherige Logo ist das für dunkle Hintergründe. Neu ein Logo für helle Hintergründe, im hellen Modus überall und als Icon auf dem Home-Bildschirm; ohne helles Logo ein weißes „S“ auf der Akzentfarbe. Das Druck-Logo bleibt getrennt. Verworfen: ein Logo automatisch einfärben.
+
+**Archiv nur von Hand, eigenes Recht `loans.archive`.** Archivierbar sind abgeschlossene, mit Mängeln abgeschlossene und stornierte Buchungen; Zurückholen geht. Das Archiv nimmt sie nur aus der Buchungsliste; Verlauf, Kontaktseite, Kalender, Dashboard und Verleihseite bleiben. Verworfen: automatisch nach einer Frist.
+
+**Kontakte auch mit Buchungen löschen, Recht `loans.contacts.delete`.** Der Name (mit Fachschaft) bleibt als Text an Buchungen und Veranstaltungen, E-Mail, Telefon, Anschrift und Notiz gehen verloren, auch aus dem Protokoll. Nicht bei offener Buchung (ein Entwurf ist offen). Kein Papierkorb. Verworfen: Kontakt nur „anonymisieren“ und behalten.
+
+**Gebäude als optionale Stufe** zwischen Adresse und Raum; je Gebäude „Im Code zeigen“ (Vorgabe aus, damit ein neues Gebäude keine Codes ändert). Alte Codes werden nach einer Änderung nicht aufgelöst, Etiketten werden neu gedruckt. Verworfen: Einstellung für die ganze Instanz, Weiterleitung alter Codes.
+
+**Testdruck im Editor mit erfundenen Daten** (Code TEST), zählt nicht als gedruckt. **Mails im Design der App**, immer hell, mit Druck-Logo.
+
+**„Ohne Platz“ ohne ausgegebene Gegenstände** (23.11.). Zurück, aber nicht eingeräumt, und vermisst bleiben dort. Umgesetzt als Erweiterungspunkt `ItemAwayProvider`, weil der Kern den Verleih nicht kennt. Verworfen: eigene Spalte „unterwegs“ am Gegenstand.
+
+**„Nach Boxen gruppieren“ als Schalter** in „Gegenstände“ und „Ohne Platz“ (23.11.), je Gerät und Liste gemerkt; Boxen aufklappbar, bei Suche und Filtern flach. Verworfen: Gruppierung als Vorgabe.
+
+**Betrieb:** Akzentfarbe nur aus den Einstellungen (vorher von `app.css` je nach Ladereihenfolge überschrieben); Mailserver-Status prüft der Scheduler alle 5 Minuten; `queue:work --memory=512`; `pint --test` in der CI; `TRUSTED_PROXIES` mit Vorgabe `*`, in Produktion die Adresse des Proxys; alte Images nach einer Woche löschen; Palette-PNGs behalten ihre Transparenz.
+
+## 2026-11-12 · Dev-Instanz über GitLab CI/CD (abgelöst am 2026-11-24)
 
 **GitLab spiegelt GitHub, der Runner läuft auf dem Dev-Server** (Entscheidung von Maurice). Jeder Push auf `dev` baut ein Image je Commit ins GitLab-Registry und startet es mit Docker Compose in `/opt/stocks-dev` ([DEPLOY.md](DEPLOY.md)). Grund: Der Server ist nur über NetBird erreichbar. Der Runner verbindet sich ausgehend, die Pipeline braucht deshalb keinen SSH-Zugang. Verworfen: SSH-Deploy von einem Shared Runner, nur Deploy des GitHub-Images (`ghcr.io/…:dev`).
 
-**`STOCKS_IMAGE` in `docker-compose.yaml`**, Vorgabe bleibt `ghcr.io/fsr5-fhaachen/stocks:latest`. Die Pipeline setzt das Image des Commits; Zurückrollen heißt, einen alten Deploy neu zu starten.
+**`STOCKS_IMAGE` in `docker-compose.yaml`**, Vorgabe bleibt `ghcr.io/fsr5-fhaachen/stocks:latest`. Der Deploy setzt das Image des Commits; Zurückrollen heißt, einen alten Deploy neu zu starten.
 
 ## 2026-11-12 · E-Mails an Mitglieder nur nach Einschalten
 

@@ -114,7 +114,8 @@ Der Editor (`LabelsEditor`, `resources/js/components/labels/Editor.vue`) dient f
 - Pfeiltasten rücken um 1 mm, mit Umschalt um 0,1 mm; Entf löscht, Esc hebt die Auswahl auf.
 - Rechts die Eigenschaften: Position und Größe als Zahlen, Text mit Variablen-Knöpfen, Schriftgröße, fett, Ausrichtung, „Drehen“, Kopie, Entfernen.
 - Ein Beispiel aus dem Inventar füllt die Variablen; genommen wird der Gegenstand, die Box und der Standort mit dem längsten Namen, in einem leeren Inventar erfundene Daten.
-- „Vorschau für“ einen Niimbot zeigt das Etikett in Schwarz-Weiß in den Punkten des Druckers und schraffiert den Rand, den der Druckkopf nicht erreicht.
+- „Vorschau und Testdruck für“ einen Niimbot zeigt das Etikett in Schwarz-Weiß in den Punkten des Druckers und schraffiert den Rand, den der Druckkopf nicht erreicht.
+- **Testdruck** (seit Review Phase 5, Karte unter der Vorlage): druckt die Vorlage, wie sie gerade in der Vorschau steht (auch ungespeichert), auf dem gewählten Drucker: Papier über den Druckdialog, Niimbot direkt per Bluetooth/USB oder als Bild für die Niimbot-App. Die Daten sind immer erfunden (`TemplateController::testSamples()`): Code und Nummer `TEST`, ein langer Name; der Code führt auf `…/s/TEST`, also auf keinen Gegenstand. Nichts wird als gedruckt vermerkt, keine Nummer reserviert. Die Druckwege teilen sich Druckseite und Editor (`resources/js/composables/useLabelPrinting.ts`).
 
 **Warnungen:** Element ragt über den Rand; Element liegt außerhalb der Druckbreite des Niimbot (der B1 druckt 48 mm in der Mitte eines 50 mm breiten Etiketts); Code-Punkte kleiner als 0,4 mm; Text passt nicht und wird abgeschnitten.
 

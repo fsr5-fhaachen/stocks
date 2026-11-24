@@ -32,9 +32,29 @@ class Contact extends Model implements Auditable, AuditSubject
     public const REQUIRED = ['name', 'email', 'phone', 'street', 'zip', 'city'];
 
     /**
+     * Personal data that the audit forgets when the contact is deleted (the name stays).
+     */
+    public const PERSONAL = ['email', 'phone', 'street', 'zip', 'city', 'notes'];
+
+    /**
      * @var list<string>
      */
     protected $fillable = ['name', 'email', 'phone', 'street', 'zip', 'city', 'council_id', 'notes'];
+
+    /**
+     * The audit of the deletion keeps no personal data, otherwise it would not be deleted.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public function transformAudit(array $data): array
+    {
+        if (($data['event'] ?? null) === 'deleted') {
+            $data['old_values'] = array_diff_key($data['old_values'] ?? [], array_flip(self::PERSONAL));
+        }
+
+        return $data;
+    }
 
     /**
      * @return BelongsTo<Council, $this>

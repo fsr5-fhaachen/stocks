@@ -10,6 +10,7 @@ Seit Phase 5 benachrichtigt Stocks per **E-Mail** und **Push** (Web Push über d
 - [Einstellungen](#einstellungen)
 - [Push einrichten](#push-einrichten)
 - [Push je Gerät](#push-je-gerät)
+- [Aussehen der Mails](#aussehen-der-mails)
 - [Warteschlange und Zeitplan](#warteschlange-und-zeitplan)
 - [Testen und Fehlersuche](#testen-und-fehlersuche)
 - [Code](#code)
@@ -106,10 +107,21 @@ Mitglieder registrieren den Worker mit dem Scope `/`, die Verleihseite mit ihrem
 
 **Ergebnis des Tests auf echten Geräten:** steht in [DECISIONS.md](DECISIONS.md), sobald Maurice iPhone, Android und PC auf stocks-dev geprüft hat. Geht es auf einem Gerät nicht, bleibt dort die Mail.
 
+## Aussehen der Mails
+
+Seit Review Phase 5 haben alle Mails (Benachrichtigungen, Einladung, Passwort zurücksetzen, Test-Mail) das Aussehen der App im hellen Modus (Mails sind immer hell):
+
+- `App\Support\Notifications\MailLayout::apply()` gibt einer `MailMessage` den Rahmen. `StocksNotification::toMail()` und `InvitationNotification` rufen es auf, „Passwort vergessen“ über `ResetPassword::toMailUsing()` im `AppServiceProvider`.
+- Theme `stocks` (`config(['mail.markdown.theme' => 'stocks'])`): `resources/views/mail/stocks.blade.php`, CSS mit den Farben der App (Seite grau, Karte weiß mit Rand, Schrift `ink`/`ink-muted`); der Knopf in der Akzentfarbe der Einstellungen. Die Ansichten `resources/views/vendor/mail/{html,text}/message.blade.php`, `html/header.blade.php` und `vendor/notifications/email.blade.php` sind angepasst (deutsch, kein Laravel-Logo).
+- **Kopf:** Druck-Logo, sonst Logo für helle Hintergründe, sonst der Name der Organisation. Das Logo für dunkle Hintergründe nie (weiß auf weiß). Es liegt als Bild in der Mail (`cid:logo@stocks`), verkleinert auf 400 px mit `Branding::pngFor()` (derselbe Cache wie die PDFs). Ist S3 nicht erreichbar, steht der Name dort und die Mail geht trotzdem raus.
+- **Fuß:** Name, Kontakt-Mail, zentrale Telefonnummer; bei Mitgliedern „Benachrichtigungen im Profil ändern“, bei Entleihern „… auf der Verleihseite ändern“ (`StocksNotification::settingsLink()`, im Verleih überschrieben).
+- Inhalt wie bisher aus `NotificationMessage`; die Textversion geht weiter mit.
+- **Vorschau:** Verwaltung › Einstellungen › Benachrichtigungen, Links unter „Test-Mail“ (`/admin/mail/preview`, `?mail=invitation`), öffnen im Browser, verschicken nichts. Zum Abnehmen in Gmail, Outlook und Apple Mail eine Test-Mail schicken.
+
 ## Warteschlange und Zeitplan
 
-- Benachrichtigungen laufen über die Warteschlange (`QUEUE_CONNECTION=redis`, Dienst `queue` mit `php artisan queue:work --tries=3 --max-time=3600`). Ohne laufenden Dienst bleiben sie liegen.
-- Der Dienst `scheduler` (`php artisan schedule:work`) startet die Erinnerungen des Verleihs (`loans:remind`, alle 15 Minuten) und das tägliche Aufräumen der Push-Abos.
+- Benachrichtigungen laufen über die Warteschlange (`QUEUE_CONNECTION=redis`, Dienst `queue` mit `php artisan queue:work --tries=3 --max-time=3600 --memory=512`; ohne `--memory` beendet sich der Worker ab 128 MB nach jedem Auftrag). Ohne laufenden Dienst bleiben sie liegen.
+- Der Dienst `scheduler` (`php artisan schedule:work`) startet die Erinnerungen des Verleihs (`loans:remind`, alle 15 Minuten), das tägliche Aufräumen der Push-Abos und seit Review Phase 5 alle 5 Minuten die Prüfung des Mailservers (`stocks:mail-status`, nur mit eingestelltem Server). Das Ergebnis hält 15 Minuten; das Menü-Badge liest nur diesen Stand und wartet nie auf das Netz.
 - Fehlgeschlagene Aufträge landen in `failed_jobs`; Verwaltung › Einstellungen › Benachrichtigungen zeigt ihre Zahl mit „Erneut versuchen“.
 - Tests laufen mit `sync` und `Notification::fake()`.
 
@@ -127,5 +139,6 @@ Mitglieder registrieren den Worker mit dem Scope `/`, die Verleihseite mit ihrem
 | Helfer | `app/Support/Notifications`, `app/Notifications/StocksNotification.php`, `TestNotification.php` |
 | Push | `config/webpush.php`, `app/Models/PushSubscription.php`, `public/sw.js`, `resources/js/composables/usePush.ts` |
 | Profil | `ProfileController` (`notifications`, `subscribe`, `unsubscribe`, `test`), `pages/Profile/Edit.vue` |
-| Befehl | `routes/console.php` (`stocks:notify-test`) |
-| Tests | `tests/Feature/NotificationsTest.php`, im Verleih `NotificationsTest`, `ChatTest`, `RemindersTest` |
+| Mails | `MailLayout`, `resources/views/mail/stocks.blade.php`, `resources/views/vendor/mail`, `resources/views/vendor/notifications/email.blade.php` |
+| Befehl | `routes/console.php` (`stocks:notify-test`, `stocks:mail-status`) |
+| Tests | `tests/Feature/NotificationsTest.php`, `MailLayoutTest.php`, `MailStatusScheduleTest.php`, im Verleih `NotificationsTest`, `ChatTest`, `RemindersTest` |

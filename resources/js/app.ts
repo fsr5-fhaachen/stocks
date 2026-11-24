@@ -65,7 +65,7 @@ createInertiaApp({
     return page;
   },
   progress: {
-    color: "rgb(var(--color-accent))",
+    color: "rgb(var(--color-accent, 34 148 140))",
   },
   setup({ el, App, props, plugin }) {
     createApp({ render: () => h(App, props) })

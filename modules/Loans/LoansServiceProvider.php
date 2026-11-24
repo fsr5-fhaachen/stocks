@@ -27,6 +27,7 @@ use Modules\Loans\Models\Council;
 use Modules\Loans\Models\Event;
 use Modules\Loans\Models\Loan;
 use Modules\Loans\Models\LoanExtensionRequest;
+use Modules\Loans\Support\LoanAwayItems;
 use Modules\Loans\Support\LoanItemInfo;
 use Modules\Loans\Support\LoanNotifier;
 use Modules\Loans\Support\LoanPage;
@@ -111,6 +112,7 @@ class LoansServiceProvider extends ServiceProvider
         $dashboardTiles->add('Loans::DashboardTile', 'loans.view', self::KEY, order: 20);
         $items->addTab('Verleih', 'Loans::ItemTab', 'loans.view', self::KEY);
         $items->addInfo(LoanItemInfo::class, self::KEY);
+        $items->addAway(LoanAwayItems::class, self::KEY);
         $items->addPublicBoxSection('Loans::PublicPackPin', PackPinSection::class, self::KEY);
         $demoData->add(LoansDemo::class, self::KEY, order: 50);
 

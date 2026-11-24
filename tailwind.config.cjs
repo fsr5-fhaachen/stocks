@@ -7,7 +7,8 @@ const defaultTheme = require("tailwindcss/defaultTheme");
  * dark mode. Components only use these names, never fixed colours, so the look is changed in
  * one place. The accent colour comes from the settings of the instance.
  */
-const token = (name) => `rgb(var(--color-${name}) / <alpha-value>)`;
+const token = (name, fallback) =>
+  `rgb(var(--color-${name}${fallback ? `, ${fallback}` : ""}) / <alpha-value>)`;
 
 module.exports = {
   content: [
@@ -24,8 +25,9 @@ module.exports = {
         line: token("line"),
         ink: token("ink"),
         "ink-muted": token("ink-muted"),
-        accent: token("accent"),
-        "accent-hover": token("accent-hover"),
+        // set by the settings only (resources/views/app.blade.php); fallback mint of Portals
+        accent: token("accent", "34 148 140"),
+        "accent-hover": token("accent-hover", "0 181 173"),
       },
       fontFamily: {
         sans: ['"Inter Variable"', ...defaultTheme.fontFamily.sans],

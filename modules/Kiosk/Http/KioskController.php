@@ -130,7 +130,7 @@ class KioskController extends Controller
      */
     public function manifest(Settings $settings, Branding $branding): JsonResponse
     {
-        $version = pathinfo((string) $branding->path('logo'), PATHINFO_FILENAME) ?: 'default';
+        $version = $branding->iconVersion();
 
         return response()->json([
             'name' => $settings->get('organization.short_name').' Kiosk',
@@ -140,7 +140,7 @@ class KioskController extends Controller
             'display' => 'fullscreen',
             'display_override' => ['fullscreen', 'standalone'],
             'orientation' => 'any',
-            'background_color' => '#ffffff',
+            'background_color' => $branding->iconBackground(),
             'theme_color' => $settings->get('organization.accent_color'),
             'icons' => array_map(fn (int $size) => [
                 'src' => route('web-app.icon', ['size' => $size, 'v' => $version], absolute: false),

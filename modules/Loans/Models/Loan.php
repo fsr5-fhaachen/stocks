@@ -34,7 +34,9 @@ use OwenIt\Auditing\Contracts\Auditable;
  * @property LoanStatus $status
  * @property LoanKind $kind
  * @property int|null $borrower_contact_id
+ * @property string|null $borrower_name name of the borrower once the contact was deleted
  * @property int|null $responsible_contact_id
+ * @property string|null $responsible_name name of the responsible person once the contact was deleted
  * @property int|null $responsible_user_id
  * @property int|null $issuer_id
  * @property int|null $event_id
@@ -53,6 +55,8 @@ use OwenIt\Auditing\Contracts\Auditable;
  * @property string|null $contract_text
  * @property Carbon|null $cancelled_at
  * @property string|null $cancelled_reason
+ * @property Carbon|null $archived_at only in the list with "Archiv" (Modules\Loans\Actions\ArchiveLoan)
+ * @property int|null $archived_by
  * @property int|null $created_by
  * @property int $access_version version of the key of the borrower page
  * @property Carbon|null $access_blocked_at
@@ -99,6 +103,7 @@ class Loan extends Model implements Auditable, AuditSubject
             'inspected_at' => 'datetime',
             'defects_closed_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'archived_at' => 'datetime',
             'pack_pin' => 'encrypted',
             'pin_attempts' => 'integer',
             'access_version' => 'integer',
@@ -340,11 +345,38 @@ class Loan extends Model implements Auditable, AuditSubject
     }
 
     /**
-     * Name of the responsible person: the contact, or the member of an internal loan.
+     * Name of the responsible person: the contact (its name kept as text once it was deleted), or
+     * the member of an internal loan.
      */
     public function responsibleName(): ?string
     {
-        return $this->isInternal() ? $this->responsibleUser?->name : $this->responsible?->name;
+        return $this->isInternal() ? $this->responsibleUser?->name : ($this->responsible?->name ?? $this->responsible_name);
+    }
+
+    /**
+     * Name of the borrower: the contact, or its name kept as text once it was deleted.
+     */
+    public function borrowerName(): ?string
+    {
+        return $this->borrower?->name ?? $this->borrower_name;
+    }
+
+    /**
+     * Member who archived the loan.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function archiver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'archived_by');
+    }
+
+    /**
+     * Check if the status allows to archive: closed, with defects or cancelled.
+     */
+    public function isArchivable(): bool
+    {
+        return in_array($this->status, LoanStatus::finished(), true);
     }
 
     /**
@@ -352,7 +384,7 @@ class Loan extends Model implements Auditable, AuditSubject
      */
     public function title(): string
     {
-        return trim($this->number.' · '.($this->purpose ?: $this->borrower?->name ?: $this->responsibleName()), ' ·');
+        return trim($this->number.' · '.($this->purpose ?: $this->borrowerName() ?: $this->responsibleName()), ' ·');
     }
 
     /**
@@ -375,6 +407,7 @@ class Loan extends Model implements Auditable, AuditSubject
             'return_at' => $this->return_at->toIso8601String(),
             'overdue_days' => $this->overdueDays(),
             'responsible' => $this->responsibleName(),
+            'archived' => $this->archived_at !== null,
         ];
     }
 
@@ -396,6 +429,7 @@ class Loan extends Model implements Auditable, AuditSubject
             'return_at' => 'Rückgabe', 'confirmed_at' => 'Bestätigt am', 'issued_at' => 'Ausgegeben am', 'returned_at' => 'Zurück am', 'inspected_at' => 'Geprüft am',
             'defects_closed_at' => 'Mängel abgeschlossen am', 'defects_note' => 'Notiz zu den Mängeln', 'purpose' => 'Anlass', 'notes' => 'Notiz',
             'cancelled_at' => 'Storniert am', 'cancelled_reason' => 'Grund der Stornierung',
+            'archived_at' => 'Archiviert am', 'archived_by' => 'Archiviert von', 'borrower_name' => 'Entleiher (gelöscht)', 'responsible_name' => 'Verantwortlich (gelöscht)',
         ];
     }
 }

@@ -10,6 +10,8 @@ x-environment: &environment
   APP_DEBUG: '${APP_DEBUG:-false}'
   APP_URL: '${APP_URL}'
   APP_FORCE_HTTPS: '${APP_FORCE_HTTPS:-true}'
+  # addresses of the reverse proxy, comma separated; * trusts every sender of X-Forwarded-For
+  TRUSTED_PROXIES: '${TRUSTED_PROXIES:-*}'
   APP_LOCALE: de
   # times of loans are entered and printed in this time zone
   APP_TIMEZONE: '${APP_TIMEZONE:-Europe/Berlin}'
@@ -75,7 +77,8 @@ services:
     depends_on:
       - web
     environment: *environment
-    command: php artisan queue:work --tries=3 --max-time=3600
+    # --memory: Laravel stops the worker after a job above 128 MB, the pdf needs more
+    command: php artisan queue:work --tries=3 --max-time=3600 --memory=512
     healthcheck:
       disable: true
     networks:

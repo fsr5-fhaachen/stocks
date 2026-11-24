@@ -32,7 +32,9 @@ class DemoDataTest extends TestCase
         app(DemoGenerator::class)->run();
 
         $this->assertGreaterThanOrEqual(InventoryDemo::ITEMS, Item::count());
-        $this->assertSame(60, Location::count());
+        $this->assertSame(65, Location::count());
+        $this->assertTrue(Location::where('full_code', 'EU-A-201')->exists(), 'room in a building in the code');
+        $this->assertTrue(Location::where('full_code', 'EU-W01')->exists(), 'room in a building not in the code');
         $this->assertSame(InventoryDemo::BOXES, Item::where('is_container', true)->count());
         $this->assertTrue(Item::whereNotNull('container_id')->where('is_container', true)->exists(), 'box in box');
         $this->assertTrue(Item::where('kind', ItemKind::Bulk)->whereIn('unit', ['Rollen', 'Packungen'])->exists(), 'consumable');

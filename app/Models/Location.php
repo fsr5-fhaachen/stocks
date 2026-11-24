@@ -13,7 +13,7 @@ use Illuminate\Support\Carbon;
 use OwenIt\Auditing\Contracts\Auditable;
 
 /**
- * A place in the tree address → room → shelf → compartment.
+ * A place in the tree address → (building) → room → shelf → compartment.
  *
  * The full code joins the codes of the path ("EU-014-R03.4"). It is stored for search and
  * sorting and recomputed by App\Actions\Inventory\SaveLocation for the whole subtree.
@@ -25,6 +25,7 @@ use OwenIt\Auditing\Contracts\Auditable;
  * @property string|null $name
  * @property string|null $description
  * @property string $full_code
+ * @property bool $show_in_code
  * @property Carbon|null $label_printed_at time of the last printed label
  */
 class Location extends Model implements Auditable, AuditSubject
@@ -46,6 +47,7 @@ class Location extends Model implements Auditable, AuditSubject
         'name',
         'description',
         'full_code',
+        'show_in_code',
     ];
 
     /**
@@ -66,6 +68,7 @@ class Location extends Model implements Auditable, AuditSubject
     {
         return [
             'type' => LocationType::class,
+            'show_in_code' => 'boolean',
             'label_printed_at' => 'datetime',
         ];
     }
@@ -97,10 +100,16 @@ class Location extends Model implements Auditable, AuditSubject
     }
 
     /**
-     * Build the full code of a location from the full code of its parent.
+     * Build the full code of a location from the full code of its parent. A building that is not
+     * shown in the code passes the code of its address on to its children ("EU-014" instead of
+     * "EU-A-014"); the building itself always has its own code ("EU-A").
      */
     public static function fullCodeOf(?Location $parent, LocationType $type, string $code): string
     {
+        if ($parent?->type === LocationType::Building && ! $parent->show_in_code) {
+            $parent = $parent->parent;
+        }
+
         return $parent ? $parent->full_code.$type->separator().$code : $code;
     }
 
@@ -114,7 +123,7 @@ class Location extends Model implements Auditable, AuditSubject
         $ids = [$this->id];
         $level = [$this->id];
 
-        // the tree has at most four levels, so this runs at most four queries
+        // the tree has at most five levels, so this runs at most five queries
         while ($level) {
             $level = Location::whereIn('parent_id', $level)->pluck('id')->all();
             $ids = [...$ids, ...$level];
@@ -126,17 +135,19 @@ class Location extends Model implements Auditable, AuditSubject
     /**
      * Data of the location for the frontend.
      *
-     * @return array{id: int, type: string, type_label: string, code: string, name: string|null, full_code: string}
+     * @return array{id: int, parent_id: int|null, type: string, type_label: string, code: string, name: string|null, full_code: string, show_in_code: bool}
      */
     public function summary(): array
     {
         return [
             'id' => $this->id,
+            'parent_id' => $this->parent_id,
             'type' => $this->type->value,
             'type_label' => $this->type->label(),
             'code' => $this->code,
             'name' => $this->name,
             'full_code' => $this->full_code,
+            'show_in_code' => $this->type === LocationType::Building && $this->show_in_code,
         ];
     }
 
@@ -168,6 +179,7 @@ class Location extends Model implements Auditable, AuditSubject
             'name' => 'Name',
             'description' => 'Beschreibung',
             'full_code' => 'Kennziffer',
+            'show_in_code' => 'Im Code zeigen',
         ];
     }
 }

@@ -37,7 +37,7 @@ Danach ist `/setup` gesperrt. Den `SETUP_TOKEN` kann man wieder entfernen.
 
 ## Dev-Instanz
 
-Die Dev-Instanz spielt GitLab CI/CD bei jedem Push auf `dev` automatisch ein, siehe [DEPLOY.md](DEPLOY.md).
+Die Dev-Instanz spielt GitHub Actions bei jedem Push auf `dev` automatisch ein, siehe [DEPLOY.md](DEPLOY.md).
 
 ## Update
 
@@ -55,6 +55,7 @@ Die Dev-Instanz spielt GitLab CI/CD bei jedem Push auf `dev` automatisch ein, si
 | `SETUP_TOKEN` | Schlüssel für den Einrichtungsassistenten; ohne ihn ist der Assistent aus |
 | `CHECK_LEAKED_PASSWORDS` | `true` lehnt Passwörter aus bekannten Datenlecks ab (Abfrage bei haveibeenpwned.com) |
 | `APP_FORCE_HTTPS` | Links immer mit https erzeugen (hinter einem Reverse Proxy) |
+| `TRUSTED_PROXIES` | Adressen des Reverse Proxys, kommagetrennt; Vorgabe `*` (jeder). In Produktion die Adresse des Proxys setzen: Sonst kann jeder, der den Port direkt erreicht, `X-Forwarded-For` fälschen und so die Sperren nach Adresse umgehen (Pack-PIN, Anmeldung). Wirkt als echte Umgebungsvariable (Compose), nicht aus einer gecachten `.env` |
 | `APP_TIMEZONE` | Zeitzone, in der Zeiten eingegeben, gespeichert und gedruckt werden (Abholung, Rückgabe); Vorgabe `Europe/Berlin` |
 | `AWS_*` | S3-Speicher für Fotos, standardmäßig das mitgestartete MinIO; siehe [INVENTORY.md](INVENTORY.md#fotos-auf-s3) |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Schlüssel für Web Push; ohne sie ist Push aus, siehe [NOTIFICATIONS.md](NOTIFICATIONS.md) |

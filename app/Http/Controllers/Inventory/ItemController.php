@@ -325,7 +325,7 @@ class ItemController extends Controller
         }
 
         // items never lie directly at an address
-        $locations = Location::where('type', '!=', LocationType::Address)
+        $locations = Location::whereNotIn('type', [LocationType::Address, LocationType::Building])
             ->where(fn ($query) => $query->whereLike('full_code', "%{$search}%")->orWhereLike('name', "%{$search}%"))
             ->orderBy('full_code')->limit(8)->get();
         $boxes = Item::active()->where('is_container', true)
@@ -339,13 +339,24 @@ class ItemController extends Controller
     }
 
     /**
+     * Active items directly in a box, for the grouped item list (json, at most
+     * ItemsTable::CONTENTS_LIMIT rows and the number of the others).
+     */
+    public function contents(Request $request, Item $item): JsonResponse
+    {
+        abort_unless($item->is_container, 404);
+
+        return response()->json(ItemsTable::contents($item, $request->user()));
+    }
+
+    /**
      * Numbers for the dashboard tile (json).
      */
     public function stats(): JsonResponse
     {
         return response()->json([
             'items' => Item::active()->count(),
-            'misplaced' => Item::active()->misplaced()->count(),
+            'misplaced' => $this->extensions->misplaced()->count(),
         ]);
     }
 
@@ -364,7 +375,7 @@ class ItemController extends Controller
             'misplaced' => $onlyMisplaced,
             'categories' => Category::options(),
             'conditions' => ItemCondition::options(),
-            'filters' => $request->only(['category', 'condition', 'retired', 'unlabeled']),
+            'filters' => $request->only(['category', 'condition', 'retired', 'unlabeled', 'grouped']),
         ]);
     }
 

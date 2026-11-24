@@ -88,6 +88,8 @@ class TemplateController extends Controller
             'variables' => collect(LabelTarget::cases())->mapWithKeys(fn (LabelTarget $target) => [$target->value => $target->variables()]),
             'sizes' => self::sizes(),
             'samples' => self::samples($labels),
+            // test print: always invented, code TEST, nothing is noted as printed
+            'testSamples' => self::testSamples($labels),
         ]);
     }
 
@@ -211,6 +213,32 @@ class TemplateController extends Controller
             'location' => $location ? $labels->forLocation($location) : self::invented($labels, 'location', 'EU-014-R03.4', 'EU-014-R03.4'),
             'reserve' => $labels->forReserved($reserved),
         ];
+    }
+
+    /**
+     * Invented labels of every target for the test print in the editor: code and number "TEST"
+     * (the short link leads to no item), a long name to see whether it fits.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public static function testSamples(LabelData $labels): array
+    {
+        $reserved = new ReservedNumber(['number' => 'TEST']);
+        $reserved->id = 0;
+
+        $samples = [
+            'item' => self::invented($labels, 'item', 'Testetikett mit einem langen Namen zum Ausprobieren', 'TEST'),
+            'box' => self::invented($labels, 'box', 'Testetikett Box mit einem langen Namen', 'TEST'),
+            'location' => self::invented($labels, 'location', 'TEST', 'TEST'),
+            'reserve' => $labels->forReserved($reserved),
+        ];
+
+        return array_map(fn (array $sample) => [
+            ...$sample,
+            'key' => 'test-'.$sample['target'],
+            'id' => 0,
+            'values' => [...$sample['values'], 'number' => 'TEST', 'name' => $sample['target'] === 'location' ? 'Testetikett' : $sample['title']],
+        ], $samples);
     }
 
     /**

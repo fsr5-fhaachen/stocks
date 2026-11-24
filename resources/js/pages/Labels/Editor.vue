@@ -75,13 +75,77 @@
           />
           <UiSelect
             v-model="printerId"
-            label="Vorschau für"
+            label="Vorschau und Testdruck für"
             :options="printerOptions"
             placeholder="Bildschirm"
           />
           <p class="text-sm text-ink-muted">
             Beispiel: {{ samples[form.target].title }}. Ein Element auswählen,
             um es zu bearbeiten.
+          </p>
+        </div>
+      </UiCard>
+      <!-- test print of the unsaved template with invented data, nothing counts as printed -->
+      <UiCard title="Testdruck">
+        <div class="space-y-3">
+          <p class="text-sm text-ink-muted">
+            Druckt die Vorlage, wie sie gerade in der Vorschau steht, mit
+            erfundenen Daten (Code TEST). Nichts wird als gedruckt vermerkt.
+          </p>
+          <p v-if="!printer" class="text-sm text-ink-muted">
+            Erst oben einen Drucker wählen.
+          </p>
+          <template v-else-if="printer.driver === 'niimbot'">
+            <template v-if="connections.length">
+              <UiButton
+                v-for="connection in connections"
+                v-show="!connected"
+                :key="connection"
+                variant="secondary"
+                class="w-full"
+                :disabled="busy"
+                @click="connectPrinter(connection)"
+              >
+                {{
+                  connection === "bluetooth"
+                    ? "Per Bluetooth verbinden"
+                    : "Per USB verbinden"
+                }}
+              </UiButton>
+              <UiButton
+                v-if="connected"
+                class="w-full"
+                icon="print"
+                :disabled="busy"
+                @click="printNiimbot"
+              >
+                Testdruck
+              </UiButton>
+            </template>
+            <UiButton
+              :variant="connections.length ? 'secondary' : 'primary'"
+              class="w-full"
+              icon="download"
+              :disabled="busy"
+              @click="downloadPng"
+            >
+              Testetikett als Bild
+            </UiButton>
+          </template>
+          <UiButton
+            v-else
+            class="w-full"
+            icon="print"
+            :disabled="busy"
+            @click="printOnPaper"
+          >
+            Testdruck
+          </UiButton>
+          <p v-if="printError" class="text-sm text-red-600">
+            {{ printError }}
+          </p>
+          <p v-if="printed" class="text-sm text-green-700 dark:text-green-400">
+            {{ printed }}
           </p>
         </div>
       </UiCard>
@@ -95,7 +159,8 @@ import { useForm, usePage } from "@inertiajs/vue3";
 
 /**
  * Editor of a label template. A sample of the inventory fills the variables, so long names show
- * whether they fit.
+ * whether they fit. "Testdruck" prints the unsaved template with invented data on the chosen
+ * printer, the same ways as the print page (useLabelPrinting).
  */
 const props = defineProps<{
   template: LabelTemplate;
@@ -103,6 +168,8 @@ const props = defineProps<{
   variables: Record<LabelTargetName, string[]>;
   sizes: { label: string; width: number; height: number }[];
   samples: Record<LabelTargetName, LabelData>;
+  // invented, code TEST
+  testSamples: Record<LabelTargetName, LabelData>;
   printers: PrinterData[];
   logoUrl: string | null;
 }>();
@@ -153,6 +220,29 @@ const printerOptions = computed(() =>
 const printerId = ref<number | null>(null);
 const printer = computed(
   () => props.printers.find((entry) => entry.id === printerId.value) ?? null,
+);
+
+const {
+  busy,
+  printError,
+  printed,
+  printOnPaper,
+  downloadPng,
+  connections,
+  connected,
+  connectPrinter,
+  printNiimbot,
+} = useLabelPrinting(
+  printer,
+  () => props.logoUrl,
+  () => [
+    {
+      template: design.value,
+      data: props.testSamples[form.target],
+      name: "TEST",
+    },
+  ],
+  () => 1,
 );
 
 const errorList = computed(() =>

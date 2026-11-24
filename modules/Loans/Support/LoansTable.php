@@ -12,7 +12,8 @@ use Modules\Loans\Models\LoanMessage;
 
 /**
  * List of loans. Filters: status ("overdue" for issued loans past their return, "unread" for loans
- * with unread messages of the borrower), time (overlapping from/to), contact, event.
+ * with unread messages of the borrower), time (overlapping from/to), contact, event. Archived loans
+ * are left out; "archive" shows only them.
  */
 class LoansTable extends Table
 {
@@ -30,6 +31,8 @@ class LoansTable extends Table
      */
     protected function applyFilters(Builder $query): void
     {
+        $this->request->boolean('archive') ? $query->whereNotNull('loans.archived_at') : $query->whereNull('loans.archived_at');
+
         $status = (string) $this->request->query('status');
         if ($status === 'overdue') {
             $query->overdue();
@@ -75,7 +78,8 @@ class LoansTable extends Table
      */
     protected function searchColumns(): array
     {
-        return ['number', 'purpose', 'responsible.name', 'borrower.name', 'event.name'];
+        // the names kept as text once a contact was deleted are found too
+        return ['number', 'purpose', 'responsible.name', 'borrower.name', 'responsible_name', 'borrower_name', 'event.name'];
     }
 
     /**

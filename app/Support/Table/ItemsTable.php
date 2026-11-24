@@ -5,6 +5,7 @@ namespace App\Support\Table;
 use App\Models\Category;
 use App\Models\Item;
 use App\Models\ItemCondition;
+use App\Models\User;
 use App\Support\Extensions\ItemExtensions;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -14,12 +15,20 @@ use Illuminate\Support\Collection;
 /**
  * Items of the inventory. Filters: category (with its sub categories), condition, retired, without
  * printed label ("noch ohne Etikett").
+ *
+ * "grouped" (switch "Nach Boxen gruppieren"): without search and filters the list shows only the
+ * items whose box is not in the list itself, boxes with the number of their contents; the page
+ * opens a box with contents() (route inventory.items.contents).
  */
 class ItemsTable extends Table
 {
     /**
-     * @param  bool  $onlyMisplaced  only items without place or away from their home (page "Ohne Platz")
+     * Most rows of the contents of a box at once, the rest is reached on the page of the box.
+     *
+     * @var int
      */
+    public const CONTENTS_LIMIT = 200;
+
     /**
      * Notices of modules for the items of the current page, by item id.
      *
@@ -27,6 +36,9 @@ class ItemsTable extends Table
      */
     private array $notices = [];
 
+    /**
+     * @param  bool  $onlyMisplaced  only items without place or away from their home (page "Ohne Platz")
+     */
     public function __construct(Request $request, private readonly bool $onlyMisplaced = false)
     {
         parent::__construct($request);
@@ -45,9 +57,48 @@ class ItemsTable extends Table
      */
     protected function query(): Builder
     {
-        $query = Item::query()->with(['category.parent', 'condition', 'location', 'container', 'photos']);
+        return $this->scope()->with(['category.parent', 'condition', 'location', 'container', 'photos'])
+            ->withCount(['contents' => fn (Builder $query) => $query->active()]);
+    }
 
-        return $this->onlyMisplaced ? $query->active()->misplaced() : $query;
+    /**
+     * Items of the page without filters: all, or those of "Ohne Platz".
+     *
+     * @return Builder<Item>
+     */
+    private function scope(): Builder
+    {
+        return $this->onlyMisplaced ? app(ItemExtensions::class)->misplaced() : Item::query();
+    }
+
+    /**
+     * Check if the rows are grouped by boxes: asked for and neither searched nor filtered.
+     */
+    public function isGrouped(): bool
+    {
+        return $this->request->boolean('grouped')
+            && trim((string) $this->request->query('search', '')) === ''
+            && ! array_filter($this->request->only(['category', 'condition', 'retired', 'unlabeled']));
+    }
+
+    /**
+     * Rows of the active items directly in a box, by name, at most CONTENTS_LIMIT.
+     *
+     * @return array{rows: list<array<string, mixed>>, more: int}
+     */
+    public static function contents(Item $box, ?User $user): array
+    {
+        $query = $box->contents()->active()
+            ->with(['category.parent', 'condition', 'location', 'container', 'photos'])
+            ->withCount(['contents' => fn (Builder $query) => $query->active()]);
+        $total = (clone $query)->count();
+        $items = $query->reorder('name')->orderBy('id')->limit(self::CONTENTS_LIMIT)->get();
+        $notices = app(ItemExtensions::class)->notices($items, $user);
+
+        return [
+            'rows' => $items->map(fn (Item $item) => self::rowFor($item, $notices[$item->id] ?? []))->values()->all(),
+            'more' => max(0, $total - self::CONTENTS_LIMIT),
+        ];
     }
 
     /**
@@ -73,6 +124,12 @@ class ItemsTable extends Table
         if ($this->request->boolean('unlabeled')) {
             $query->whereNull('label_printed_at');
         }
+
+        // grouped: the contents of a box in the list are shown below the box
+        if ($this->isGrouped()) {
+            $query->where(fn (Builder $query) => $query->whereNull('items.container_id')
+                ->orWhereNotIn('items.container_id', $this->scope()->whereNull('retired_at')->select('items.id')));
+        }
     }
 
     /**
@@ -81,6 +138,17 @@ class ItemsTable extends Table
      * @param  Item  $model
      */
     protected function row(Model $model): array
+    {
+        return self::rowFor($model, $this->notices[$model->id] ?? []);
+    }
+
+    /**
+     * Row of an item, also for the contents of a box.
+     *
+     * @param  list<array<string, mixed>>  $notices  notices of the modules for this item
+     * @return array<string, mixed>
+     */
+    public static function rowFor(Item $model, array $notices): array
     {
         return [
             'id' => $model->id,
@@ -98,10 +166,12 @@ class ItemsTable extends Table
             'retired' => $model->isRetired(),
             'photo_url' => $model->photos->first()?->url(),
             'label_printed_at' => $model->label_printed_at?->toIso8601String(),
+            // active items directly in the box, for the grouped list
+            'contents_count' => $model->is_container ? (int) $model->contents_count : 0,
             // short notices of modules, e.g. "ausgegeben bis 12.11."
             'badges' => array_values(array_filter(array_map(
                 fn (array $notice) => $notice['badge'] ? ['text' => $notice['badge'], 'variant' => $notice['variant']] : null,
-                $this->notices[$model->id] ?? [],
+                $notices,
             ))),
         ];
     }

@@ -203,7 +203,11 @@
           class="mt-4 grid grid-cols-2 gap-2 [&>*]:min-h-[44px] lg:[&>*]:text-base"
         >
           <UiButton
-            v-if="can('inventory.move') && card.location_type !== 'address'"
+            v-if="
+              can('inventory.move') &&
+              card.location_type !== 'address' &&
+              card.location_type !== 'building'
+            "
             icon="right-left"
             size="md"
             @click="mode = { type: 'here', code: card.full_code }"
@@ -314,7 +318,7 @@ type ScannedItem = {
 };
 type ScannedLocation = {
   type: "location";
-  location_type: "address" | "room" | "shelf" | "compartment";
+  location_type: LocationType;
   id: number;
   type_label: string;
   name: string | null;

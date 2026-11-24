@@ -19,6 +19,7 @@ use OwenIt\Auditing\Contracts\Auditable;
  * @property Carbon $ends_at
  * @property string|null $place
  * @property int|null $responsible_contact_id
+ * @property string|null $responsible_name name of the responsible person once the contact was deleted
  * @property string|null $notes
  */
 class Event extends Model implements Auditable, AuditSubject
@@ -44,6 +45,14 @@ class Event extends Model implements Auditable, AuditSubject
     public function responsible(): BelongsTo
     {
         return $this->belongsTo(Contact::class, 'responsible_contact_id');
+    }
+
+    /**
+     * Name of the responsible person: the contact, or its name kept as text once it was deleted.
+     */
+    public function responsibleName(): ?string
+    {
+        return $this->responsible?->name ?? $this->responsible_name;
     }
 
     /**

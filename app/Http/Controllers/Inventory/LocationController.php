@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Inventory;
 
 use App\Actions\Inventory\DeleteLocation;
 use App\Actions\Inventory\SaveLocation;
+use App\Enums\LocationType;
 use App\Http\Controllers\Controller;
 use App\Models\Item;
 use App\Models\Location;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -92,16 +94,19 @@ class LocationController extends Controller
     }
 
     /**
-     * @return array{parent_id: int|null, code: string, name: string|null, description: string|null}
+     * @return array{parent_id: int|null, code: string, name: string|null, description: string|null, type: string|null, show_in_code: bool|null}
      */
     private function validated(Request $request): array
     {
         return $request->validate([
             'parent_id' => ['nullable', 'integer', 'exists:locations,id'],
+            // only where the parent allows two levels (address: room or building)
+            'type' => ['nullable', Rule::enum(LocationType::class)],
+            'show_in_code' => ['nullable', 'boolean'],
             // letters and digits only, "-" and "." join the codes of the path
             'code' => ['required', 'string', 'max:20', 'regex:/^[A-Za-z0-9]+$/'],
             'name' => ['nullable', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:2000'],
-        ], ['code.regex' => 'Das Kürzel besteht nur aus Buchstaben und Ziffern.']) + ['parent_id' => null, 'name' => null, 'description' => null];
+        ], ['code.regex' => 'Das Kürzel besteht nur aus Buchstaben und Ziffern.']) + ['parent_id' => null, 'name' => null, 'description' => null, 'type' => null, 'show_in_code' => null];
     }
 }

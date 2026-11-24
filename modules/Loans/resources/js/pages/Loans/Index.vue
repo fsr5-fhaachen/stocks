@@ -6,6 +6,15 @@
     <UiButton variant="secondary" icon="calendar-days" href="/loans/calendar"
       >Kalender</UiButton
     >
+    <UiButton
+      v-if="can('loans.archive') && selected.length"
+      variant="secondary"
+      icon="box-archive"
+      :disabled="archiving"
+      @click="archiveSelected"
+    >
+      {{ selected.length }} archivieren
+    </UiButton>
     <UiButton v-if="can('loans.manage')" icon="plus" href="/loans/create"
       >Neue Buchung</UiButton
     >
@@ -13,7 +22,7 @@
 
   <UiCard flush>
     <div
-      class="grid gap-4 border-b border-line p-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-4"
+      class="grid gap-4 border-b border-line p-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-5"
     >
       <UiSelect
         v-model="filter.status"
@@ -39,6 +48,13 @@
         type="date"
         @update:model-value="apply"
       />
+      <!-- archived loans are only listed here -->
+      <UiCheckbox
+        v-model="filter.archive"
+        label="Archiv"
+        class="lg:mt-7"
+        @update:model-value="apply"
+      />
     </div>
     <UiTable
       ref="table"
@@ -49,6 +65,15 @@
       stacked
     >
       <template #cell-number="{ row }">
+        <!-- choice of finished loans to archive several at once -->
+        <input
+          v-if="can('loans.archive') && !row.archived && finished(row)"
+          v-model="selected"
+          type="checkbox"
+          :value="row.id"
+          class="mr-2 h-4 w-4 rounded border-line text-accent focus:ring-accent"
+          :aria-label="`${row.number} zum Archivieren auswählen`"
+        />
         <UiLink :href="`/loans/${row.id}`" class="font-mono font-medium">{{
           row.number
         }}</UiLink>
@@ -73,11 +98,13 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
+import { router } from "@inertiajs/vue3";
 import { formatDateTime } from "../../http";
 import LoansStatusBadge from "../../components/StatusBadge.vue";
 
 /**
- * List of loans with filters by status, event and time.
+ * List of loans with filters by status, event and time. Archived loans only show with "Archiv";
+ * finished loans can be chosen and archived together.
  */
 const props = defineProps<{
   statuses: Option[];
@@ -88,6 +115,7 @@ const props = defineProps<{
     to?: string;
     contact?: string;
     event?: string;
+    archive?: string;
   };
   contact: { id: number; name: string } | null;
 }>();
@@ -114,6 +142,7 @@ const filter = ref({
   event: props.filters.event ? Number(props.filters.event) : null,
   from: props.filters.from ?? "",
   to: props.filters.to ?? "",
+  archive: props.filters.archive === "1",
 });
 
 const apply = () =>
@@ -123,5 +152,27 @@ const apply = () =>
     from: filter.value.from || null,
     to: filter.value.to || null,
     contact: props.filters.contact ?? null,
+    archive: filter.value.archive ? "1" : null,
   });
+
+// archive: closed, with defects or cancelled (LoanStatus::finished)
+const finished = (row: { status: string }) =>
+  ["closed", "defects", "cancelled"].includes(row.status);
+const selected = ref<number[]>([]);
+const archiving = ref(false);
+const archiveSelected = () => {
+  archiving.value = true;
+  router.post(
+    "/loans/archive",
+    { ids: selected.value },
+    {
+      preserveScroll: true,
+      onSuccess: () => {
+        selected.value = [];
+        apply();
+      },
+      onFinish: () => (archiving.value = false),
+    },
+  );
+};
 </script>
