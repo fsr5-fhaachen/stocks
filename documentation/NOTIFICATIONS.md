@@ -128,7 +128,7 @@ Seit Review Phase 5 haben alle Mails (Benachrichtigungen, Einladung, Passwort zu
 ## Testen und Fehlersuche
 
 - `php artisan stocks:notify-test <email> --channel=mail|push` schickt eine Testbenachrichtigung sofort (ohne Warteschlange) und zeigt Fehler direkt. Dasselbe als Knopf im Profil.
-- Kommt keine Mail: Verwaltung › Einstellungen › Benachrichtigungen (Verbindung, Test-Mail, fehlgeschlagene Aufträge), läuft der Dienst `queue`?
+- Kommt keine Mail: Ist `APP_DEBUG=true`? Dann geht keine Mail raus, jede landet nur im Log (`storage/logs`), auch mit eingetragenem Mailserver (`MailSettings::isSendingBlocked()`, seit 24.11.2026). Die Seite Benachrichtigungen sagt das im Verbindungsstatus und nach der Test-Mail; die Verbindungsprüfung selbst läuft weiter. `MAIL_SEND_IN_DEBUG=true` verschickt trotzdem. Sonst: Verwaltung › Einstellungen › Benachrichtigungen (Verbindung, Test-Mail, fehlgeschlagene Aufträge), läuft der Dienst `queue`?
 - Kommt kein Push: Schlüssel gesetzt (Seite zeigt „Push ist eingerichtet“)? HTTPS? Gerät im Profil eingetragen? Am iPhone von der App auf dem Home-Bildschirm eingeschaltet? Erreicht der Server die Push-Dienste? `last_used_at` des Geräts zeigt die letzte Zustellung.
 - Die Verleihseite verliert ihre Abos, wenn ihr Link gesperrt, neu ausgestellt oder abgelaufen ist.
 

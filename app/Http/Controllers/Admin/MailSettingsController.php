@@ -99,6 +99,10 @@ class MailSettingsController extends Controller
             return back()->with('error', 'Die Test-Mail ging nicht raus: '.$exception->getMessage());
         }
 
+        if (MailSettings::isSendingBlocked()) {
+            return back()->with('success', "Debug-Modus (APP_DEBUG) ist an: Die Test-Mail an {$validated['to']} wurde nur ins Log geschrieben, nicht verschickt.");
+        }
+
         return back()->with('success', "Die Test-Mail ist an {$validated['to']} unterwegs.");
     }
 

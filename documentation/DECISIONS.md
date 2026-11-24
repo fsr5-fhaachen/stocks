@@ -2,6 +2,10 @@
 
 Warum Stocks so gebaut ist, wie es gebaut ist. Neue Einträge oben; jeder Eintrag mit Datum, Entscheidung, Grund und verworfener Alternative.
 
+## 2026-11-24 · Keine Mails im Debug-Modus
+
+**Mit `APP_DEBUG=true` verlässt keine Mail den Server** (Entscheidung von Maurice). Vorher stellte `MailSettings::apply()` auf SMTP um, sobald in den Einstellungen ein Mailserver eingetragen war, und überstimmte damit `MAIL_MAILER=log`; stocks-dev schickte deshalb echte Mails. Jetzt setzt `MailSettings::blockSendingInDebug()` im Debug-Modus `mail.default` auf `log`: beim Start (Konsole, Scheduler) und in `apply()` (Requests, Queue). Der Mailserver wird trotzdem vorbereitet, damit die Verbindungsprüfung weiter geht. Ausnahme nur ausdrücklich mit `MAIL_SEND_IN_DEBUG=true`, etwa zum Prüfen des Mail-Designs; die Tests setzen es, damit sie den Mailaufbau prüfen können. Push bleibt im Debug-Modus an. Verworfen: Kopplung an `APP_ENV` (dev läuft mit `production`).
+
 ## 2026-11-24 · Dev-Instanz über GitHub Actions statt GitLab
 
 **GitLab fällt weg** (Entscheidung von Maurice). Der Pull-Mirror braucht eine GitLab-Lizenz, und zwei CI-Systeme bauten jeden Push auf `dev` doppelt. Jetzt baut `deploy-dev.yml` das Image auf einem GitHub-Runner nach `ghcr.io` und ein **self-hosted Runner auf dem Dev-Server** spielt es ein ([DEPLOY.md](DEPLOY.md)). Der Server bleibt ohne eingehende Verbindung. Der Runner steckt in einer Runner-Gruppe, die nur `deploy-dev.yml` auf `dev` ausführen darf, weil das Repository öffentlich ist. Verworfen: Timer auf dem Server, der `:dev` holt (kein Status in GitHub), SSH über NetBird von GitHub aus (Setup-Key als Secret, mehr bewegliche Teile).
