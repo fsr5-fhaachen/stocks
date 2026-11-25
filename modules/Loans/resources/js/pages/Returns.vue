@@ -20,8 +20,8 @@
             geht zurück zu {{ current.merge_to }}.</template
           >
           <template v-else>
-            : Stammplatz <strong>{{ current.home?.code ?? "keiner" }}</strong
-            >. Scanne jetzt das Regal.
+            : Stammplatz <strong>{{ current.home?.code ?? "keiner" }}</strong>.
+            Scanne jetzt das Regal.
           </template>
           <button
             type="button"

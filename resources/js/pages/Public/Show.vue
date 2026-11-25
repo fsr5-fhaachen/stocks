@@ -27,8 +27,7 @@
           <a
             :href="`mailto:${contact}?subject=${encodeURIComponent(item.number)}`"
             class="font-medium text-accent underline"
-            >{{ contact }}</a
-          >.
+            >{{ contact }}</a>.
         </p>
       </div>
     </section>

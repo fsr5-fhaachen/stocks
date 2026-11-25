@@ -22,8 +22,8 @@
   <template v-else>
     <!-- the address in the codes can not change for printed labels -->
     <UiAlert v-if="!baseUrlConfirmed" type="warning" class="mb-6">
-      Die Codes führen auf <strong class="font-mono">{{ baseUrl }}</strong
-      >. Ändert sich diese Adresse später, öffnet die Handykamera die Etiketten
+      Die Codes führen auf <strong class="font-mono">{{ baseUrl }}</strong>.
+      Ändert sich diese Adresse später, öffnet die Handykamera die Etiketten
       nicht mehr (der Scan in Stocks liest weiter die Nummer). Die Adresse steht
       unter Verwaltung › Einstellungen › Allgemein.
       <button
