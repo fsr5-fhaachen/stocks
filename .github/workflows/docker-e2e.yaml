@@ -19,9 +19,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Build Image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           push: false
           load: true
@@ -43,7 +43,7 @@ jobs:
           MAIL_MAILER=log
           EOF
       - name: Run Image
-        uses: isbang/compose-action@v2.0.1
+        uses: isbang/compose-action@v3.2.1
         with:
           compose-file: "docker-compose.yaml"
           down-flags: "--volumes"
