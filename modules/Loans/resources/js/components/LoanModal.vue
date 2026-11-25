@@ -45,8 +45,9 @@
             }}</span>
           </p>
           <p v-if="row.state && row.state !== 'ok'" class="text-xs">
-            <strong>{{ row.state_label }}</strong
-            ><template v-if="row.note"> – {{ row.note }}</template>
+            <strong>{{ row.state_label }}</strong><template v-if="row.note">
+              – {{ row.note }}</template
+            >
           </p>
           <p v-else-if="!row.issued" class="text-xs text-ink-muted">
             Rest, noch nicht ausgegeben

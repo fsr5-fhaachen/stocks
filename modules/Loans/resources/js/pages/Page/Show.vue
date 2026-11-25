@@ -303,8 +303,11 @@
                 >{{ row.name }}</span
               >
               <span class="text-xs text-ink-muted">
-                <span class="font-mono">{{ row.number }}</span
-                ><template v-if="row.amount"> · {{ row.amount }}</template>
+                <span class="font-mono">{{ row.number }}</span><template
+                  v-if="row.amount"
+                >
+                  · {{ row.amount }}</template
+                >
               </span>
             </span>
             <UiButton

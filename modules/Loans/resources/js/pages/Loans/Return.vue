@@ -172,8 +172,9 @@
       <ul v-if="defectRows.length" class="mt-4 space-y-1 text-sm">
         <li v-for="row in defectRows" :key="row.id">
           <span class="font-mono">{{ row.number }}</span> {{ row.name }}:
-          <strong>{{ row.state_label }}</strong
-          ><template v-if="row.note"> – {{ row.note }}</template>
+          <strong>{{ row.state_label }}</strong><template v-if="row.note">
+            – {{ row.note }}</template
+          >
         </li>
       </ul>
       <p v-if="openRows.length" class="mt-4 text-sm text-ink-muted">
