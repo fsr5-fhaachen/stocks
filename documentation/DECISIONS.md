@@ -2,6 +2,10 @@
 
 Warum Stocks so gebaut ist, wie es gebaut ist. Neue Einträge oben; jeder Eintrag mit Datum, Entscheidung, Grund und verworfener Alternative.
 
+## 2026-11-25 · Klon auf einem Windows-Laufwerk
+
+**Mit dem Klon auf einem Windows-Laufwerk (z. B. `P:`) gilt Weg C1** (Entscheidung von Maurice): PHP und Node nativ, nur MariaDB, Redis und MinIO in Docker. `./vendor/bin/sail` scheitert dort, weil WSL den Pfad nicht übersetzen kann; ein Container, der die App direkt von diesem Laufwerk ausführt, ist spürbar langsamer als `php artisan serve` nativ, weil er jede Datei über die Freigabe von Docker Desktop liest. `WWWUSER`/`WWWGROUP` haben in `docker-compose.sail.yaml` die Vorgabe 1000, damit `docker compose` ohne Sail nicht an einer leeren Gruppen-ID scheitert. Verworfen: eigener Weg „Docker aus PowerShell“ mit `sail.ps1` (zu langsam), `vendor/` in einem Docker-Volume (IDE sieht die Pakete nicht mehr).
+
 ## 2026-11-24 · Version und „Update verfügbar“ im Menü
 
 **Die Version kommt aus dem Image** (`STOCKS_VERSION`, Build-Argument der Workflows): der Tag des Releases oder `dev-<commit>`. Einzige Quelle sind die Git-Tags; `package.json` und `composer.json` bleiben unberührt. Verworfen: Version von Hand in einer Datei pflegen.
