@@ -27,7 +27,7 @@
     "laravel/telescope": "^5.23",
     "mockery/mockery": "^1.6",
     "nunomaduro/collision": "^8.0",
-    "phpunit/phpunit": "^12.0",
+    "phpunit/phpunit": "^13.4",
     "scrumble-nl/laravel-model-ts-type": "^10.4"
   },
   "autoload": {
