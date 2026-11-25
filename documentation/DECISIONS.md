@@ -2,6 +2,12 @@
 
 Warum Stocks so gebaut ist, wie es gebaut ist. Neue Einträge oben; jeder Eintrag mit Datum, Entscheidung, Grund und verworfener Alternative.
 
+## 2026-11-25 · Schnellere Tests
+
+**Die Tests nutzen eine SQLite-Datei statt `:memory:`** (`database/testing.sqlite`, angelegt von `tests/bootstrap.php`). Mit `:memory:` migriert `RefreshDatabase` vor jedem Test neu, bei über 450 Tests und allen Migrationen von Kern und Modulen der größte Grundaufwand; mit einer Datei migriert es einmal je Lauf und rollt jeden Test in einer Transaktion zurück. Verworfen: Schema-Dump (muss bei jeder Migration neu erzeugt werden).
+
+**Ein Generator-Lauf je Demo-Test** (Wunsch von Maurice: CI zu langsam). Ein Lauf des Demo-Generators dauert mehrere Sekunden; die neun Demo-Tests riefen ihn elfmal auf, gut 40 % der Laufzeit. Jetzt prüft je Datei ein Test alles an denselben Daten (Kern und Kiosk: ein Lauf in einer Transaktion für den Vergleich gleicher Startwert, ein zweiter bleibt für die übrigen Prüfungen; Verleih: ein Lauf), zusammen fünf Läufe. Der Vergleich nutzt jetzt den Standard-Startwert statt 7. Verworfen: Tests parallel mit paratest (neue Abhängigkeit, erst wenn es noch nicht reicht).
+
 ## 2026-11-25 · Klon auf einem Windows-Laufwerk
 
 **Mit dem Klon auf einem Windows-Laufwerk (z. B. `P:`) gilt Weg C1** (Entscheidung von Maurice): PHP und Node nativ, nur MariaDB, Redis und MinIO in Docker. `./vendor/bin/sail` scheitert dort, weil WSL den Pfad nicht übersetzen kann; ein Container, der die App direkt von diesem Laufwerk ausführt, ist spürbar langsamer als `php artisan serve` nativ, weil er jede Datei über die Freigabe von Docker Desktop liest. `WWWUSER`/`WWWGROUP` haben in `docker-compose.sail.yaml` die Vorgabe 1000, damit `docker compose` ohne Sail nicht an einer leeren Gruppen-ID scheitert. Verworfen: eigener Weg „Docker aus PowerShell“ mit `sail.ps1` (zu langsam), `vendor/` in einem Docker-Volume (IDE sieht die Pakete nicht mehr).
