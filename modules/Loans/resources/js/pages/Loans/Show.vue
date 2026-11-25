@@ -323,8 +323,7 @@
                 Kollision mit
                 <UiLink :href="`/loans/${conflict.id}`">{{
                   conflict.title
-                }}</UiLink
-                >, {{ formatDateTime(conflict.pickup_at) }} bis
+                }}</UiLink>, {{ formatDateTime(conflict.pickup_at) }} bis
                 {{
                   conflict.overdue
                     ? "zur Rückgabe (überfällig)"

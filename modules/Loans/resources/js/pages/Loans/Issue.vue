@@ -225,8 +225,7 @@
   <!-- step: who picks it up -->
   <UiCard v-else-if="current === 'person'" title="Wer holt ab?">
     <p v-if="!changingResponsible" class="text-sm">
-      <strong>{{ loan.responsible?.name }}</strong
-      ><br />
+      <strong>{{ loan.responsible?.name }}</strong><br />
       {{ loan.responsible?.email }} · {{ loan.responsible?.phone }}<br />
       {{ loan.responsible?.address }}
     </p>

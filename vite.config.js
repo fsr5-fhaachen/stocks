@@ -68,8 +68,10 @@ export default defineConfig(({ mode }) => {
       target: "esnext",
     },
     optimizeDeps: {
-      esbuildOptions: {
-        target: "esnext",
+      rolldownOptions: {
+        transform: {
+          target: "esnext",
+        },
       },
     },
     resolve: {

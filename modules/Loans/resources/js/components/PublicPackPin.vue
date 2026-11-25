@@ -21,8 +21,8 @@
 
     <div v-else class="mt-3 space-y-3">
       <p class="text-sm">
-        Buchung <strong>{{ unlocked.loan }}</strong
-        >, {{ formatDateTime(unlocked.pickup_at) }} bis
+        Buchung <strong>{{ unlocked.loan }}</strong>,
+        {{ formatDateTime(unlocked.pickup_at) }} bis
         {{ formatDateTime(unlocked.return_at) }}.
       </p>
       <ul
