@@ -27,9 +27,23 @@ class DemoDataTest extends TestCase
         Storage::fake('s3');
     }
 
-    public function test_the_generator_creates_the_inventory_with_every_case(): void
+    /**
+     * One generator run for every check: it takes several seconds, so the cases, the test sheet and
+     * the download share the data. A first run in a transaction proves that the seed gives the same numbers.
+     */
+    public function test_the_generator_creates_every_case_the_same_for_the_same_seed_with_a_sheet(): void
     {
+        $user = $this->userWithPermissions('labels.print');
+        $this->actingAs($user)->get('/labels/demo-sheet.pdf')->assertNotFound();
+
+        DB::beginTransaction();
         app(DemoGenerator::class)->run();
+        $numbers = Item::orderBy('id')->pluck('number')->all();
+        DB::rollBack();
+        Cache::flush();
+
+        app(DemoGenerator::class)->run();
+        $this->assertSame($numbers, Item::orderBy('id')->pluck('number')->all(), 'the same seed gives the same numbers');
 
         $this->assertGreaterThanOrEqual(InventoryDemo::ITEMS, Item::count());
         $this->assertSame(65, Location::count());
@@ -46,31 +60,11 @@ class DemoDataTest extends TestCase
         $this->assertTrue(Item::whereNotNull('label_hint')->exists(), 'with hint');
         $this->assertTrue(Item::has('photos')->exists(), 'with photos');
         $this->assertTrue(ReservedNumber::open()->exists(), 'reserved number');
-        // one account per start role besides the admin
-        $this->assertSame(count(config('stocks.start_roles')) + 1, User::where('email', 'like', '%@example.com')->count());
+        // one account per start role besides the admin (the account of the download above does not count)
+        $this->assertSame(count(config('stocks.start_roles')) + 1, User::where('email', 'like', '%@example.com')->whereKeyNot($user->id)->count());
         $this->assertNotNull(app(Settings::class)->get('demo.seeded_at'));
-    }
 
-    public function test_the_same_seed_gives_the_same_numbers(): void
-    {
-        $numbers = function (): array {
-            DB::beginTransaction();
-            app(DemoGenerator::class)->run(7);
-            $numbers = Item::orderBy('id')->pluck('number')->all();
-            DB::rollBack();
-            Cache::flush();
-
-            return $numbers;
-        };
-
-        $this->assertSame($numbers(), $numbers());
-    }
-
-    public function test_the_test_sheet_has_a_code_for_every_label(): void
-    {
-        app(DemoGenerator::class)->run();
         $labels = app(Settings::class)->get('demo.labels');
-
         $this->assertNotEmpty($labels);
         $unknown = collect($labels)->firstWhere('purpose', 'Unbekannte Nummer');
         foreach ($labels as $label) {
@@ -82,16 +76,7 @@ class DemoDataTest extends TestCase
             $this->assertTrue($known, "{$label['code']} ({$label['purpose']}) gibt es nicht.");
         }
         $this->assertFalse(Item::where('number', $unknown['code'])->exists());
-
         $this->assertStringStartsWith('%PDF', app(TestSheet::class)->pdf());
-    }
-
-    public function test_the_sheet_can_be_downloaded_only_with_demo_data(): void
-    {
-        $user = $this->userWithPermissions('labels.print');
-        $this->actingAs($user)->get('/labels/demo-sheet.pdf')->assertNotFound();
-
-        app(DemoGenerator::class)->run();
 
         $this->actingAs($user)->get('/labels/demo-sheet.pdf')->assertOk()->assertHeader('Content-Type', 'application/pdf');
     }
