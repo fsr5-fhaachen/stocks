@@ -68,5 +68,6 @@ jobs:
           DB_DATABASE: database/database.sqlite
         run: |
           php artisan db:seed
-      - name: Execute tests (Unit and Feature tests) via PHPUnit
-        run: vendor/bin/phpunit
+      # one process per core (paratest); every process gets its own sqlite file and fake disks
+      - name: Execute tests (Unit and Feature tests) in parallel
+        run: php artisan test --parallel
