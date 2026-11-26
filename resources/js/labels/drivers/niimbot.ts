@@ -47,11 +47,11 @@ export const connect = async (
   const prefixes = known
     ? [model]
     : [...new Set(lib.modelsLibrary.map((entry) => entry.model[0]))];
+  const bluetooth = new lib.NiimbotBluetoothClient();
   const device = await navigator.bluetooth.requestDevice({
     filters: prefixes.map((namePrefix) => ({ namePrefix })),
-    optionalServices: lib.BleDefaultConfiguration.SERVICES,
+    optionalServices: bluetooth.getServiceUuidFilter(),
   });
-  const bluetooth = new lib.NiimbotBluetoothClient();
   client = bluetooth;
   const info = await bluetooth.connect({ authorizedDevice: device });
   return info.deviceName ?? device.name ?? null;
