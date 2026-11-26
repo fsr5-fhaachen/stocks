@@ -91,7 +91,10 @@ export default function (
     busy.value = true;
     printError.value = null;
     try {
-      deviceName.value = await niimbot.connect(connection);
+      deviceName.value = await niimbot.connect(
+        connection,
+        printer.value?.model?.name ?? null,
+      );
       connected.value = true;
     } catch (error) {
       printError.value = `Verbinden ging nicht: ${error instanceof Error ? error.message : error}`;
