@@ -30,6 +30,7 @@ use App\Support\Table\ItemsTable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cookie;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -280,7 +281,7 @@ class ItemController extends Controller
                 'condition_id' => $found->condition_id,
                 'condition' => $found->condition->name,
                 'condition_is_defect' => $found->condition->is_defect,
-                'photo_url' => ($photo = $found->photos->first()) ? Surface::route('inventory.photos.show', $photo) : null,
+                'photo_url' => ($photo = $found->photos->first()) ? Surface::route('inventory.photos.show', [$photo, 'thumb' => 1]) : null,
                 'contents_count' => $found->is_container ? $found->contents()->active()->count() : 0,
                 'consumable' => $found->kind === ItemKind::Bulk && ItemUnit::isConsumable($found->unit),
                 'can_merge' => ($target = $found->mergeTarget()) !== null && ! $target->isRetired() && ! $found->isRetired(),
@@ -366,6 +367,10 @@ class ItemController extends Controller
     private function list(Request $request, bool $onlyMisplaced): Response|JsonResponse
     {
         $table = new ItemsTable($request, $onlyMisplaced);
+        // keep the choice of grouping on this device, the next visit of the list starts with it
+        if ($request->has('grouped')) {
+            Cookie::queue($table->groupingCookie(), $table->wantsGrouping() ? '1' : '0', 60 * 24 * 365 * 5);
+        }
         if ($table->wantsChanges()) {
             return $table->changesResponse();
         }
@@ -375,7 +380,10 @@ class ItemController extends Controller
             'misplaced' => $onlyMisplaced,
             'categories' => Category::options(),
             'conditions' => ItemCondition::options(),
-            'filters' => $request->only(['category', 'condition', 'retired', 'unlabeled', 'grouped']),
+            'filters' => [
+                ...$request->only(['category', 'condition', 'retired', 'unlabeled']),
+                'grouped' => $table->wantsGrouping() ? '1' : '0',
+            ],
         ]);
     }
 
@@ -467,9 +475,10 @@ class ItemController extends Controller
             return [];
         }
 
-        return $box->contents()->get()->map(fn (Item $item) => [
+        return $box->contents()->with('photos')->get()->map(fn (Item $item) => [
             ...$item->only(['id', 'number', 'name', 'quantity', 'unit', 'is_container']),
             'kind' => $item->kind->value,
+            'photo_url' => $item->photos->first()?->thumbUrl(),
             'contents' => $item->is_container ? $this->contentsTree($item, $depth + 1) : [],
         ])->all();
     }

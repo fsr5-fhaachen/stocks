@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Support\Branding;
+use App\Support\ImageDecoding;
 use App\Support\Settings;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -46,6 +47,10 @@ class BrandingTest extends TestCase
         $this->assertNotNull($url);
         $this->actingAs($admin)->get('/dashboard')->assertInertia(fn ($page) => $page->where('organization.logo_light_url', $url)->where('organization.logo_url', null));
         $this->actingAs($admin)->get('/admin/settings')->assertInertia(fn ($page) => $page->where('branding.logo_light', $url));
+        // the image itself is delivered, also to guests
+        auth()->logout();
+        $this->get($url)->assertOk()->assertHeader('Content-Type', 'image/png');
+        $this->actingAs($admin);
 
         $this->actingAs($admin)->post('/admin/settings/branding', ['remove' => ['logo_light']])->assertSessionHasNoErrors();
         $this->assertNull(app(Settings::class)->get('organization.logo_light_path'));
@@ -72,7 +77,18 @@ class BrandingTest extends TestCase
         $this->actingAs($this->admin())->post('/admin/settings/branding', ['favicon' => UploadedFile::fake()->image('icon.png', 64, 64)]);
         $this->assertStringStartsWith('/branding/favicon?v=', app(Branding::class)->url('favicon'));
         auth()->logout();
-        $this->get('/login')->assertSee(app(Branding::class)->url('favicon'), false);
+        $this->get('/login')->assertSee(app(Branding::class)->url('favicon'), false)->assertSee('type="image/png"', false);
+    }
+
+    public function test_a_png_favicon_is_delivered_with_the_type_of_its_bytes(): void
+    {
+        $this->actingAs($this->admin())->post('/admin/settings/branding', ['favicon' => UploadedFile::fake()->image('icon.png', 64, 64)]);
+        // S3 may keep a general type, the browser then shows no favicon at all
+        $path = app(Settings::class)->get('organization.favicon_path');
+        Storage::disk(Branding::DISK)->put($path, Storage::disk(Branding::DISK)->get($path), ['ContentType' => 'application/octet-stream']);
+
+        auth()->logout();
+        $this->get(app(Branding::class)->url('favicon'))->assertOk()->assertHeader('Content-Type', 'image/png');
     }
 
     public function test_images_can_be_removed(): void
@@ -85,6 +101,50 @@ class BrandingTest extends TestCase
 
         $this->assertNull(app(Settings::class)->get('organization.logo_path'));
         Storage::disk(Branding::DISK)->assertMissing($path);
+    }
+
+    public function test_a_big_logo_is_scaled_down_when_stored(): void
+    {
+        $this->actingAs($this->admin())
+            ->post('/admin/settings/branding', ['app_icon' => UploadedFile::fake()->image('riesig.png', 3000, 1500)])
+            ->assertSessionHasNoErrors();
+
+        $path = app(Settings::class)->get('organization.app_icon_path');
+        $this->assertStringEndsWith('.png', $path);
+        $image = imagecreatefromstring(Storage::disk(Branding::DISK)->get($path));
+        $this->assertSame([Branding::MAX_STORED_SIZE, Branding::MAX_STORED_SIZE / 2], [imagesx($image), imagesy($image)]);
+    }
+
+    public function test_a_big_png_favicon_is_scaled_down_and_an_ico_is_kept(): void
+    {
+        $admin = $this->admin();
+        $this->actingAs($admin)->post('/admin/settings/branding', ['favicon' => UploadedFile::fake()->image('gross.png', 2000, 2000)])->assertSessionHasNoErrors();
+
+        $image = imagecreatefromstring(Storage::disk(Branding::DISK)->get(app(Settings::class)->get('organization.favicon_path')));
+        $this->assertSame([Branding::MAX_FAVICON_SIZE, Branding::MAX_FAVICON_SIZE], [imagesx($image), imagesy($image)]);
+
+        $ico = (string) file_get_contents(public_path('favicon.ico'));
+        $this->actingAs($admin)->post('/admin/settings/branding', ['favicon' => UploadedFile::fake()->createWithContent('favicon.ico', $ico)])->assertSessionHasNoErrors();
+        $this->assertSame($ico, Storage::disk(Branding::DISK)->get(app(Settings::class)->get('organization.favicon_path')));
+    }
+
+    public function test_an_image_that_can_not_be_read_is_refused(): void
+    {
+        $this->actingAs($this->admin())
+            ->post('/admin/settings/branding', ['logo_light' => UploadedFile::fake()->createWithContent('kaputt.png', 'kein Bild')])
+            ->assertSessionHasErrors('logo_light');
+
+        $this->assertNull(app(Settings::class)->get('organization.logo_light_path'));
+    }
+
+    public function test_images_bigger_than_the_limit_are_not_opened(): void
+    {
+        $png = UploadedFile::fake()->image('klein.png', 20, 20)->getContent();
+
+        $this->assertSame(20, ImageDecoding::process($png, fn (\GdImage $image) => imagesx($image)));
+        // too many pixels: not opened at all, so the memory can not run out
+        $this->assertNull(ImageDecoding::process($png, fn (\GdImage $image) => imagesx($image), maxPixels: 399));
+        $this->assertNull(ImageDecoding::process('kein Bild', fn (\GdImage $image) => imagesx($image)));
     }
 
     public function test_svg_is_not_allowed(): void

@@ -110,7 +110,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, ref } from "vue";
 import { usePage } from "@inertiajs/vue3";
 
 type Found = {
@@ -171,32 +171,13 @@ const applyFilters = () =>
     unlabeled: filter.value.unlabeled ? "1" : null,
   });
 
-// grouping by boxes, kept per device and list (localStorage can be missing or blocked)
-const storageKey = props.misplaced
-  ? "stocks.misplaced.grouped"
-  : "stocks.items.grouped";
-const grouped = ref(props.filters.grouped === "1");
+// grouping by boxes, on by default; the server keeps the choice per device and list in a cookie
+// (ItemsTable::wantsGrouping), so "off" is sent explicitly
+const grouped = ref(props.filters.grouped !== "0");
 const applyGrouping = () => {
-  try {
-    localStorage.setItem(storageKey, grouped.value ? "1" : "0");
-  } catch {
-    // not kept, still applied
-  }
   open.value = new Set();
-  table.value?.reload({ grouped: grouped.value ? "1" : null });
+  table.value?.reload({ grouped: grouped.value ? "1" : "0" });
 };
-onMounted(() => {
-  let stored = false;
-  try {
-    stored = localStorage.getItem(storageKey) === "1";
-  } catch {
-    // nothing kept
-  }
-  if (stored && !grouped.value) {
-    grouped.value = true;
-    applyGrouping();
-  }
-});
 // the server groups only without search and filters (ItemsTable::isGrouped)
 const page = usePage();
 const groupedActive = computed(() => {

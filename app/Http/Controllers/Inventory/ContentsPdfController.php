@@ -7,6 +7,7 @@ use App\Models\Item;
 use App\Models\ItemPhoto;
 use App\Models\ItemUnit;
 use App\Support\Branding;
+use App\Support\ImageDecoding;
 use App\Support\Labels\ShortLink;
 use App\Support\QrCode;
 use App\Support\Settings;
@@ -175,7 +176,7 @@ class ContentsPdfController extends Controller
         }
 
         try {
-            $content = Storage::disk(ItemPhoto::DISK)->get($photo->path);
+            $content = Storage::disk(ItemPhoto::DISK)->get($photo->thumbnailPath());
         } catch (\Throwable) {
             return null;
         }
@@ -196,11 +197,14 @@ class ContentsPdfController extends Controller
      */
     private function scaled(string $content, int $pixels, string $format): ?string
     {
-        $source = @imagecreatefromstring($content);
-        if ($source === false) {
-            return null;
-        }
+        return ImageDecoding::process($content, fn (\GdImage $source) => $this->scaleImage($source, $pixels, $format));
+    }
 
+    /**
+     * Scale an open image down, see scaled().
+     */
+    private function scaleImage(\GdImage $source, int $pixels, string $format): string
+    {
         $scale = min(1, $pixels / max(imagesx($source), imagesy($source)));
         $image = imagescale($source, max(1, (int) round(imagesx($source) * $scale)), max(1, (int) round(imagesy($source) * $scale)));
         if ($format === 'png') {

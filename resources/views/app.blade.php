@@ -11,7 +11,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <link rel="icon" href="{{ app(\App\Support\Branding::class)->url('favicon') }}">
+    {{-- the type lets browsers take a png as favicon, without it some only try .ico --}}
+    <link rel="icon" type="{{ str_ends_with((string) app(\App\Support\Branding::class)->path('favicon'), '.png') ? 'image/png' : 'image/x-icon' }}" href="{{ app(\App\Support\Branding::class)->url('favicon') }}">
 
     {{-- web app: added to the home screen it runs in full screen (App\Http\Controllers\WebAppController) --}}
     {{-- a surface (kiosk) and the borrower page of a loan bring their own web app, which starts on their own page --}}

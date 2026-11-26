@@ -52,6 +52,12 @@ Gehört zu Phase 5, keine neue Phase. Entscheidungen von Maurice vom 15.11. und 
 
 **„Nach Boxen gruppieren“ als Schalter** in „Gegenstände“ und „Ohne Platz“ (23.11.), je Gerät und Liste gemerkt; Boxen aufklappbar, bei Suche und Filtern flach. Verworfen: Gruppierung als Vorgabe.
 
+**Gruppierung doch als Vorgabe, Wahl als Cookie** (26.11., v0.1.1). „Nach Boxen gruppieren“ ist an, bis man es auf einem Gerät ausschaltet; die Wahl liegt in einem Cookie, das der Server setzt und liest, damit schon die erste Seite richtig kommt. Verworfen: weiter `localStorage` (die Seite lud erst flach und dann gruppiert).
+
+**Vorschaubilder für Fotos auf dem Server** (26.11., v0.1.1). Zu jedem Foto ein JPEG bis 256 Pixel neben dem Foto; die Migration erzeugt sie für vorhandene Fotos, fehlende entstehen beim ersten Abruf. Die Fotos selbst bleiben, wie der Browser sie hochgeladen hat (1600 Pixel). Grund: Listen und der Inhalt großer Boxen luden sonst je Zeile ein volles Foto.
+
+**Direktdruck am iPhone über Bluefy** (26.11., v0.1.1). Safari und alle Browser auf iOS haben kein Web Bluetooth; der Browser Bluefy hat es. Stocks zeigt dort einen Hinweis mit Link zum App Store. Verworfen: Safari-Erweiterung WebBLE mit Polyfill (Beta, neues Paket), eigene App.
+
 **Betrieb:** Akzentfarbe nur aus den Einstellungen (vorher von `app.css` je nach Ladereihenfolge überschrieben); Mailserver-Status prüft der Scheduler alle 5 Minuten; `queue:work --memory=512`; `pint --test` in der CI; `TRUSTED_PROXIES` mit Vorgabe `*`, in Produktion die Adresse des Proxys; alte Images nach einer Woche löschen; Palette-PNGs behalten ihre Transparenz.
 
 ## 2026-11-12 · Dev-Instanz über GitLab CI/CD (abgelöst am 2026-11-24)

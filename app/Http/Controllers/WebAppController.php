@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\Branding;
+use App\Support\ImageDecoding;
 use App\Support\Settings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
@@ -10,8 +11,8 @@ use Illuminate\Support\Facades\Cache;
 
 /**
  * Web app: manifest and icons, so Stocks can be added to the home screen of a phone and runs in full
- * screen there. The icons are made from the logo for light backgrounds, without it they show a white
- * "S" on the accent colour. There is no offline mode.
+ * screen there. The icons are the own icon of the settings (fills the whole icon), else the logo for
+ * light backgrounds on white, without both a white "S" on the accent colour. There is no offline mode.
  */
 class WebAppController extends Controller
 {
@@ -56,21 +57,24 @@ class WebAppController extends Controller
     private const FONT = 'fonts/Inter-Bold-S.ttf';
 
     /**
-     * Deliver an icon: the logo for light backgrounds in the middle of a white square, or a white
-     * "S" on the accent colour without it. Made once per logo, colour and size.
+     * Deliver an icon: the own icon filling the square, the logo for light backgrounds in the
+     * middle of a white square, or a white "S" on the accent colour without both. An image that
+     * can not be opened (S3 away, too big) is skipped for the next one. Made once per image,
+     * colour and size.
      */
     public function icon(Settings $settings, Branding $branding, int $size): Response
     {
         abort_unless(in_array($size, self::ICON_SIZES, true), 404);
 
         $accent = (string) $settings->get('organization.accent_color');
-        $key = 'stocks.web-app-icon.'.md5($branding->path('logo_light').$accent.$size);
+        $key = 'stocks.web-app-icon.'.md5($branding->path('app_icon').'|'.$branding->path('logo_light').$accent.$size);
 
         $png = Cache::get($key);
         if ($png === null) {
-            $png = $this->draw($size, $branding->contents('logo_light'), $accent);
-            // without S3 the default icon is shown, but not kept
-            if ($branding->path('logo_light') === null || $png !== null) {
+            $png = $this->firstIcon($branding, $size, $accent)
+                ?? ($branding->iconKind() === null ? $this->draw($size, null, $accent) : null);
+            // the "S" instead of an image that failed is shown, but not kept
+            if ($png !== null) {
                 Cache::put($key, $png, now()->addWeek());
             }
         }
@@ -82,14 +86,50 @@ class WebAppController extends Controller
     }
 
     /**
-     * Draw an icon as png.
+     * The icon of the first image that can be drawn: the own icon, then the light logo. Null if
+     * there is none or none can be opened.
      */
-    private function draw(int $size, ?string $logo, string $accent): ?string
+    private function firstIcon(Branding $branding, int $size, string $accent): ?string
+    {
+        foreach (['app_icon', 'logo_light'] as $kind) {
+            $content = $branding->path($kind) !== null ? $branding->contents($kind) : null;
+            $png = $content !== null ? $this->draw($size, $content, $accent, fill: $kind === 'app_icon') : null;
+            if ($png !== null) {
+                return $png;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Draw an icon as png. Null when the image can not be opened (no image, or too big, see
+     * App\Support\ImageDecoding); the caller shows the "S" then.
+     *
+     * @param  bool  $fill  the image fills the whole square (own icon), cut to a square in the middle
+     */
+    private function draw(int $size, ?string $logo, string $accent, bool $fill = false): ?string
+    {
+        if ($logo === null) {
+            return $this->drawWith($size, null, $accent, $fill);
+        }
+
+        return ImageDecoding::process($logo, fn (\GdImage $source) => $this->drawWith($size, $source, $accent, $fill));
+    }
+
+    /**
+     * Draw an icon from an open image, or the "S" without image.
+     */
+    private function drawWith(int $size, ?\GdImage $source, string $accent, bool $fill): ?string
     {
         $image = imagecreatetruecolor($size, $size);
-        $source = $logo !== null ? @imagecreatefromstring($logo) : false;
 
-        if ($source !== false) {
+        if ($source !== null && $fill) {
+            // white behind transparent parts, launchers would show them black
+            imagefill($image, 0, 0, imagecolorallocate($image, 255, 255, 255));
+            $side = min(imagesx($source), imagesy($source));
+            imagecopyresampled($image, $source, 0, 0, intdiv(imagesx($source) - $side, 2), intdiv(imagesy($source) - $side, 2), $size, $size, $side, $side);
+        } elseif ($source !== null) {
             imagefill($image, 0, 0, imagecolorallocate($image, 255, 255, 255));
             // the logo fills 80 %, so round masks of launchers do not cut it
             $scale = $size * 0.8 / max(imagesx($source), imagesy($source));

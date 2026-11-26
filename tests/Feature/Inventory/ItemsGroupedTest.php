@@ -46,8 +46,25 @@ class ItemsGroupedTest extends TestCase
         $this->assertSame(['Beamer', 'Box Kabel'], $this->names('/inventory/items?grouped=1'));
         $this->actingAs($this->admin())->get('/inventory/items?grouped=1')
             ->assertInertia(fn ($page) => $page->where('filters.grouped', '1')->where('items.data.1.contents_count', 2));
-        // flat without the switch
-        $this->assertCount(5, $this->names('/inventory/items'));
+        // flat when switched off
+        $this->assertCount(5, $this->names('/inventory/items?grouped=0'));
+    }
+
+    public function test_grouping_is_on_by_default_and_the_choice_is_kept_in_a_cookie(): void
+    {
+        $admin = $this->admin();
+        $this->actingAs($admin)->get('/inventory/items')->assertInertia(fn ($page) => $page->where('filters.grouped', '1')->has('items.data', 2));
+
+        // switching it off keeps the choice on this device, for this list only
+        $this->actingAs($admin)->get('/inventory/items?grouped=0')->assertCookie('stocks_items_grouped', '0');
+        $this->actingAs($admin)->withCookie('stocks_items_grouped', '0')->get('/inventory/items')
+            ->assertInertia(fn ($page) => $page->where('filters.grouped', '0')->has('items.data', 5));
+        $this->actingAs($admin)->withCookie('stocks_items_grouped', '0')->get('/inventory/misplaced')
+            ->assertInertia(fn ($page) => $page->where('filters.grouped', '1'));
+        // a parameter wins over the cookie
+        $this->actingAs($admin)->withCookie('stocks_items_grouped', '0')->get('/inventory/items?grouped=1')
+            ->assertInertia(fn ($page) => $page->has('items.data', 2))
+            ->assertCookie('stocks_items_grouped', '1');
     }
 
     public function test_search_and_filters_make_the_list_flat(): void
@@ -86,7 +103,7 @@ class ItemsGroupedTest extends TestCase
         $this->box->forceFill(['location_id' => null])->save();
         Item::where('name', 'XLR')->update(['home_container_id' => null, 'home_location_id' => $this->shelf->id]);
 
-        $this->assertSame(['Box Kabel', 'XLR'], $this->names('/inventory/misplaced'));
+        $this->assertSame(['Box Kabel', 'XLR'], $this->names('/inventory/misplaced?grouped=0'));
         $this->assertSame(['Box Kabel'], $this->names('/inventory/misplaced?grouped=1'));
     }
 }

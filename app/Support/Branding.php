@@ -5,12 +5,13 @@ namespace App\Support;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
  * Logos and favicon of the instance: the logo for dark backgrounds ("logo", dark mode), the logo for
- * light backgrounds ("logo_light", light mode and the icon of the web app), the print logo and the
- * favicon. The files lie on S3 (like the photos of items); the settings
+ * light backgrounds ("logo_light", light mode and the icon of the web app while there is no own
+ * icon), the print logo, the favicon and the own icon of the web app ("app_icon", fills the icon). The files lie on S3 (like the photos of items); the settings
  * keep their paths. App\Http\Controllers\BrandingController delivers them, also to guests (login
  * page, browser tab).
  */
@@ -36,6 +37,8 @@ class Branding
         'favicon' => 'organization.favicon_path',
         // logo for paper and labels, e.g. a dark one when the screen logo is white
         'print_logo' => 'organization.print_logo_path',
+        // own icon of the web app on the home screen, fills it without margin
+        'app_icon' => 'organization.app_icon_path',
     ];
 
     public function __construct(private readonly Settings $settings) {}
@@ -71,21 +74,36 @@ class Branding
     }
 
     /**
-     * Version of the icons of the web app, part of their url: a new light logo or another accent
-     * colour gives new urls, otherwise devices would keep the old icon for a week.
+     * Kind of the image the icon of the web app is made of: the own icon (fills it), else the logo
+     * for light backgrounds (on white), null for the "S" on the accent colour.
      */
-    public function iconVersion(): string
+    public function iconKind(): ?string
     {
-        return substr(md5($this->path('logo_light').'|'.$this->settings->get('organization.accent_color')), 0, 12);
+        foreach (['app_icon', 'logo_light'] as $kind) {
+            if ($this->path($kind) !== null) {
+                return $kind;
+            }
+        }
+
+        return null;
     }
 
     /**
-     * Background of the web app while it starts (manifest): white behind the light logo, else the
-     * accent colour like the icon.
+     * Version of the icons of the web app, part of their url: a new icon or light logo or another
+     * accent colour gives new urls, otherwise devices would keep the old icon for a week.
+     */
+    public function iconVersion(): string
+    {
+        return substr(md5($this->path('app_icon').'|'.$this->path('logo_light').'|'.$this->settings->get('organization.accent_color')), 0, 12);
+    }
+
+    /**
+     * Background of the web app while it starts (manifest): white behind an own icon or the light
+     * logo, else the accent colour like the icon.
      */
     public function iconBackground(): string
     {
-        return $this->path('logo_light') !== null ? '#ffffff' : (string) $this->settings->get('organization.accent_color');
+        return $this->iconKind() !== null ? '#ffffff' : (string) $this->settings->get('organization.accent_color');
     }
 
     /**
@@ -130,16 +148,36 @@ class Branding
     }
 
     /**
+     * Longest side of uploaded logos and of the own icon, they are scaled down when stored: enough
+     * for screen, labels, pdf and the icon (512 px), and small enough to open quickly.
+     *
+     * @var int
+     */
+    public const MAX_STORED_SIZE = 1024;
+
+    /**
+     * Longest side of an uploaded png favicon: Firefox shows no favicon at all when it is very
+     * big, browsers need at most 256 px.
+     *
+     * @var int
+     */
+    public const MAX_FAVICON_SIZE = 256;
+
+    /**
      * Scale an image down to a png of at most $maxSize px, keeping transparency (also of palette
-     * pngs, which imagescale() would give a black background). Null if it is not an image.
+     * pngs, which imagescale() would give a black background). Null if it is not an image or too
+     * big to open (App\Support\ImageDecoding).
      */
     public static function scalePng(string $content, int $maxSize): ?string
     {
-        $image = @imagecreatefromstring($content);
-        if ($image === false) {
-            return null;
-        }
+        return ImageDecoding::process($content, fn (\GdImage $image) => self::scaleImage($image, $maxSize));
+    }
 
+    /**
+     * Scale an open image down to a png of at most $maxSize px, see scalePng().
+     */
+    private static function scaleImage(\GdImage $image, int $maxSize): string
+    {
         imagepalettetotruecolor($image);
         imagealphablending($image, false);
         imagesavealpha($image, true);
@@ -157,6 +195,16 @@ class Branding
         imagepng($image);
 
         return (string) ob_get_clean();
+    }
+
+    /**
+     * Type of an image from its bytes, e.g. "image/png" or "image/vnd.microsoft.icon".
+     */
+    public static function mimeType(string $content): string
+    {
+        $type = (new \finfo(FILEINFO_MIME_TYPE))->buffer($content);
+
+        return is_string($type) && str_starts_with($type, 'image/') ? $type : 'application/octet-stream';
     }
 
     /**
@@ -183,13 +231,44 @@ class Branding
      */
     public function replace(string $kind, UploadedFile $file): void
     {
-        $path = $file->store('branding', self::DISK);
+        $path = $this->storeScaled($kind, $file);
         if ($path === false) {
             throw ValidationException::withMessages([$kind => 'Das Bild konnte nicht gespeichert werden, der Speicher ist gerade nicht erreichbar.']);
         }
 
         $this->remove($kind);
         $this->settings->set([self::KINDS[$kind] => $path]);
+    }
+
+    /**
+     * Store an image as png of at most MAX_STORED_SIZE px (favicon MAX_FAVICON_SIZE), so it is
+     * never opened at full size later (a big image used up the memory when the icon was made).
+     * An ico favicon is kept as it is, GD can not read it. False when S3 can not store it.
+     *
+     * @throws ValidationException
+     */
+    private function storeScaled(string $kind, UploadedFile $file): string|false
+    {
+        $content = (string) $file->get();
+        if ($kind === 'favicon' && self::mimeType($content) !== 'image/png') {
+            return $file->store('branding', self::DISK);
+        }
+
+        $png = self::scalePng($content, $kind === 'favicon' ? self::MAX_FAVICON_SIZE : self::MAX_STORED_SIZE);
+        if ($png === null) {
+            // GD may lack a format (webp in the container): a small image is kept as it is, it can
+            // be shown in the browser but is left out where GD is needed (icon, pdf, mails)
+            $size = @getimagesizefromstring($content);
+            if ($size !== false && max($size[0], $size[1]) <= self::MAX_STORED_SIZE) {
+                return $file->store('branding', self::DISK);
+            }
+
+            throw ValidationException::withMessages([$kind => 'Das Bild konnte nicht gelesen werden oder ist zu groß. Bitte als PNG oder JPG mit höchstens '.self::MAX_STORED_SIZE.' Pixeln Kantenlänge hochladen.']);
+        }
+
+        $path = 'branding/'.Str::random(40).'.png';
+
+        return Storage::disk(self::DISK)->put($path, $png, ['ContentType' => 'image/png']) ? $path : false;
     }
 
     /**

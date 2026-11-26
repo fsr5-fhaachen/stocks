@@ -122,6 +122,7 @@
                 Testdruck
               </UiButton>
             </template>
+            <LabelsDirectPrintHint v-else />
             <UiButton
               :variant="connections.length ? 'secondary' : 'primary'"
               class="w-full"

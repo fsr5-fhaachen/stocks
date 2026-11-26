@@ -37,6 +37,8 @@ class Settings
         'organization.favicon_path' => null,
         // logo for labels and pdf, see App\Support\Branding
         'organization.print_logo_path' => null,
+        // own icon of the web app on the home screen, fills the whole icon, see App\Support\Branding
+        'organization.app_icon_path' => null,
         // postal address, lines separated by line breaks (letterhead of the box contents pdf)
         'organization.address' => null,
         // central phone number (borrower page), accounts have none

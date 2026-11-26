@@ -152,28 +152,49 @@ export const printPaper = async (
     body = labels.map((entry) => `<section>${image(entry)}</section>`).join("");
   }
 
-  const frame = document.createElement("iframe");
-  frame.style.cssText =
-    "position:fixed;width:0;height:0;border:0;visibility:hidden";
-  document.body.append(frame);
-  const doc = frame.contentDocument!;
-  doc.open();
-  doc.write(`<!doctype html><html><head><title>Etiketten</title><style>
-    @page { ${page} }
-    html, body { margin: 0; padding: 0; }
-    section { position: relative; page-break-after: always; break-after: page; ${settings.page === "sheet" ? "width: 210mm; height: 297mm;" : ""} overflow: hidden; }
-    section:last-child { page-break-after: auto; break-after: auto; }
-    img { display: block; }
-  </style></head><body>${body}</body></html>`);
-  doc.close();
+  // printed from the page itself: Safari on iOS and some Android browsers ignore print() in a
+  // frame and print the whole page instead. While printing only the labels are shown.
+  document.getElementById("stocks-print")?.remove();
+  document.getElementById("stocks-print-style")?.remove();
+  const style = document.createElement("style");
+  style.id = "stocks-print-style";
+  style.textContent = `
+    #stocks-print { display: none; }
+    @media print {
+      @page { ${page} }
+      html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+      body > *:not(#stocks-print) { display: none !important; }
+      #stocks-print { display: block; }
+      #stocks-print section { position: relative; page-break-after: always; break-after: page; ${settings.page === "sheet" ? "width: 210mm; height: 297mm;" : ""} overflow: hidden; }
+      #stocks-print section:last-child { page-break-after: auto; break-after: auto; }
+      #stocks-print img { display: block; }
+    }`;
+  const container = document.createElement("div");
+  container.id = "stocks-print";
+  container.innerHTML = body;
+  document.head.append(style);
+  document.body.append(container);
 
   await Promise.all(
-    [...doc.images].map((element) => element.decode().catch(() => undefined)),
+    [...container.querySelectorAll("img")].map((element) =>
+      element.decode().catch(() => undefined),
+    ),
   );
-  frame.contentWindow!.focus();
-  frame.contentWindow!.print();
-  // the dialog blocks until it is closed in most browsers; remove the frame a bit later for the others
-  setTimeout(() => frame.remove(), 60_000);
+
+  // removed only when the page is used again: Safari on iOS reports afterprint before its print
+  // sheet has taken the page, and some browsers never report it. Until then the container is
+  // hidden on screen; the next print replaces it.
+  const cleanUp = () => {
+    container.remove();
+    style.remove();
+    window.removeEventListener("pointerdown", cleanUp);
+    window.removeEventListener("keydown", cleanUp);
+  };
+  window.print();
+  setTimeout(() => {
+    window.addEventListener("pointerdown", cleanUp, { once: true });
+    window.addEventListener("keydown", cleanUp, { once: true });
+  }, 1000);
 };
 
 /**

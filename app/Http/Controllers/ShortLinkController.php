@@ -71,9 +71,11 @@ class ShortLinkController extends Controller
      * Deliver a photo of the public view. The link is signed and expires, so photos can not be
      * fetched by trying ids.
      */
-    public function photo(ItemPhoto $photo): StreamedResponse
+    public function photo(Request $request, ItemPhoto $photo): StreamedResponse
     {
-        return Storage::disk(ItemPhoto::DISK)->response($photo->path, headers: [
+        $path = $request->boolean('thumb') ? $photo->thumbnailPath() : $photo->path;
+
+        return Storage::disk(ItemPhoto::DISK)->response($path, headers: [
             'Cache-Control' => 'private, max-age=3600',
             'X-Robots-Tag' => 'noindex',
         ]);
@@ -137,18 +139,18 @@ class ShortLinkController extends Controller
         return $box->contents()->active()->with('photos')->get()->map(fn (Item $item) => [
             ...$item->only(['number', 'name', 'quantity', 'unit', 'is_container']),
             'kind' => $item->kind->value,
-            'photo_url' => $this->photoUrl($item->photos->first()),
+            'photo_url' => $this->photoUrl($item->photos->first(), thumb: true),
             'contents' => $item->is_container ? $this->contents($item, $depth + 1) : [],
         ])->all();
     }
 
     /**
-     * Signed link of a photo, null without photo.
+     * Signed link of a photo (or of its small preview for lists), null without photo.
      */
-    private function photoUrl(?ItemPhoto $photo): ?string
+    private function photoUrl(?ItemPhoto $photo, bool $thumb = false): ?string
     {
         return $photo
-            ? URL::temporarySignedRoute('short-link.photo', now()->addMinutes(self::PHOTO_LINK_MINUTES), $photo, absolute: false)
+            ? URL::temporarySignedRoute('short-link.photo', now()->addMinutes(self::PHOTO_LINK_MINUTES), $thumb ? [$photo, 'thumb' => 1] : $photo, absolute: false)
             : null;
     }
 }
