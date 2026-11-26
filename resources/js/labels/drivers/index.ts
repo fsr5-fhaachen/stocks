@@ -259,6 +259,32 @@ export const printPaper = async (
 };
 
 /**
+ * Labels as png files, shown in the file viewer on iPhone and iPad (home screen app, Bluefy), where
+ * downloads do not work; its share button hands them on (e.g. save to photos for the Niimbot app).
+ */
+export const imageFiles = (
+  canvases: { canvas: HTMLCanvasElement; name: string }[],
+) =>
+  Promise.all(
+    canvases.map(
+      (entry) =>
+        new Promise<File>((resolve, reject) =>
+          entry.canvas.toBlob(
+            (blob) =>
+              blob
+                ? resolve(
+                    new File([blob], `${entry.name}.png`, {
+                      type: "image/png",
+                    }),
+                  )
+                : reject(new Error("Bild fehlgeschlagen")),
+            "image/png",
+          ),
+        ),
+    ),
+  );
+
+/**
  * Download labels as png, several in a zip file.
  */
 export const downloadImages = async (

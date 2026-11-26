@@ -45,9 +45,10 @@
         :style="gestureStyle"
       >
         <img
-          v-if="isImage && imageUrl"
-          :src="imageUrl"
-          :alt="current.name"
+          v-for="(url, index) in imageUrls"
+          :key="url"
+          :src="url"
+          :alt="current.files[index]?.name ?? current.name"
           class="block bg-white shadow-lg"
           :style="{ width: `${pageWidth}px` }"
         />
@@ -80,7 +81,7 @@
 
     <!-- share: opens the share sheet of iOS (print, save to files, send) -->
     <button
-      v-if="current.file"
+      v-if="current.files.length"
       type="button"
       class="absolute flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-lg ring-4 ring-black/10 hover:bg-accent-hover focus:outline-none focus-visible:ring-white active:scale-95"
       style="
@@ -126,7 +127,7 @@ import {
   watch,
 } from "vue";
 import useFileViewer, {
-  isHomeScreenApp,
+  usesFileViewer,
   viewerLink,
 } from "../../composables/useFileViewer";
 
@@ -148,9 +149,11 @@ const shareError = ref<string | null>(null);
 const error = computed(() => current.value?.error ?? renderError.value);
 
 const isImage = computed(
-  () => current.value?.file?.type.startsWith("image/") ?? false,
+  () =>
+    !!current.value?.files.length &&
+    current.value.files.every((file) => file.type.startsWith("image/")),
 );
-const imageUrl = ref<string | null>(null);
+const imageUrls = ref<string[]>([]);
 
 // zoom: 1 = page as wide as the screen
 const MAX_ZOOM = 5;
@@ -168,14 +171,15 @@ const currentPage = ref(1);
  */
 const updateCurrentPage = () => {
   const element = scroller.value;
-  const canvases = pages.value?.querySelectorAll("canvas");
-  if (!element || !canvases?.length) {
+  // pages of a pdf (canvas) or images
+  const shown = content.value?.querySelectorAll("canvas, img");
+  if (!element || !shown?.length) {
     return;
   }
   const middle = element.getBoundingClientRect().top + element.clientHeight / 2;
   let page = 1;
-  canvases.forEach((canvas, index) => {
-    if (canvas.getBoundingClientRect().top <= middle) {
+  shown.forEach((entry, index) => {
+    if (entry.getBoundingClientRect().top <= middle) {
       page = index + 1;
     }
   });
@@ -274,10 +278,8 @@ const reset = () => {
   loadingTask = null;
   pdf = null;
   clearPages();
-  if (imageUrl.value) {
-    URL.revokeObjectURL(imageUrl.value);
-    imageUrl.value = null;
-  }
+  imageUrls.value.forEach((url) => URL.revokeObjectURL(url));
+  imageUrls.value = [];
   zoom.value = 1;
   pageCount.value = 0;
   currentPage.value = 1;
@@ -286,19 +288,22 @@ const reset = () => {
   shareError.value = null;
 };
 
-const show = async (file: File) => {
+const show = async (files: File[]) => {
   await nextTick();
   baseWidth.value = Math.max((scroller.value?.clientWidth ?? 320) - 24, 200);
-  if (file.type.startsWith("image/")) {
-    imageUrl.value = URL.createObjectURL(file);
+  if (files.every((file) => file.type.startsWith("image/"))) {
+    imageUrls.value = files.map((file) => URL.createObjectURL(file));
+    pageCount.value = files.length;
     return;
   }
+  // a pdf comes alone
+  const file = files[0];
   rendering.value = true;
   try {
     const pdfjs = await loadPdfJs();
     const task = pdfjs.getDocument({ data: await file.arrayBuffer() });
     // another file was opened meanwhile
-    if (current.value?.file !== file) {
+    if (current.value?.files[0] !== file) {
       task.destroy();
       return;
     }
@@ -307,7 +312,7 @@ const show = async (file: File) => {
     pageCount.value = pdf.numPages;
   } catch (exception) {
     // closed or replaced while loading
-    if (current.value?.file !== file) {
+    if (current.value?.files[0] !== file) {
       return;
     }
     rendering.value = false;
@@ -320,14 +325,14 @@ const show = async (file: File) => {
 };
 
 watch(
-  () => current.value?.file,
-  (file, previous) => {
-    if (file === previous) {
+  () => current.value?.files,
+  (files, previous) => {
+    if (files === previous) {
       return;
     }
     reset();
-    if (file) {
-      show(file);
+    if (files?.length) {
+      show(files);
     }
   },
 );
@@ -429,18 +434,18 @@ const scheduleRender = () => {
 // ---------------------------------------------------------------- share
 
 /**
- * Share sheet of the system with the file. The file is already loaded, so this still counts as
- * the tap of the user (Safari does not allow share() after a fetch).
+ * Share sheet of the system with the files. They are already loaded, so this still counts as the
+ * tap of the user (Safari and Bluefy do not allow share() after a fetch).
  */
 const share = async () => {
-  const file = current.value?.file;
-  if (!file) {
+  const files = current.value?.files ?? [];
+  if (!files.length) {
     return;
   }
   shareError.value = null;
-  if (navigator.canShare?.({ files: [file] })) {
+  if (navigator.canShare?.({ files })) {
     try {
-      await navigator.share({ files: [file], title: file.name });
+      await navigator.share({ files, title: current.value!.name });
     } catch (exception) {
       // closed by the user
       if (!(
@@ -458,7 +463,8 @@ const share = async () => {
 // ---------------------------------------------------------------- links and keys
 
 /**
- * Links to pdfs open in the viewer instead of the frame of iOS (only in the home screen app).
+ * Links to pdfs (and marked links to images) open in the viewer instead of the browser (only where
+ * usesFileViewer: home screen app and Bluefy on iOS).
  */
 const interceptLink = (event: MouseEvent) => {
   if (
@@ -466,7 +472,7 @@ const interceptLink = (event: MouseEvent) => {
     event.button !== 0 ||
     event.metaKey ||
     event.ctrlKey ||
-    !isHomeScreenApp()
+    !usesFileViewer()
   ) {
     return;
   }

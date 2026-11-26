@@ -9,6 +9,7 @@
 export {}
 declare global {
   const deviceKind: typeof import('../composables/usePush').deviceKind
+  const isAppleMobile: typeof import('../composables/useFileViewer').isAppleMobile
   const isHomeScreenApp: typeof import('../composables/useFileViewer').isHomeScreenApp
   const useActiveEntry: typeof import('../composables/useActiveEntry').default
   const useColorMode: typeof import('../composables/useColorMode').default
@@ -21,6 +22,7 @@ declare global {
   const usePush: typeof import('../composables/usePush').default
   const useScannerInput: typeof import('../composables/useScannerInput').default
   const useSurface: typeof import('../composables/useSurface').default
+  const usesFileViewer: typeof import('../composables/useFileViewer').usesFileViewer
   const viewerLink: typeof import('../composables/useFileViewer').viewerLink
 }
 // for type re-export

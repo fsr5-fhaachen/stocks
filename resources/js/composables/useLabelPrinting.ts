@@ -2,13 +2,14 @@ import { ref, type Ref } from "vue";
 import { loadImages } from "../labels/render";
 import {
   downloadImages,
+  imageFiles,
   paperPdf,
   printPaper,
   renderForPrinter,
   type PrintLabel,
 } from "../labels/drivers";
 import * as niimbot from "../labels/drivers/niimbot";
-import useFileViewer, { isHomeScreenApp } from "./useFileViewer";
+import useFileViewer, { usesFileViewer } from "./useFileViewer";
 
 /**
  * The three ways to print labels, used by the print page and the test print of the editor: paper
@@ -62,12 +63,12 @@ export default function (
     }
   };
 
-  // the home screen app on iOS has no print dialog: the labels become a pdf in the file viewer,
-  // printed through its share button
-  const { showFile } = useFileViewer();
+  // the home screen app and Bluefy on iOS have no print dialog and no downloads: the labels go to
+  // the file viewer (pdf, or images), printed or handed on through its share button
+  const { showFile, showFiles } = useFileViewer();
   const printOnPaper = () =>
     run(async () => {
-      if (isHomeScreenApp()) {
+      if (usesFileViewer()) {
         showFile(await paperPdf(await render(false), copies(), printer.value!));
         return "Vorschau geöffnet. Unten links über Teilen → Drucken.";
       }
@@ -77,6 +78,14 @@ export default function (
 
   const downloadPng = () =>
     run(async () => {
+      if (usesFileViewer()) {
+        const images = await imageFiles(await render(false));
+        showFiles(
+          images,
+          images.length === 1 ? images[0].name : `${images.length} Etiketten`,
+        );
+        return "Vorschau geöffnet. Über Teilen → „Bild sichern“, dann in der Niimbot-App öffnen und drucken.";
+      }
       await downloadImages(await render(false));
       return "Heruntergeladen. In der Niimbot-App das Bild öffnen und drucken.";
     });

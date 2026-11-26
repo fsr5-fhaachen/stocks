@@ -293,6 +293,7 @@
                 :key="photo.id"
                 :href="photo.url"
                 target="_blank"
+                data-file-viewer
               >
                 <img
                   :src="photo.url"
@@ -339,7 +340,12 @@
             :class="['space-y-2', index === 0 ? 'col-span-2' : '']"
           >
             <div class="relative">
-              <a :href="photo.url" target="_blank" class="block">
+              <a
+                :href="photo.url"
+                target="_blank"
+                data-file-viewer
+                class="block"
+              >
                 <img
                   :src="photo.url"
                   alt=""

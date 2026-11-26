@@ -1,18 +1,21 @@
 import { ref } from "vue";
 
 /**
- * Own viewer for pdfs (and images) in the home screen app on iOS and iPadOS.
+ * Own viewer for pdfs and images on iPhone and iPad where the browser handles files badly: the
+ * home screen app and bluetooth browsers like Bluefy (see usesFileViewer).
  *
  * In the home screen app iOS opens a pdf in a frame without share button, ignores window.print()
- * and gets stuck on downloads ("Content-Disposition: attachment"). There Stocks loads the file
- * itself and shows it in UiFileViewer, whose share button opens the share sheet of iOS (print,
- * save to files, send). Because the file is already loaded, the share sheet opens on the first
- * tap: Safari does not keep the tap across a fetch. Safari, the pc and Android keep normal links.
+ * and gets stuck on downloads ("Content-Disposition: attachment"); Bluefy does nothing on
+ * downloads and shows pdfs poorly. There Stocks loads the file itself and shows it in
+ * UiFileViewer, whose share button opens the share sheet of iOS (print, save to files, send).
+ * Because the file is already loaded, the share sheet opens on the first tap: neither Safari nor
+ * Bluefy keep the tap across a fetch. Safari, the pc and Android keep normal links.
  */
 
 export type ViewerFile = {
   name: string;
-  file: File | null;
+  // one pdf, or one or more images (e.g. labels for the Niimbot app); shared together
+  files: File[];
   loading: boolean;
   error: string | null;
 };
@@ -27,6 +30,20 @@ let request: AbortController | null = null;
  */
 export const isHomeScreenApp = () =>
   (navigator as Navigator & { standalone?: boolean }).standalone === true;
+
+/**
+ * iPhone or iPad; iPads report themselves as Mac, but have a touch screen.
+ */
+export const isAppleMobile = () =>
+  /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+  (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+
+/**
+ * Files open in the own viewer: in the home screen app on iOS, and in browsers on iPhone and iPad
+ * that have bluetooth (Bluefy and the like; Safari never has it).
+ */
+export const usesFileViewer = () =>
+  isHomeScreenApp() || (isAppleMobile() && "bluetooth" in navigator);
 
 /**
  * File name from the Content-Disposition header, otherwise from the address.
@@ -77,7 +94,7 @@ export default function useFileViewer() {
     request = new AbortController();
     current.value = {
       name: decodeURIComponent(url.pathname.split("/").pop() || "Datei"),
-      file: null,
+      files: [],
       loading: true,
       error: null,
     };
@@ -97,7 +114,7 @@ export default function useFileViewer() {
       const name = nameOf(response, url);
       current.value = {
         name,
-        file: new File([blob], name, { type: blob.type }),
+        files: [new File([blob], name, { type: blob.type })],
         loading: false,
         error: null,
       };
@@ -107,7 +124,7 @@ export default function useFileViewer() {
       }
       current.value = {
         name: current.value?.name ?? "Datei",
-        file: null,
+        files: [],
         loading: false,
         error:
           error instanceof Error
@@ -118,17 +135,18 @@ export default function useFileViewer() {
   };
 
   /**
-   * Show a file made in the browser (e.g. labels as pdf).
+   * Show files made in the browser: labels as pdf, or labels as images for the Niimbot app.
    */
-  const showFile = (file: File) => {
+  const showFiles = (files: File[], name = files[0]?.name ?? "Datei") => {
     request?.abort();
-    current.value = { name: file.name, file, loading: false, error: null };
+    current.value = { name, files, loading: false, error: null };
   };
+  const showFile = (file: File) => showFiles([file]);
 
   const close = () => {
     request?.abort();
     current.value = null;
   };
 
-  return { current, openUrl, showFile, close };
+  return { current, openUrl, showFile, showFiles, close };
 }
