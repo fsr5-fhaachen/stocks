@@ -546,6 +546,7 @@
             <div class="flex items-center justify-between gap-2">
               <a
                 :href="document.url"
+                data-file-viewer
                 class="font-medium text-accent hover:underline"
               >
                 <FontAwesomeIcon :icon="['fas', 'file-pdf']" class="mr-1" />{{

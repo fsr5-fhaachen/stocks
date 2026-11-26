@@ -9,8 +9,10 @@
 export {}
 declare global {
   const deviceKind: typeof import('../composables/usePush').deviceKind
+  const isHomeScreenApp: typeof import('../composables/useFileViewer').isHomeScreenApp
   const useActiveEntry: typeof import('../composables/useActiveEntry').default
   const useColorMode: typeof import('../composables/useColorMode').default
+  const useFileViewer: typeof import('../composables/useFileViewer').default
   const useImageCompression: typeof import('../composables/useImageCompression').default
   const useLabelPrinting: typeof import('../composables/useLabelPrinting').default
   const useModuleComponent: typeof import('../composables/useModuleComponent').default
@@ -19,9 +21,13 @@ declare global {
   const usePush: typeof import('../composables/usePush').default
   const useScannerInput: typeof import('../composables/useScannerInput').default
   const useSurface: typeof import('../composables/useSurface').default
+  const viewerLink: typeof import('../composables/useFileViewer').viewerLink
 }
 // for type re-export
 declare global {
+  // @ts-ignore
+  export type { ViewerFile } from '../composables/useFileViewer'
+  import('../composables/useFileViewer')
   // @ts-ignore
   export type { PushState, DeviceKind } from '../composables/usePush'
   import('../composables/usePush')

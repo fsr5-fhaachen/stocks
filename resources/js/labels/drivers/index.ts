@@ -1,5 +1,6 @@
 import { drawLabel, toMonochrome } from "../render";
 import { zip } from "../zip";
+import { labelsPdf, type PdfPage } from "./pdf";
 
 /**
  * Printing per driver of the printer (App\Enums\PrinterDriver). Every driver takes labels drawn
@@ -101,6 +102,84 @@ const cropMiddle = (source: HTMLCanvasElement, width: number) => {
 };
 
 /**
+ * Labels on paper pages, by the settings of the printer: one label per page in its own size, or
+ * labels in a grid on A4 sheets. Shared by the print dialog and the pdf.
+ */
+const paperPages = (
+  canvases: {
+    canvas: HTMLCanvasElement;
+    width_mm: number;
+    height_mm: number;
+  }[],
+  copies: number,
+  printer: PrinterData,
+): PdfPage[] => {
+  const labels = canvases.flatMap((entry) =>
+    Array.from({ length: copies }, () => entry),
+  );
+  const settings = printer.settings;
+
+  if (settings.page === "sheet") {
+    const columns = settings.columns ?? 2;
+    const perSheet = columns * (settings.rows ?? 8);
+    return Array.from(
+      { length: Math.ceil(labels.length / perSheet) },
+      (_, sheet) => ({
+        width_mm: 210,
+        height_mm: 297,
+        images: labels
+          .slice(sheet * perSheet, (sheet + 1) * perSheet)
+          .map((entry, index) => ({
+            canvas: entry.canvas,
+            width_mm: entry.width_mm,
+            height_mm: entry.height_mm,
+            left_mm:
+              (settings.margin_left ?? 0) +
+              (index % columns) * (entry.width_mm + (settings.gap_x ?? 0)),
+            top_mm:
+              (settings.margin_top ?? 0) +
+              Math.floor(index / columns) *
+                (entry.height_mm + (settings.gap_y ?? 0)),
+          })),
+      }),
+    );
+  }
+
+  // a label printer at the pc gets one page per label in the size of the first label
+  return labels.map((entry) => ({
+    width_mm: labels[0].width_mm,
+    height_mm: labels[0].height_mm,
+    images: [
+      {
+        canvas: entry.canvas,
+        width_mm: entry.width_mm,
+        height_mm: entry.height_mm,
+        left_mm: 0,
+        top_mm: 0,
+      },
+    ],
+  }));
+};
+
+/**
+ * Labels as pdf, for the home screen app on iOS where there is no print dialog: it is shown in the
+ * file viewer and printed through the share sheet.
+ */
+export const paperPdf = (
+  canvases: {
+    canvas: HTMLCanvasElement;
+    width_mm: number;
+    height_mm: number;
+  }[],
+  copies: number,
+  printer: PrinterData,
+) =>
+  labelsPdf(
+    paperPages(canvases, copies, printer),
+    canvases.length === 1 && copies === 1 ? "Etikett.pdf" : "Etiketten.pdf",
+  );
+
+/**
  * Print on paper with the print dialog of the browser: one label per page in its own size, or
  * labels in a grid on A4 sheets (settings of the printer).
  */
@@ -113,44 +192,26 @@ export const printPaper = async (
   copies: number,
   printer: PrinterData,
 ) => {
-  const labels = canvases.flatMap((entry) =>
-    Array.from({ length: copies }, () => entry),
-  );
-  const settings = printer.settings;
-  const image = (entry: (typeof labels)[number], style = "") =>
-    `<img src="${entry.canvas.toDataURL("image/png")}" style="width:${entry.width_mm}mm;height:${entry.height_mm}mm;${style}">`;
-
-  let body: string;
-  let page: string;
-  if (settings.page === "sheet") {
-    const columns = settings.columns ?? 2;
-    const perSheet = columns * (settings.rows ?? 8);
-    page = "size: A4; margin: 0;";
-    body = Array.from(
-      { length: Math.ceil(labels.length / perSheet) },
-      (_, sheet) =>
-        `<section>${labels
-          .slice(sheet * perSheet, (sheet + 1) * perSheet)
-          .map((entry, index) => {
-            const left =
-              (settings.margin_left ?? 0) +
-              (index % columns) * (entry.width_mm + (settings.gap_x ?? 0));
-            const top =
-              (settings.margin_top ?? 0) +
-              Math.floor(index / columns) *
-                (entry.height_mm + (settings.gap_y ?? 0));
-            return image(
-              entry,
-              `position:absolute;left:${left}mm;top:${top}mm;`,
-            );
-          })
+  const pages = paperPages(canvases, copies, printer);
+  const sheet = printer.settings.page === "sheet";
+  const page = sheet
+    ? "size: A4; margin: 0;"
+    : `size: ${pages[0].width_mm}mm ${pages[0].height_mm}mm; margin: 0;`;
+  const body = pages
+    .map(
+      (entry) =>
+        `<section>${entry.images
+          .map(
+            (image) =>
+              `<img src="${image.canvas.toDataURL("image/png")}" style="width:${image.width_mm}mm;height:${image.height_mm}mm;${
+                sheet
+                  ? `position:absolute;left:${image.left_mm}mm;top:${image.top_mm}mm;`
+                  : ""
+              }">`,
+          )
           .join("")}</section>`,
-    ).join("");
-  } else {
-    // a label printer at the pc gets one page per label in the size of the first label
-    page = `size: ${labels[0].width_mm}mm ${labels[0].height_mm}mm; margin: 0;`;
-    body = labels.map((entry) => `<section>${image(entry)}</section>`).join("");
-  }
+    )
+    .join("");
 
   // printed from the page itself: Safari on iOS and some Android browsers ignore print() in a
   // frame and print the whole page instead. While printing only the labels are shown.
@@ -165,7 +226,7 @@ export const printPaper = async (
       html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
       body > *:not(#stocks-print) { display: none !important; }
       #stocks-print { display: block; }
-      #stocks-print section { position: relative; page-break-after: always; break-after: page; ${settings.page === "sheet" ? "width: 210mm; height: 297mm;" : ""} overflow: hidden; }
+      #stocks-print section { position: relative; page-break-after: always; break-after: page; ${sheet ? "width: 210mm; height: 297mm;" : ""} overflow: hidden; }
       #stocks-print section:last-child { page-break-after: auto; break-after: auto; }
       #stocks-print img { display: block; }
     }`;
