@@ -71,6 +71,41 @@ class WebAppTest extends TestCase
         $this->get('/login')->assertSee('icon-180.png?v='.app(Branding::class)->iconVersion(), false);
     }
 
+    public function test_an_own_icon_fills_the_whole_icon_before_the_light_logo(): void
+    {
+        Storage::fake(Branding::DISK);
+        $admin = $this->admin();
+        $this->actingAs($admin)->post('/admin/settings/branding', ['logo_light' => UploadedFile::fake()->image('hell.png', 100, 100)]);
+        $withLogo = $this->get('/manifest.webmanifest')->json('icons.2.src');
+
+        // the fake image is black: without margin even the corner is black, cut to a square
+        $this->actingAs($admin)->post('/admin/settings/branding', ['app_icon' => UploadedFile::fake()->image('icon.png', 600, 400)])->assertSessionHasNoErrors();
+        $manifest = $this->get('/manifest.webmanifest')->assertJsonPath('background_color', '#ffffff');
+        $this->assertNotSame($withLogo, $manifest->json('icons.2.src'));
+        $png = $this->get($manifest->json('icons.2.src'))->assertOk()->getContent();
+        $this->assertSame([512, 512], [imagesx($image = imagecreatefromstring($png)), imagesy($image)]);
+        $this->assertSame([0, 0, 0], $this->pixel($png, 1, 1));
+        $this->actingAs($admin)->get('/admin/settings')->assertInertia(fn ($page) => $page->where('branding.app_icon', app(Branding::class)->url('app_icon')));
+
+        // removed, the light logo on white is back
+        $this->actingAs($admin)->post('/admin/settings/branding', ['remove' => ['app_icon']])->assertSessionHasNoErrors();
+        $this->assertSame([255, 255, 255], $this->pixel($this->get($this->get('/manifest.webmanifest')->json('icons.2.src'))->getContent(), 1, 1));
+    }
+
+    public function test_an_own_icon_that_can_not_be_opened_falls_back_to_the_light_logo(): void
+    {
+        Storage::fake(Branding::DISK);
+        $this->actingAs($this->admin())->post('/admin/settings/branding', ['logo_light' => UploadedFile::fake()->image('hell.png', 100, 100)]);
+        // e.g. stored before uploads were scaled down, too big to open
+        Storage::disk(Branding::DISK)->put('branding/kaputt.png', 'kein Bild');
+        app(Settings::class)->set(['organization.app_icon_path' => 'branding/kaputt.png']);
+
+        $png = $this->get($this->get('/manifest.webmanifest')->json('icons.2.src'))->assertOk()->getContent();
+
+        // the light logo on white, not the "S" on the accent colour
+        $this->assertSame([255, 255, 255], $this->pixel($png, 1, 1));
+    }
+
     public function test_the_dark_logo_alone_does_not_change_the_icon(): void
     {
         Storage::fake(Branding::DISK);

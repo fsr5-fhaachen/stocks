@@ -35,6 +35,8 @@ declare global {
     unit: string | null;
     kind: "single" | "bulk";
     is_container: boolean;
+    // small preview of the first photo
+    photo_url: string | null;
     contents: ContentsItem[];
   }
 }

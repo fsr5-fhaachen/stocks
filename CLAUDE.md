@@ -30,7 +30,9 @@ Where to look first; details in `documentation/` (German). Search there before r
 - "Ohne Platz" is `ItemExtensions::misplaced()`, not `Item::misplaced()` alone (lent items are left out).
 - Full codes of locations come from `Location::fullCodeOf()`; a building without "Im Code zeigen" passes on the code of its address.
 - New permissions go into `module.json`; existing instances only give them to Admin (`stocks:sync`).
-- Logo kinds: `logo` (dark backgrounds), `logo_light` (light mode, home screen icon), `print_logo` (paper, mails). Mails never use `logo`.
+- Logo kinds: `logo` (dark backgrounds), `logo_light` (light mode, home screen icon while there is no `app_icon`), `print_logo` (paper, mails), `app_icon` (home screen icon, fills it). Mails never use `logo`. The route `/branding/{kind}` takes all of `Branding::KINDS`.
+- Lists show the preview of a photo (`ItemPhoto::thumbUrl()`), never the photo itself.
+- Open images with GD only through `App\Support\ImageDecoding::process()`: running out of memory on a big image is a fatal error no try/catch stops.
 - The accent colour is only defined in `resources/views/app.blade.php`, never in css.
 
 **Checks before handing over**: `php vendor/bin/phpunit`, `vendor/bin/pint --test`, `npm run lint`, `npm run build`.

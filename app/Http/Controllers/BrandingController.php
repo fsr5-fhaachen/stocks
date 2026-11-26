@@ -5,10 +5,9 @@ namespace App\Http\Controllers;
 use App\Support\Branding;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Http\Response;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Logo and favicon: deliver them to everybody, change them in the settings.
@@ -16,19 +15,27 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class BrandingController extends Controller
 {
     /**
-     * Deliver an image. Without an uploaded favicon the default of public/ is used.
+     * Deliver an image. Without an uploaded favicon the default of public/ is used. The type comes
+     * from the bytes of the image, not from S3: browsers show no favicon at all when S3 answers
+     * with a general type like "application/octet-stream".
      */
-    public function show(Branding $branding, string $kind): StreamedResponse|BinaryFileResponse
+    public function show(Branding $branding, string $kind): Response|BinaryFileResponse
     {
-        $path = $branding->path($kind);
-        if ($path === null) {
+        if ($branding->path($kind) === null) {
             abort_unless($kind === 'favicon', 404);
 
             return response()->file(public_path('favicon.ico'));
         }
 
+        $content = $branding->contents($kind);
+        abort_if($content === null, 404);
+
         // the url changes with every new image (see Branding::url), so it can be kept for a week
-        return Storage::disk(Branding::DISK)->response($path, headers: ['Cache-Control' => 'public, max-age=604800']);
+        return response($content, headers: [
+            'Content-Type' => Branding::mimeType($content),
+            'Cache-Control' => 'public, max-age=604800',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
     }
 
     /**
@@ -41,6 +48,7 @@ class BrandingController extends Controller
             'logo_light' => ['nullable', 'file', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
             'favicon' => ['nullable', 'file', 'mimes:png,ico', 'max:512'],
             'print_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
+            'app_icon' => ['nullable', 'file', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
             'remove' => ['array'],
             'remove.*' => [Rule::in(array_keys(Branding::KINDS))],
         ]);

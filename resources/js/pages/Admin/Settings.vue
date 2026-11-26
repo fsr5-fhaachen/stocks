@@ -2,12 +2,12 @@
   <UiPageHeader title="Einstellungen" />
 
   <UiCard
-    title="Logo und Symbol"
-    description="Die Logos stehen oben links, auf der Anmeldeseite, am Kiosk und auf der Verleihseite: im hellen Modus das Logo für helle Hintergründe, im dunklen das für dunkle. Gibt es nur eines, gilt es in beiden. Das Logo für helle Hintergründe wird auch das Icon auf dem Home-Bildschirm, ohne steht dort ein „S“ auf der Akzentfarbe. Das Symbol (Favicon) zeigt der Browser im Tab. Das Druck-Logo kommt auf Etiketten, PDFs und Mails."
+    title="Logos und Symbole"
+    description="Die Logos stehen oben links, auf der Anmeldeseite, am Kiosk und auf der Verleihseite: im hellen Modus das Logo für helle Hintergründe, im dunklen das für dunkle. Gibt es nur eines, gilt es in beiden. Auf dem Home-Bildschirm steht das eigene Symbol dafür, ohne das Logo für helle Hintergründe auf Weiß, ohne beide ein „S“ auf der Akzentfarbe. Das Symbol (Favicon) zeigt der Browser im Tab. Das Druck-Logo kommt auf Etiketten, PDFs und Mails."
     class="mb-6"
   >
     <form
-      class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4"
+      class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
       @submit.prevent="saveBranding"
     >
       <div v-for="kind in brandingKinds" :key="kind.key" class="space-y-3">
@@ -51,7 +51,7 @@
           Standard verwenden
         </UiButton>
       </div>
-      <div class="flex justify-end sm:col-span-2 lg:col-span-4">
+      <div class="flex justify-end sm:col-span-2 lg:col-span-3">
         <UiButton
           type="submit"
           :disabled="brandingForm.processing || !brandingForm.isDirty"
@@ -172,12 +172,14 @@ const props = defineProps<{
     logo_light: string | null;
     favicon: string | null;
     print_logo: string | null;
+    app_icon: string | null;
   };
   appUrl: string;
 }>();
 
 // logo and favicon have their own form, files can not be sent with PUT
-type BrandingKind = "logo" | "logo_light" | "favicon" | "print_logo";
+type BrandingKind =
+  "logo" | "logo_light" | "favicon" | "print_logo" | "app_icon";
 const brandingKinds: {
   key: BrandingKind;
   label: string;
@@ -197,7 +199,7 @@ const brandingKinds: {
     key: "logo_light",
     label: "Logo für helle Hintergründe",
     accept: "image/png,image/jpeg,image/webp",
-    hint: "Für den hellen Modus und das Icon auf dem Home-Bildschirm. Ein schon abgelegtes Icon ändert sich erst, wenn die App neu zum Home-Bildschirm hinzugefügt wird.",
+    hint: "Für den hellen Modus. Solange kein eigenes Symbol für den Home-Bildschirm hochgeladen ist, steht es dort auf Weiß.",
     background: "light",
   },
   {
@@ -213,12 +215,20 @@ const brandingKinds: {
     accept: "image/png,image/x-icon,.ico",
     hint: "PNG oder ICO, quadratisch, höchstens 512 KB.",
   },
+  {
+    key: "app_icon",
+    label: "Symbol für den Home-Bildschirm",
+    accept: "image/png,image/jpeg,image/webp",
+    hint: "Füllt das Symbol ganz, ohne Rand: quadratisch, mindestens 512 px. Je nach Gerät werden die Ecken rund abgeschnitten. Ein schon abgelegtes Symbol ändert sich erst, wenn die App neu zum Home-Bildschirm hinzugefügt wird.",
+    background: "light",
+  },
 ];
 const brandingForm = useForm({
   logo: null as File | null,
   logo_light: null as File | null,
   favicon: null as File | null,
   print_logo: null as File | null,
+  app_icon: null as File | null,
   remove: [] as BrandingKind[],
 });
 const previews = ref<Record<BrandingKind, string | null>>({
@@ -226,6 +236,7 @@ const previews = ref<Record<BrandingKind, string | null>>({
   logo_light: props.branding.logo_light,
   favicon: props.branding.favicon,
   print_logo: props.branding.print_logo,
+  app_icon: props.branding.app_icon,
 });
 const choose = (kind: BrandingKind, event: Event) => {
   const file = (event.target as HTMLInputElement).files?.[0] ?? null;

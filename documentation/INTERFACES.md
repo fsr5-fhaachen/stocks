@@ -22,8 +22,8 @@ Stocks hat mehrere Oberflächen für dieselben Vorgänge. Wenn ein Vorgang neu d
 |---|---|---|---|---|
 | Logo aus den Einstellungen | ✓ oben links, Quadrat 64 px mit Name | ✓ obere Leiste, klein mit Name | ✓ Kopfzeile, klein mit Name | ✓ Quadrat 250 px mittig über dem Namen |
 | Logo für helle Hintergründe im hellen Modus, sonst das Logo für dunkle (Review Phase 5) | ✓ | ✓ | ✓ | ✓ (auch Verleihseite) |
-| Favicon aus den Einstellungen | ✓ | ✓ | ✓ | ✓ |
-| Icon auf dem Home-Bildschirm: helles Logo auf Weiß, sonst weißes „S“ auf der Akzentfarbe | ✓ | ✓ | ✓ (eigenes Manifest) | n. v. |
+| Favicon aus den Einstellungen (PNG oder ICO; seit v0.1.1 mit dem Typ aus den Bytes ausgeliefert) | ✓ | ✓ | ✓ | ✓ |
+| Icon auf dem Home-Bildschirm: eigenes Symbol ohne Rand (seit v0.1.1), sonst helles Logo auf Weiß, sonst weißes „S“ auf der Akzentfarbe | ✓ | ✓ | ✓ (eigenes Manifest) | n. v. |
 | Akzentfarbe aus den Einstellungen wirkt überall (Review Phase 5: vorher von `app.css` überschrieben) | ✓ | ✓ | ✓ | ✓ (auch Verleihseite) |
 | Version und „Update verfügbar“ (24.11.2026, `LayoutAppVersion`) | ✓ Seitenleiste zwischen Abmelden und Impressum/Datenschutz; eingeklappt nur Symbol mit Tooltip | ✓ Menü „Mehr“ unter Abmelden | n. v. | n. v. |
 
@@ -34,10 +34,11 @@ Stocks hat mehrere Oberflächen für dieselben Vorgänge. Wenn ein Vorgang neu d
 | Vorgang | Web PC | Web Handy | Kiosk | Anmerkung für spätere Oberflächen |
 |---|---|---|---|---|
 | Gegenstände suchen und ansehen | ✓ | ✓ | nur Scan-Karte | Suche nimmt Artikelnummer und Kennziffer, mit und ohne Bindestrich |
-| „Nach Boxen gruppieren“ in „Gegenstände“ und „Ohne Platz“ (Review Phase 5) | ✓ | ✓ | n. v. | Schalter in der Filterleiste, je Gerät und Liste gemerkt; Boxen mit Pfeil und „N Teile“ klappen ihren Inhalt auf (auch Boxen in Boxen); bei Suche und Filtern flach; am Handy Inhalt mit Strich links statt Einrückung. Tabellen-Slot `after-row` in `UiTable` |
+| „Nach Boxen gruppieren“ in „Gegenstände“ und „Ohne Platz“ (Review Phase 5) | ✓ | ✓ | n. v. | Schalter in der Filterleiste, seit v0.1.1 standardmäßig an, je Gerät und Liste als Cookie gemerkt; Boxen mit Pfeil und „N Teile“ klappen ihren Inhalt auf (auch Boxen in Boxen); bei Suche und Filtern flach; am Handy Inhalt mit Strich links statt Einrückung. Tabellen-Slot `after-row` in `UiTable` |
 | „Ohne Platz“ ohne ausgegebene Gegenstände (Review Phase 5) | ✓ | ✓ | n. v. | ausgegebene stehen nur in der Gesamtliste mit „ausgegeben bis …“; zurück, aber nicht eingeräumt, und vermisst bleiben in „Ohne Platz“; gilt auch für die Dashboard-Zahl |
 | Gebäude als Standort-Stufe (Review Phase 5) | ✓ | ✓ | n. v. | Standorte: an einer Adresse „+ Raum“ und „+ Gebäude“, Schalter „Im Code zeigen“ mit Rückfrage, wie viele Kennziffern sich ändern; Gebäude mit eigenem Symbol im Baum und in „Darin“; Gegenstände liegen nicht in Gebäuden (auch nicht in der Ortswahl, am Kiosk ebenso); Kiosk-Standortwahl braucht nichts Neues |
-| Gegenstand anlegen, mit Fotos | ✓ | ✓ | n. v. | Fotos werden im Browser verkleinert (`useImageCompression`) |
+| Gegenstand anlegen, mit Fotos | ✓ | ✓ | n. v. | Fotos werden im Browser verkleinert (`useImageCompression`); seit v0.1.1 legt der Server zu jedem Foto ein Vorschaubild für Listen an |
+| Inhalt einer Box auf der Seite der Box, mit Vorschaubild je Zeile (seit v0.1.1) | ✓ | ✓ | n. v. (keine Gegenstandsseiten) | Baum `InventoryContentsTree`, Boxen in Boxen aufklappbar; die öffentliche Ansicht zeigt ihre Inhaltsliste mit Vorschaubildern |
 | Umlagern per Scan (zwei Schritte) | ✓ | ✓ | ✓ | auf der Seite „Scannen“; die Seite „Umlagern“ gibt es am Kiosk nicht |
 | Umlagern über den Gegenstand | ✓ | ✓ | n. v. | Dialog mit Ortsvorschlägen |
 | Zustand ändern mit Begründung und Fotos | ✓ | ✓ | ✓ | Zustände kommen aus der Liste der Einstellungen; Fotos werden nacheinander hinzugefügt (`UiPhotoPicker`), auch einzeln mit der Handykamera |
@@ -49,7 +50,7 @@ Stocks hat mehrere Oberflächen für dieselben Vorgänge. Wenn ein Vorgang neu d
 | Zustände und Einheiten verwalten | ✓ | ✓ | n. v. | Untermenü Verwaltung › Einstellungen |
 | Mailserver einstellen, Status, Test-Mail | ✓ | ✓ | n. v. | Verwaltung › Einstellungen › Benachrichtigungen (bis Phase 4 „E-Mail“); Status als Badge im Menü, unter dem Titel; seit Review Phase 5 prüft der Scheduler alle 5 Minuten, das Badge steht ohne Aufruf der Seite; die Test-Mail hat das Design aller Mails |
 | Vorschau der Mails (Test-Mail, Einladung) | ✓ | ✓ | n. v. | Links unter „Test-Mail“, öffnen im neuen Tab, verschickt nichts |
-| Logos hochladen (dunkle und helle Hintergründe, Druck-Logo, Favicon) | ✓ | ✓ | n. v. | Verwaltung › Einstellungen › Allgemein, Karte „Logo und Symbol“; Vorschau auf dem passenden Hintergrund |
+| Logos hochladen (dunkle und helle Hintergründe, Druck-Logo, Favicon, seit v0.1.1 Symbol für den Home-Bildschirm) | ✓ | ✓ | n. v. | Verwaltung › Einstellungen › Allgemein, Karte „Logo und Symbol“; Vorschau auf dem passenden Hintergrund |
 | Hinweis fürs Etikett pflegen | ✓ | ✓ | n. v. | Feld im Formular des Gegenstands |
 | Box-Inhaltsliste als PDF | ✓ | ✓ | n. v. | Knopf auf der Box, wahlweise als Brief (DIN 5008) mit eingegebenem Empfänger, Vorschaubilder wählbar; nicht in der öffentlichen Ansicht |
 
@@ -63,7 +64,7 @@ Seit Phase 2, siehe [LABELS.md](LABELS.md); am Kiosk seit Phase 4.
 | Scannen mit Handscanner ohne Feld | ✓ | ✓ | ✓ | n. v. | `useScannerInput` |
 | Kamera auf der Seite „Umlagern“ | ✓ | ✓ | n. v. | n. v. | |
 | „Hierher umlagern“ (alles an einen Standort scannen) | ✓ | ✓ | ✓ | n. v. | auf der Seite „Scannen“ am Standort |
-| Etikett drucken (Vorschau mit echten Daten) | ✓ | ✓ | ✓ | n. v. | Direktdruck Niimbot nur Chrome/Edge (PC, Android); iPhone und iPad laden das Bild für die Niimbot-App. Am Kiosk entscheidet die Plattform des Geräts, „Als Vorlage speichern“ fehlt dort |
+| Etikett drucken (Vorschau mit echten Daten) | ✓ | ✓ | ✓ | n. v. | Direktdruck Niimbot nur Chrome/Edge (PC, Android) und seit v0.1.1 im Browser Bluefy auf iPhone und iPad (Hinweis mit Link zum App Store, `LabelsDirectPrintHint`); sonst laden iPhone und iPad das Bild für die Niimbot-App. Am Kiosk entscheidet die Plattform des Geräts, „Als Vorlage speichern“ fehlt dort |
 | Sammeldruck (Auswahl, Box-Inhalt, Fächer unter einem Standort) | ✓ | ✓ | – | n. v. | Recht `labels.print`; „Alle drucken“ oder „Einzeln“ mit Auswahl; am Kiosk nur das Etikett der Scan-Karte |
 | Etiketten auf Vorrat, Reservierungen freigeben | ✓ | ✓ | n. v. | n. v. | Verwaltung › Einstellungen › Etiketten auf Vorrat |
 | Gegenstand aus reservierter Nummer anlegen | ✓ | ✓ | n. v. | n. v. | Scan oder Kurzlink öffnet das Formular mit der Nummer |

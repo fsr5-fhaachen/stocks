@@ -195,11 +195,7 @@
                     Drucken
                   </UiButton>
                 </template>
-                <p v-else class="text-sm text-ink-muted">
-                  Direkt drucken geht nur in Chrome oder Edge am PC und unter
-                  Android. Hier das Bild herunterladen und mit der Niimbot-App
-                  drucken.
-                </p>
+                <LabelsDirectPrintHint v-else />
                 <UiButton
                   :variant="connections.length ? 'secondary' : 'primary'"
                   class="w-full"

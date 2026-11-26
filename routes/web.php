@@ -31,6 +31,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SetupController;
 use App\Http\Controllers\ShortLinkController;
 use App\Http\Controllers\WebAppController;
+use App\Support\Branding;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -46,8 +47,8 @@ use Inertia\Inertia;
 
 Route::get('/setup', [SetupController::class, 'show'])->name('setup.show');
 
-// logo and favicon, also for guests (login page, browser tab)
-Route::get('/branding/{kind}', [BrandingController::class, 'show'])->whereIn('kind', ['logo', 'favicon', 'print_logo'])->name('branding.show');
+// logos, favicon and icon of the settings, also for guests (login page, browser tab)
+Route::get('/branding/{kind}', [BrandingController::class, 'show'])->whereIn('kind', array_keys(Branding::KINDS))->name('branding.show');
 Route::post('/setup', [SetupController::class, 'store'])->middleware('throttle:10,1')->name('setup.store');
 
 // web app: manifest and icons from the logo, also for guests (added to the home screen before login);
