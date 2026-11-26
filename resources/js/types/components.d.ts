@@ -47,6 +47,7 @@ declare module 'vue' {
     UiContactLink: typeof import('./../components/ui/ContactLink.vue')['default']
     UiDateTime: typeof import('./../components/ui/DateTime.vue')['default']
     UiEmptyState: typeof import('./../components/ui/EmptyState.vue')['default']
+    UiFileViewer: typeof import('./../components/ui/FileViewer.vue')['default']
     UiFlash: typeof import('./../components/ui/Flash.vue')['default']
     UiInput: typeof import('./../components/ui/Input.vue')['default']
     UiLink: typeof import('./../components/ui/Link.vue')['default']

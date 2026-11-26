@@ -2,11 +2,13 @@ import { ref, type Ref } from "vue";
 import { loadImages } from "../labels/render";
 import {
   downloadImages,
+  paperPdf,
   printPaper,
   renderForPrinter,
   type PrintLabel,
 } from "../labels/drivers";
 import * as niimbot from "../labels/drivers/niimbot";
+import useFileViewer, { isHomeScreenApp } from "./useFileViewer";
 
 /**
  * The three ways to print labels, used by the print page and the test print of the editor: paper
@@ -60,10 +62,17 @@ export default function (
     }
   };
 
+  // the home screen app on iOS has no print dialog: the labels become a pdf in the file viewer,
+  // printed through its share button
+  const { showFile } = useFileViewer();
   const printOnPaper = () =>
     run(async () => {
+      if (isHomeScreenApp()) {
+        showFile(await paperPdf(await render(false), copies(), printer.value!));
+        return "Vorschau geöffnet. Unten links über Teilen → Drucken.";
+      }
       await printPaper(await render(false), copies(), printer.value!);
-      return "An den Druckdialog übergeben.";
+      return "Druckdialog geöffnet.";
     });
 
   const downloadPng = () =>

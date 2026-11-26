@@ -173,6 +173,7 @@
         <li v-for="document in documents" :key="document.id">
           <a
             :href="document.url"
+            data-file-viewer
             class="flex min-h-[44px] items-center gap-3 px-4 py-3 hover:bg-surface-muted sm:px-6"
           >
             <FontAwesomeIcon
