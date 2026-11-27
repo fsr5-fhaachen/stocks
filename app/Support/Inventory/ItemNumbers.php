@@ -51,6 +51,15 @@ class ItemNumbers
     }
 
     /**
+     * Number that stands for one not taken yet, e.g. on the label preview of a new item
+     * ("FSR5-000000"). Takes nothing from the counter.
+     */
+    public function placeholder(): string
+    {
+        return $this->prefix().'-000000';
+    }
+
+    /**
      * Find an item by its number. Case and hyphens do not matter ("fsr5004218" works).
      */
     public function find(string $input): ?Item

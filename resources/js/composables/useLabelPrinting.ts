@@ -15,14 +15,15 @@ import useFileViewer, { usesFileViewer } from "./useFileViewer";
  * The three ways to print labels, used by the print page and the test print of the editor: paper
  * (print dialog), Niimbot directly by bluetooth or usb, or as image for the Niimbot app. What is
  * printed comes from labels(); afterPrint runs after a successful print (the print page notes the
- * labels as printed, the test print does not).
+ * labels as printed, the test print does not). For a direct print it gets how many of the labels
+ * were printed (fewer after "Abbrechen"), otherwise null.
  */
 export default function (
   printer: Ref<PrinterData | null>,
   logoUrl: () => string | null,
   labels: () => (PrintLabel & { name: string })[],
   copies: () => number,
-  afterPrint: () => void = () => {},
+  afterPrint: (done: number | null) => void = () => {},
 ) {
   const { surface } = useSurface();
 
@@ -45,6 +46,8 @@ export default function (
     }));
   };
 
+  // labels printed by the last direct print, null for paper and images
+  let lastDone: number | null = null;
   const run = async (job: () => Promise<string>) => {
     if (!labels().length) {
       printError.value = "Wähle mindestens ein Etikett aus.";
@@ -53,9 +56,10 @@ export default function (
     busy.value = true;
     printError.value = null;
     printed.value = null;
+    lastDone = null;
     try {
       printed.value = await job();
-      afterPrint();
+      afterPrint(lastDone);
     } catch (error) {
       printError.value = error instanceof Error ? error.message : String(error);
     } finally {
@@ -119,12 +123,16 @@ export default function (
       const canvases = await render(true);
       abort = new AbortController();
       progress.value = { done: 0, total: canvases.length };
+      lastDone = 0;
       try {
         await niimbot.printDirect(
           canvases.map((entry) => entry.canvas),
           copies(),
           printer.value!,
-          (done, total) => (progress.value = { done, total }),
+          (done, total) => {
+            progress.value = { done, total };
+            lastDone = done;
+          },
           abort.signal,
         );
         return abort.signal.aborted
@@ -150,5 +158,7 @@ export default function (
     progress,
     printNiimbot,
     cancel,
+    // labels of the last direct print that came out, also when it stopped with an error
+    printedCount: () => lastDone,
   };
 }

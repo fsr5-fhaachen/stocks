@@ -20,80 +20,27 @@
       {{ form.errors.reserved_number }}
     </UiAlert>
     <UiCard>
-      <div class="grid gap-5 sm:grid-cols-2">
-        <UiInput
-          v-model="form.name"
-          label="Name"
-          required
-          class="sm:col-span-2"
-          :error="form.errors.name"
-        />
-        <UiSelect
-          v-model="form.category_id"
-          label="Kategorie"
-          :options="categories"
-          placeholder="keine"
-        />
-        <UiSelect
-          v-model="form.kind"
-          label="Art"
-          :options="kinds"
-          :placeholder="null"
-        />
-        <template v-if="form.kind === 'bulk'">
+      <InventoryItemFields
+        :form="form"
+        :errors="form.errors"
+        :categories="categories"
+        :kinds="kinds"
+        :units="units"
+        :conditions="item ? null : conditions"
+        :quantity-hint="
+          item ? 'Eine geänderte Menge wird als Zählung protokolliert.' : null
+        "
+      >
+        <template #more>
           <UiInput
-            v-model="form.quantity"
-            label="Menge"
-            type="number"
-            inputmode="numeric"
-            required
-            :hint="
-              item
-                ? 'Eine geänderte Menge wird als Zählung protokolliert.'
-                : null
-            "
-            :error="form.errors.quantity"
+            v-model="form.label_hint"
+            label="Hinweis fürs Etikett"
+            placeholder="z. B. Achtung, zerbrechlich"
+            hint="Kurzer Text, den Vorlagen mit {hint} drucken. Leer: Das Element bleibt weg."
+            :error="form.errors.label_hint"
           />
-          <div>
-            <UiSelect
-              v-model="form.unit"
-              label="Einheit"
-              :options="units"
-              :placeholder="null"
-            />
-            <p v-if="form.errors.unit" class="mt-1 text-sm text-red-600">
-              {{ form.errors.unit }}
-            </p>
-          </div>
         </template>
-        <UiSelect
-          v-if="!item"
-          v-model="form.condition_id"
-          label="Zustand"
-          :options="conditions"
-          :placeholder="null"
-        />
-        <UiTextarea
-          v-model="form.description"
-          label="Beschreibung"
-          class="sm:col-span-2"
-          :error="form.errors.description"
-        />
-        <UiTextarea
-          v-model="form.notes"
-          label="Notiz"
-          class="sm:col-span-2"
-          :rows="2"
-          :error="form.errors.notes"
-        />
-        <UiInput
-          v-model="form.label_hint"
-          label="Hinweis fürs Etikett"
-          placeholder="z. B. Achtung, zerbrechlich"
-          hint="Kurzer Text, den Vorlagen mit {hint} drucken. Leer: Das Element bleibt weg."
-          :error="form.errors.label_hint"
-        />
-      </div>
+      </InventoryItemFields>
     </UiCard>
 
     <UiCard title="Box">

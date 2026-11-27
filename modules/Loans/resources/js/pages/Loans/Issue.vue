@@ -11,7 +11,7 @@
     >
   </UiPageHeader>
 
-  <LoansSteps
+  <UiSteps
     :steps="steps.map((entry) => entry.label)"
     :current="step"
     :reachable="reachable"
@@ -448,7 +448,6 @@ import { formatDateTime, type Contact, type LoanSummary } from "../../http";
 import LoansScanInput from "../../components/ScanInput.vue";
 import LoansSignaturePad from "../../components/SignaturePad.vue";
 import LoansContactPicker from "../../components/ContactPicker.vue";
-import LoansSteps from "../../components/Steps.vue";
 
 const { kiosk, url } = useSurface();
 

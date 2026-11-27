@@ -149,6 +149,7 @@ class AppServiceProvider extends ServiceProvider
 
         $navigation->add('inventory', 'Gegenstände', 'inventory.items.index', 'boxes-stacked', 'inventory.view', mobile: true, order: 10);
         // on phones "Scannen" has the place in the bottom bar, "Umlagern" is under "Mehr"
+        $navigation->add('inventory', 'Erfassen', 'inventory.capture', 'plus', 'inventory.edit', mobile: true, order: 12);
         $navigation->add('inventory', 'Scannen', 'inventory.scan', 'qrcode', 'inventory.view', mobile: true, order: 15);
         $navigation->add('inventory', 'Umlagern', 'inventory.move', 'right-left', 'inventory.move', order: 20);
         $navigation->add('inventory', 'Ohne Platz', 'inventory.items.misplaced', 'circle-question', 'inventory.view', order: 30);

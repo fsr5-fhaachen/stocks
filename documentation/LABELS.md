@@ -135,7 +135,7 @@ Gedruckt wird immer über die Vorschau `GET /labels/print` (`labels.print`) mit 
 
 Höchstens 500 Etiketten je Druck. Bei mehreren Etiketten wählt man „Alle drucken“ oder „Einzeln“: Dann zeigt eine Liste alle Etiketten zum Ankreuzen, gedruckt (und als gedruckt vermerkt) werden nur die angekreuzten; ein Tipp auf eine Zeile zeigt das Etikett in der Vorschau. Jede Art druckt mit ihrer Vorlage (vorausgewählt die Standardvorlage), Anpassungen gelten für den ganzen Stapel; „Als Vorlage speichern“ übernimmt sie (`labels.manage`). Durch einen Stapel blättert man mit den Pfeilen. Der zuletzt benutzte Drucker liegt im Browser (`localStorage.labelPrinter`), weil ein Bluetooth-Drucker zu einem Gerät gehört.
 
-Nach dem Druck setzt `POST /labels/printed` `items.label_printed_at` bzw. `locations.label_printed_at` (als Abfrage, ohne Audit und ohne `updated_at`). Ein heruntergeladenes Bild zählt als Druck. Die Gegenstandsliste und die Standortliste haben den Filter „Noch ohne Etikett“; die Seite eines Gegenstands zeigt das Datum und bietet „Etikett drucken“ an, solange nie gedruckt wurde. Nach dem Teilen eines Mengenartikels bietet die Erfolgsmeldung „Etikett drucken“ für den neuen Teil an (Flash `label`).
+Nach dem Druck setzt `POST /labels/printed` `items.label_printed_at` bzw. `locations.label_printed_at` (als Abfrage, ohne Audit und ohne `updated_at`). Ein heruntergeladenes Bild zählt auf der Druckseite als Druck. Beim [Erfassen](INVENTORY.md#erfassen) nicht: Dort zählen nur der Direktdruck (bei Abbruch nur die gedruckten Etiketten) und das Häkchen „Etikett wurde aufgeklebt“; `useLabelPrinting` gibt dafür nach dem Direktdruck die Zahl der gedruckten Etiketten an `afterPrint` weiter. Die Gegenstandsliste und die Standortliste haben den Filter „Noch ohne Etikett“; die Seite eines Gegenstands zeigt das Datum und bietet „Etikett drucken“ an, solange nie gedruckt wurde. Nach dem Teilen eines Mengenartikels bietet die Erfolgsmeldung „Etikett drucken“ für den neuen Teil an (Flash `label`).
 
 ## Drucker und Treiber
 
@@ -222,7 +222,7 @@ Scannen braucht `inventory.view`, die Aktionen die Rechte des Inventars. Einen G
 | `app/Http/Controllers/Inventory/ScanController.php`, `ContentsPdfController.php` | Scan-Seite, Box-PDF |
 | `app/Http/Controllers/WebAppController.php` | Manifest und Symbole |
 | `resources/js/labels` | `render.ts` (Zeichnen), `drivers/` (Papier, Niimbot, Bild), `zip.ts` |
-| `resources/js/components/labels` | Editor, Inhaltsliste der öffentlichen Ansicht |
+| `resources/js/components/labels` | Editor, `Preview` (nur ansehen), Inhaltsliste der öffentlichen Ansicht |
 | `resources/js/pages/Labels`, `resources/js/pages/Public` | Seiten |
 | `database/migrations/2026_11_11_000000_create_label_tables.php` | Tabellen, Spalten und mitgelieferte Daten |
 | `tests/Feature/Labels` | Tests |
