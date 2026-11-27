@@ -21,6 +21,7 @@ use App\Http\Controllers\Inventory\ItemPhotoController;
 use App\Http\Controllers\Inventory\LocationController;
 use App\Http\Controllers\Inventory\MoveController;
 use App\Http\Controllers\Inventory\ScanController;
+use App\Http\Controllers\Inventory\StockController;
 use App\Http\Controllers\Inventory\UnitController;
 use App\Http\Controllers\Labels\DemoSheetController;
 use App\Http\Controllers\Labels\PrintController;
@@ -119,6 +120,10 @@ Route::middleware('auth')->group(function () {
             Route::post('/items/{item}/photos', [ItemPhotoController::class, 'store'])->name('items.photos.store');
             Route::post('/items/{item}/photos/{photo}/cover', [ItemPhotoController::class, 'cover'])->scopeBindings()->name('items.photos.cover');
             Route::delete('/items/{item}/photos/{photo}', [ItemPhotoController::class, 'destroy'])->scopeBindings()->name('items.photos.destroy');
+            // stock of bulk items: "Wareneingang", counting and target of a place (documentation/INVENTORY.md)
+            Route::get('/stock-in', [StockController::class, 'index'])->name('stock-in');
+            Route::post('/stock-in', [StockController::class, 'receive'])->name('stock-in.store');
+            Route::post('/items/{item}/stocks', [StockController::class, 'update'])->name('items.stocks.update');
         });
 
         Route::get('/items/{item}', [ItemController::class, 'show'])->name('items.show');
@@ -129,6 +134,7 @@ Route::middleware('auth')->group(function () {
             Route::post('/items/{item}/return-home', [ItemController::class, 'returnHome'])->name('items.return-home');
             Route::post('/items/{item}/condition', [ItemController::class, 'changeCondition'])->name('items.condition');
             Route::post('/items/{item}/consume', [ItemController::class, 'consume'])->name('items.consume');
+            Route::post('/stocks/fill', [StockController::class, 'fill'])->name('stocks.fill');
         });
 
         Route::middleware('can:inventory.retire')->group(function () {

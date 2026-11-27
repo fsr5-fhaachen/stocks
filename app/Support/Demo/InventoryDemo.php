@@ -7,6 +7,7 @@ use App\Actions\Inventory\CreateItem;
 use App\Actions\Inventory\MoveItem;
 use App\Actions\Inventory\RetireItem;
 use App\Actions\Inventory\SaveLocation;
+use App\Actions\Inventory\StockBook;
 use App\Actions\Labels\ReserveNumbers;
 use App\Enums\ItemKind;
 use App\Enums\LocationType;
@@ -138,6 +139,7 @@ class InventoryDemo implements DemoPart
         private readonly ChangeItemCondition $changeCondition,
         private readonly ReserveNumbers $reserveNumbers,
         private readonly ItemNumbers $numbers,
+        private readonly StockBook $stock,
     ) {}
 
     /**
@@ -255,6 +257,9 @@ class InventoryDemo implements DemoPart
             // a bulk item at two places: some of its pieces moved into a box
             $spread = $this->createBulk($demo, 'Möbel', $second, 20);
             $this->moveItem->handle($demo->actor, $spread, $this->boxes[0], 5, 'Für die Partybox.');
+            // the box should hold 8 ("Sollmenge", 5 of 8: "Auffüllen"); new pieces wait in "Eingang"
+            $this->stock->setTarget($spread, $this->boxes[0], 8);
+            $this->stock->receive($demo->actor, $spread, 6, note: 'Bestellung');
             // captured without place: the pieces wait in "Eingang", the home is a suggestion
             $this->createBulk($demo, 'Kabel', null, null, 'neu', $first);
 
@@ -264,7 +269,7 @@ class InventoryDemo implements DemoPart
                 $demo->label($consumable->number, $consumable->name, 'Verbrauchsmaterial', 'Karte mit Knopf „Verbraucht“.');
                 $demo->label($defect->number, $defect->name, 'Defekter Gegenstand', 'Zustand rot; nicht verleihbar.');
                 $demo->label($retired->number, $retired->name, 'Ausgemustert', 'Karte „ausgemustert“, keine Aktionen.');
-                $demo->label($spread->number, $spread->name, 'Mengenartikel an zwei Stellen', "15 in {$second->full_code}, 5 in {$this->boxes[0]->number}; Umlagern fragt „Von“.");
+                $demo->label($spread->number, $spread->name, 'Mengenartikel an zwei Stellen', "15 in {$second->full_code}, 5 von soll 8 in {$this->boxes[0]->number}, 6 im Eingang; Umlagern fragt „Von“, die Box bietet „Auffüllen“.");
                 $demo->label($hint->number, $hint->name, 'Mit Hinweis und Fotos', 'Karte mit Foto; Etikett trägt „Achtung, zerbrechlich“.');
             }
         }

@@ -220,6 +220,25 @@
             Etiketten für den Inhalt
           </UiButton>
           <UiButton
+            v-if="can('inventory.move') && !item.retired_at"
+            variant="secondary"
+            size="sm"
+            icon="box-open"
+            @click="packOpen = 'box'"
+          >
+            Mengenartikel einpacken
+          </UiButton>
+          <UiButton
+            v-if="can('inventory.move') && hasShort && !item.retired_at"
+            variant="secondary"
+            size="sm"
+            icon="fill-drip"
+            :disabled="filling"
+            @click="fill"
+          >
+            Auffüllen
+          </UiButton>
+          <UiButton
             variant="secondary"
             size="sm"
             icon="file-pdf"
@@ -347,6 +366,8 @@
         @move="openMove"
         @consume="openConsume"
         @retire="openRetire"
+        @pack="packOpen = 'item'"
+        @edit="editStock = $event"
       />
       <UiCard v-else title="Ort">
         <dl class="space-y-4">
@@ -554,6 +575,26 @@
     :conditions="conditions"
     @close="conditionOpen = false"
     @done="conditionOpen = false"
+  />
+
+  <!-- "Einpacken": pieces of this bulk item into a box or to a location; on a box: pieces of a
+       scanned bulk item into this box -->
+  <InventoryPackModal
+    v-if="packOpen"
+    :item="packOpen === 'item' ? item : null"
+    :target="packOpen === 'box' ? item.number : null"
+    :title="packOpen === 'box' ? 'Mengenartikel einpacken' : 'Einpacken'"
+    @close="packOpen = null"
+    @done="packOpen = null"
+  />
+  <!-- count a place and set its target ("Sollmenge") -->
+  <InventoryStockEditModal
+    v-if="editStock"
+    :item-id="item.id"
+    :unit="item.unit"
+    :stock="editStock"
+    @close="editStock = null"
+    @done="editStock = null"
   />
 
   <!-- consume: quick action for consumables -->
@@ -902,6 +943,25 @@ const retireOpen = ref(false);
 // consume a part of a consumable ("verbraucht"), from one place
 const consumeOpen = ref(false);
 const consumeFrom = ref<string | null>(null);
+
+// "Einpacken" of this bulk item ("item") or into this box ("box"); counting a place
+const packOpen = ref<"item" | "box" | null>(null);
+const editStock = ref<StockEntry | null>(null);
+// "Auffüllen": bulk pieces below their target in this box get the difference from "Eingang"
+const hasShort = computed(() =>
+  props.item.contents.some((entry) => entry.stock?.short),
+);
+const filling = ref(false);
+const fill = () =>
+  router.post(
+    "/inventory/stocks/fill",
+    { code: props.item.number },
+    {
+      preserveScroll: true,
+      onStart: () => (filling.value = true),
+      onFinish: () => (filling.value = false),
+    },
+  );
 const openConsume = (key: string | null = null) => {
   consumeFrom.value = key ?? firstSource();
   consumeOpen.value = true;

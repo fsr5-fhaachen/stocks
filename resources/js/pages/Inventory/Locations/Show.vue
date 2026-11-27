@@ -27,6 +27,23 @@
       Gegenstand hier anlegen
     </UiButton>
     <UiButton
+      v-if="canStock"
+      variant="secondary"
+      icon="box-open"
+      @click="packOpen = true"
+    >
+      Mengenartikel einräumen
+    </UiButton>
+    <UiButton
+      v-if="canStock && stocks.some((entry) => entry.stock.short)"
+      variant="secondary"
+      icon="fill-drip"
+      :disabled="filling"
+      @click="fill"
+    >
+      Auffüllen
+    </UiButton>
+    <UiButton
       v-if="can('labels.print')"
       variant="secondary"
       icon="tag"
@@ -150,6 +167,14 @@
     </UiCard>
   </div>
 
+  <InventoryPackModal
+    v-if="packOpen"
+    :target="location.full_code"
+    title="Mengenartikel einräumen"
+    @close="packOpen = false"
+    @done="packOpen = false"
+  />
+
   <InventoryLocationModal
     v-if="editOpen"
     :location="location"
@@ -160,7 +185,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
+import { router } from "@inertiajs/vue3";
 
 type LocationSummary = {
   id: number;
@@ -177,7 +203,7 @@ type LocationSummary = {
  * A location with the locations and the items directly in it. Items in boxes are listed on the
  * page of the box.
  */
-defineProps<{
+const props = defineProps<{
   location: LocationSummary & {
     description: string | null;
   };
@@ -208,4 +234,24 @@ defineProps<{
 
 const { can } = usePermissions();
 const editOpen = ref(false);
+
+// bulk pieces: "einräumen" from another place, "Auffüllen" up to the targets from "Eingang"
+const canStock = computed(
+  () =>
+    can("inventory.move") &&
+    props.location.type !== "address" &&
+    props.location.type !== "building",
+);
+const packOpen = ref(false);
+const filling = ref(false);
+const fill = () =>
+  router.post(
+    "/inventory/stocks/fill",
+    { code: props.location.full_code },
+    {
+      preserveScroll: true,
+      onStart: () => (filling.value = true),
+      onFinish: () => (filling.value = false),
+    },
+  );
 </script>

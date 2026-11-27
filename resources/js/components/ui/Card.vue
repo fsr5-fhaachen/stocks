@@ -10,7 +10,7 @@
           {{ description }}
         </p>
       </div>
-      <div v-if="$slots.actions" class="flex gap-2">
+      <div v-if="$slots.actions" class="flex flex-wrap gap-2">
         <slot name="actions" />
       </div>
     </header>

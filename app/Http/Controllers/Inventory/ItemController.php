@@ -280,7 +280,7 @@ class ItemController extends Controller
         $found = $this->codes->find($code);
 
         if ($found instanceof Item) {
-            $found->load(['condition', 'location', 'container', 'photos', 'stocks.location', 'stocks.container']);
+            $found->load(['condition', 'location', 'container', 'photos', 'homeLocation', 'homeContainer', 'stocks.location', 'stocks.container']);
 
             return response()->json([
                 'type' => 'item',
@@ -289,6 +289,7 @@ class ItemController extends Controller
                 'kind' => $found->kind->value,
                 'retired' => $found->isRetired(),
                 'place' => Item::placeSummary($found->place()),
+                'home' => Item::placeSummary($found->home()),
                 'condition_id' => $found->condition_id,
                 'condition' => $found->condition->name,
                 'condition_is_defect' => $found->condition->is_defect,
@@ -365,9 +366,14 @@ class ItemController extends Controller
      */
     public function stats(): JsonResponse
     {
+        $incoming = ItemStock::query()->where('place_key', ItemStock::INCOMING)->where('quantity', '>', 0)
+            ->whereHas('item', fn ($query) => $query->whereNull('retired_at'));
+
         return response()->json([
             'items' => Item::active()->count(),
             'misplaced' => $this->extensions->misplaced()->count(),
+            // "Im Eingang: 12 Stück in 3 Artikeln"
+            'incoming' => ['pieces' => (int) (clone $incoming)->sum('quantity'), 'items' => $incoming->count()],
         ]);
     }
 
