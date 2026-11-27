@@ -4,6 +4,7 @@ namespace Modules\Loans\Tests;
 
 use App\Enums\ItemKind;
 use App\Models\Item;
+use App\Support\Extensions\ItemExtensions;
 use Modules\Loans\Enums\LoanStatus;
 use Modules\Loans\Models\Loan;
 use Modules\Loans\Support\Availability;
@@ -42,13 +43,12 @@ class PartialReturnTest extends LoansTestCase
         $this->assertFree($back->id);
     }
 
-    public function test_a_bulk_part_back_counts_again_before_it_is_put_away(): void
+    public function test_bulk_pieces_back_count_again_before_they_are_put_away(): void
     {
         $bulk = $this->item(['kind' => ItemKind::Bulk, 'quantity' => 10, 'unit' => 'Stück']);
         $loan = $this->issued([[$bulk, 4], $this->item()], now()->subHour(), now()->addDay());
 
-        $part = $loan->positions()->where('item_id', $bulk->id)->first()->issuedItem;
-        $this->returnPart($loan, $part->number, ['quantity' => 4]);
+        $this->returnPart($loan, $bulk->number, ['quantity' => 4]);
         // all ten again: six that stayed plus the four that came back
         $this->assertFree($bulk->id, 10);
     }
@@ -64,17 +64,16 @@ class PartialReturnTest extends LoansTestCase
         $this->assertFree($back->id);
     }
 
-    public function test_the_issue_books_back_a_part_that_is_not_put_away_yet(): void
+    public function test_pieces_not_put_away_yet_can_leave_again(): void
     {
         $bulk = $this->item(['kind' => ItemKind::Bulk, 'quantity' => 10, 'unit' => 'Stück']);
         $loan = $this->issued([[$bulk, 4], $this->item()], now()->subHour(), now()->addDay());
-        $part = $loan->positions()->where('item_id', $bulk->id)->first()->issuedItem;
-        $this->returnPart($loan, $part->number, ['quantity' => 4]);
+        $this->returnPart($loan, $bulk->number, ['quantity' => 4]);
 
-        // all ten leave with the next loan: the four that came back go to the origin first
+        // all ten leave with the next loan; the item kept its stock, nothing to book back
         $next = $this->issued([[$bulk, 10]]);
         $this->assertSame(LoanStatus::Issued, $next->status);
-        $this->assertTrue($part->refresh()->isRetired(), 'the part went back to its origin');
-        $this->assertNotNull($loan->positions()->where('item_id', $bulk->id)->first()->stowed_at);
+        $this->assertSame(10, $bulk->refresh()->quantity);
+        $this->assertSame(10, app(ItemExtensions::class)->awayQuantity($bulk));
     }
 }

@@ -111,11 +111,14 @@ class MoveTest extends TestCase
         $actor = $this->userWithPermissions('inventory.view', 'inventory.move');
         $from = Location::factory()->create(['code' => 'EU']);
         $to = Location::factory()->create(['code' => 'GO']);
-        $cables = Item::factory()->bulk(20)->at($from)->create(['name' => 'XLR-Kabel']);
+        $cables = Item::factory()->bulk(20)->at($from)->create(['name' => 'XLR-Kabel', 'label_printed_at' => now()]);
 
         $this->actingAs($actor)->post('/inventory/move', ['item_id' => $cables->id, 'target_code' => 'GO', 'quantity' => 5])->assertSessionHasNoErrors();
 
         $part = Item::where('split_from_id', $cables->id)->sole();
+        // the new number has no label yet, the origin keeps its label
+        $this->assertNull($part->label_printed_at);
+        $this->assertNotNull($cables->fresh()->label_printed_at);
         $this->assertSame(15, $cables->fresh()->quantity);
         $this->assertSame(5, $part->quantity);
         $this->assertSame('XLR-Kabel', $part->name);

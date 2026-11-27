@@ -7,7 +7,7 @@
         type="number"
         inputmode="numeric"
         required
-        :hint="`Noch da: ${item.quantity} ${item.unit ?? ''}`"
+        :hint="`Vorhanden: ${item.quantity_here ?? item.quantity} ${item.unit ?? ''}`"
         :error="form.errors.quantity"
       />
       <UiInput
@@ -34,7 +34,12 @@ import { useForm } from "@inertiajs/vue3";
  * Mark a part of a consumable as used up. Used on the item page and on the scan page.
  */
 const props = defineProps<{
-  item: { id: number; quantity: number; unit: string | null };
+  item: {
+    id: number;
+    quantity: number;
+    quantity_here?: number | null;
+    unit: string | null;
+  };
 }>();
 const emit = defineEmits<{ close: []; done: [] }>();
 const { url } = useSurface();

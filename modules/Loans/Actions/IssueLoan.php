@@ -7,6 +7,7 @@ use App\Enums\ItemKind;
 use App\Enums\MovementType;
 use App\Models\Item;
 use App\Models\ItemCondition;
+use App\Models\ItemMovement;
 use App\Models\ItemPhoto;
 use App\Models\User;
 use App\Support\Inventory\CodeLookup;
@@ -39,7 +40,8 @@ use Modules\Loans\Support\Snapshot;
  *    contents of a ticked box that is taken back stays here (leaveBehind()),
  * 3. defect(): a defect found now is documented (and may keep the row back),
  * 4. complete(): signatures (or "auf Papier"), the contract and the material list are frozen with
- *    their SHA-256 hash, the ticked items leave their place ("ausgegeben") and the time runs.
+ *    their SHA-256 hash, the ticked items leave their place ("ausgegeben") and the time runs. A
+ *    bulk item is not split: it keeps its place and stock, the row holds how many left.
  *
  * What is not ticked off is the rest (partial issue, no defect): it stays booked and leaves later
  * with the same steps and a material list of its own ("Nachtrag"; the contract is signed only the
@@ -55,7 +57,6 @@ class IssueLoan
         private readonly ConfirmLoan $confirmLoan,
         private readonly RecordDefect $recordDefect,
         private readonly ReturnLoan $returnLoan,
-        private readonly StowItem $stowItem,
         private readonly LoanNotifier $notifier,
     ) {}
 
@@ -336,15 +337,13 @@ class IssueLoan
                 $this->storeScan($issuer, $loan, $scan);
             }
 
-            // the items leave their place; the contents of a box stay in it and travel along
+            // the items leave their place; the contents of a box stay in it and travel along. A bulk
+            // item keeps its place and stock: the row says how many are out
             foreach ($leaving as $position) {
-                if ($position->item->kind === ItemKind::Bulk) {
-                    $this->restock($issuer, $position->item, $position->quantity);
-                }
-                $left = $this->moveItem->takeAway($issuer, $position->item, MovementType::Issue, $position->item->kind === ItemKind::Bulk ? $position->quantity : null, "Ausgegeben mit {$loan->number}.");
-                if ($left->isNot($position->item)) {
-                    $position->forceFill(['issued_item_id' => $left->id])->save();
-                }
+                $note = "Ausgegeben mit {$loan->number}.";
+                $position->item->kind === ItemKind::Bulk
+                    ? ItemMovement::record($position->item, MovementType::Issue, $position->item->place(), null, $issuer, $position->quantity, $note)
+                    : $this->moveItem->takeAway($issuer, $position->item, MovementType::Issue, note: $note);
             }
             LoanItem::whereIn('id', $rowIds)->update(['issued_at' => now(), 'issue_document_id' => $list->id]);
 
@@ -361,23 +360,6 @@ class IssueLoan
             // contract and material list of this issue to the borrower
             $this->notifier->toContact($loan, new LoanIssued($loan, $created));
         }));
-    }
-
-    /**
-     * Parts of a bulk item that came back and are not put away yet count as free (Availability).
-     * When the origin has too little for the issue, they go back to it first, like "Einräumen".
-     */
-    private function restock(User $actor, Item $item, int $needed): void
-    {
-        if ($item->refresh()->quantity >= $needed) {
-            return;
-        }
-        foreach (StowItem::pending()->where('item_id', $item->id)->whereNotNull('issued_item_id')->orderBy('returned_at')->get() as $row) {
-            $this->stowItem->handle($actor, $row, null);
-            if ($item->refresh()->quantity >= $needed) {
-                return;
-            }
-        }
     }
 
     /**

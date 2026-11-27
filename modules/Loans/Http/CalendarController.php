@@ -2,6 +2,7 @@
 
 namespace Modules\Loans\Http;
 
+use App\Enums\ItemKind;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Item;
@@ -12,7 +13,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
+use Modules\Loans\Actions\StowItem;
 use Modules\Loans\Enums\LoanStatus;
+use Modules\Loans\Enums\ReturnState;
 use Modules\Loans\Models\Loan;
 use Modules\Loans\Models\LoanItem;
 use Modules\Loans\Support\Availability;
@@ -84,11 +87,12 @@ class CalendarController extends Controller
 
     /**
      * Tab "Verleih" of an item (json): its loans of the coming weeks for the timeline, and all its
-     * loans as list.
+     * loans as list. Of a bulk item also the pieces that are not here right now: out with a loan,
+     * back but not put away, or missing, each with its loan and the notes of its row.
      */
     public function item(Item $item, Availability $availability): JsonResponse
     {
-        $loanIds = LoanItem::where('item_id', $item->id)->orWhere('issued_item_id', $item->id)
+        $loanIds = LoanItem::where('item_id', $item->id)
             // bookings of a box it lies in now; once issued, the contents are rows of their own
             ->orWhere(fn (Builder $query) => $query->whereIn('item_id', $availability->boxesAround($item))->whereHas('loan', fn (Builder $query) => $query->whereIn('status', [LoanStatus::Draft, LoanStatus::Confirmed])))
             ->pluck('loan_id');
@@ -98,7 +102,47 @@ class CalendarController extends Controller
             'from' => now()->startOfWeek()->subWeek()->toDateString(),
             'to' => now()->startOfWeek()->addWeeks(7)->toDateString(),
             'loans' => $loans->map(fn (Loan $loan) => $loan->summary()),
+            'pieces' => $item->kind === ItemKind::Bulk ? $this->pieces($item) : [],
         ]);
+    }
+
+    /**
+     * Pieces of a bulk item that are with a loan or missing, one entry per row and state.
+     *
+     * @return list<array{loan: array<string, mixed>, quantity: int, state: string, variant: string, notes: list<string>}>
+     */
+    private function pieces(Item $item): array
+    {
+        $rows = LoanItem::where('item_id', $item->id)
+            ->where(fn (Builder $query) => $query
+                ->where(fn (Builder $query) => $query->whereNotNull('issued_at')->whereNull('returned_at'))
+                ->orWhere(fn (Builder $query) => $query->whereIn('id', StowItem::pending()->select('id')))
+                ->orWhere(fn (Builder $query) => $query->stillMissing()))
+            ->whereHas('loan', fn (Builder $query) => $query->where('status', '!=', LoanStatus::Cancelled))
+            ->with('loan.responsible', 'loan.responsibleUser', 'loan.borrower')->orderBy('id')->get();
+
+        $pieces = [];
+        foreach ($rows as $row) {
+            $notes = array_values(array_filter([
+                $row->issueDefect() ? 'Bei der Ausgabe: '.$row->issueDefect() : null,
+                $row->return_state && $row->return_state !== ReturnState::Ok ? 'Bei der Rückgabe: '.$row->return_state->label().($row->return_note ? ": {$row->return_note}" : '') : ($row->return_note ? "Bei der Rückgabe: {$row->return_note}" : null),
+            ]));
+            $entry = fn (int $quantity, string $state, string $variant) => ['loan' => $row->loan->summary(), 'quantity' => $quantity, 'state' => $state, 'variant' => $variant, 'notes' => $notes];
+
+            if ($row->returned_at === null) {
+                $pieces[] = $entry($row->quantity, $row->loan->isOverdue() ? 'überfällig' : 'ausgegeben bis '.$row->loan->return_at->format('d.m.Y'), $row->loan->isOverdue() ? 'danger' : 'warning');
+
+                continue;
+            }
+            if ($row->stowed_at === null && ($back = $row->returned_quantity ?? $row->quantity) > 0) {
+                $pieces[] = $entry($back, 'zurück, noch nicht eingeräumt', 'neutral');
+            }
+            if ($row->missing_quantity > 0 && $row->missing_resolution === null) {
+                $pieces[] = $entry($row->missing_quantity, 'vermisst seit '.$row->returned_at->format('d.m.Y'), 'danger');
+            }
+        }
+
+        return $pieces;
     }
 
     /**

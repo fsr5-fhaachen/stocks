@@ -44,7 +44,9 @@ Stocks hat mehrere Oberflächen für dieselben Vorgänge. Wenn ein Vorgang neu d
 | Umlagern über den Gegenstand | ✓ | ✓ | n. v. | Dialog mit Ortsvorschlägen |
 | Zustand ändern mit Begründung und Fotos | ✓ | ✓ | ✓ | Zustände kommen aus der Liste der Einstellungen; Fotos werden nacheinander hinzugefügt (`UiPhotoPicker`), auch einzeln mit der Handykamera |
 | Rückfrage bei gebuchtem Material („Ja, trotzdem“) | ✓ | ✓ | ✓ | vor Ausmustern, Verbrauchen, Abteilen (Umlagern einer Teilmenge) und einem Zustand, der als Schaden gilt, wenn eine bestätigte Buchung oder ein Rest damit rechnet; `InventoryReservedConfirm` in den Dialogen, auf „Scannen“ und „Umlagern“ |
-| Abgeteilten Teil zurückbuchen | ✓ | ✓ | ✓ | Knopf am Teil oder Ursprungsnummer als Ziel scannen |
+| Abgeteilten Teil zurückbuchen | ✓ | ✓ | ✓ | Knopf am Teil oder Ursprungsnummer als Ziel scannen; abgeteilt wird nur noch beim Umlagern einer Teilmenge, nicht mehr im Verleih (27.11.2026) |
+| Mengenartikel: „Vorhanden“ (Bestand ohne verliehene und vermisste Stücke, 27.11.2026) | ✓ | ✓ | ✓ (Scan-Karte) | Seite: Feld „Vorhanden“; Scan-Karte „(38 vorhanden)“; Liste „38 / 50“; Hinweise in Umlagern, Verbrauchen, Ausmustern |
+| Mengenartikel: was gerade nicht hier ist (27.11.2026) | ✓ | ✓ | n. v. | Reiter „Verleih“ am Gegenstand, Abschnitt „Gerade nicht hier“: je Buchung Anzahl, Zustand (ausgegeben, zurück nicht eingeräumt, vermisst) und Notizen; Hinweis „12 Stück ausgegeben an …“ ohne Sperre; der Kiosk hat keine Gegenstandsseite mit Reitern |
 | **Verbraucht** (Verbrauchsmaterial ausbuchen) | ✓ | ✓ | ✓ | eigener Knopf, nur wenn die Einheit Verbrauchsmaterial ist |
 | Ausmustern, auch Teilmengen | ✓ | ✓ | n. v. | Recht `inventory.retire` |
 | Verlaufseintrag löschen | ✓ | ✓ | n. v. | nur Admin |
@@ -98,7 +100,7 @@ Seit Phase 3, siehe [LOANS.md](LOANS.md). Ausgabe, Rückgabe, Prüfung und Einr�
 | Box-Kontrolle mit Pack-PIN | n. v. | n. v. | n. v. | ✓ | Pack-PIN sichtbar | auf `/s/{code}` der Box, ohne Konto; nach fünf falschen PINs 15 Minuten warten (je Box und Adresse) |
 | Rückgabe in Schritten (Material, Übersicht, Unterschriften) per Scan, Teilrückgabe, Mängel mit Foto | ✓ | ✓ | ✓ | n. v. | n. v. | „Rückgabe dieser Buchung“ auch auf der Scan-Karte; eine abgehakte Box hakt ihren Inhalt mit ab (auch bei der Ausgabe); am Handy Name oben, Anzahl und Mangel darunter |
 | Ungeprüft annehmen, spätere Prüfung | ✓ | ✓ | ✓ | n. v. | n. v. | Liste „Prüfung offen“ unter Verleih › Rückgaben |
-| Einräumen per Scan (Gegenstand, dann Regal) | ✓ | ✓ | ✓ | n. v. | n. v. | Liste „Noch nicht eingeräumt“ mit Knopf „Einräumen“ je Zeile; Tipp auf den Gegenstand öffnet am PC seine Seite, am Kiosk ein Info-Fenster; „Einräumen“ auf der Scan-Karte |
+| Einräumen per Scan (Gegenstand, dann Regal; Mengenartikel: Scan ihres Ortes bestätigt, ein anderer Ort wird abgelehnt, seit 27.11.2026) | ✓ | ✓ | ✓ | n. v. | n. v. | Liste „Noch nicht eingeräumt“ mit Knopf „Einräumen“ je Zeile; Tipp auf den Gegenstand öffnet am PC seine Seite, am Kiosk ein Info-Fenster; „Einräumen“ auf der Scan-Karte |
 | Mängel abschließen | ✓ | ✓ | ✓ | n. v. | Mängel sichtbar | Recht `loans.cancel`; was noch vermisst ist, wird als verloren ausgemustert; am Kiosk im Fenster der Buchung (Liste „Mit Mängeln“) |
 | Vermisstes „Wieder da“ | ✓ | ✓ | ✓ | n. v. | n. v. | auf der Buchung (Abschnitt „Vermisst“), Hinweis mit Link auf Seite und Scan-Karte des Gegenstands; Recht `loans.issue`; am Kiosk im Fenster der Buchung |
 | Kontakte, Fachschaften, Veranstaltungen | ✓ | ✓ | n. v. | n. v. | n. v. | Fachschaften unter Verwaltung › Einstellungen › Verleih |

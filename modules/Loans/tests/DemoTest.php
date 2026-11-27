@@ -23,6 +23,7 @@ use Modules\Loans\Models\LoanItem;
 use Modules\Loans\Models\LoanMessage;
 use Modules\Loans\Models\LoanNotification;
 use Modules\Loans\Support\Availability;
+use Modules\Loans\Support\LoanAwayItems;
 
 /**
  * Demo data of the loan module and the full test sheet (documentation/DEMO.md).
@@ -50,6 +51,7 @@ class DemoTest extends LoansTestCase
         $this->assertGreaterThan(1, LoanBoxCheck::count());
         $this->assertGreaterThan(1, StowItem::pending()->count());
         $this->assertTrue(LoanItem::stillMissing()->exists(), 'vermisst');
+        $this->assertTrue(LoanAwayItems::bulkPositions(LoanAwayItems::issuedRows())->exists(), 'Mengenartikel teils ausgegeben');
         $this->assertTrue(Contact::whereNull('phone')->exists());
         $this->assertTrue(Contact::whereNull('council_id')->exists() && Contact::whereNotNull('council_id')->exists());
         $this->assertTrue(Loan::where('status', LoanStatus::ClosedWithDefects)->whereNotNull('defects_closed_at')->exists());

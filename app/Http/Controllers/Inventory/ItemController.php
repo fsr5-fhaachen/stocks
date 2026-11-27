@@ -110,6 +110,8 @@ class ItemController extends Controller
         return Inertia::render('Inventory/Items/Show', [
             'item' => [
                 ...$item->only(['id', 'number', 'name', 'description', 'quantity', 'unit', 'is_container', 'public_contents', 'notes', 'retired_note', 'label_hint']),
+                // pieces of a bulk item that are there ("vorhanden"), without those lent or missing
+                'quantity_here' => $item->kind === ItemKind::Bulk ? $this->extensions->quantityHere($item) : null,
                 'label_printed_at' => $item->label_printed_at?->toIso8601String(),
                 'kind' => $item->kind->value,
                 'kind_label' => $item->kind->label(),
@@ -275,6 +277,7 @@ class ItemController extends Controller
             return response()->json([
                 'type' => 'item',
                 ...$found->only(['id', 'number', 'name', 'quantity', 'unit', 'is_container', 'split_from_id']),
+                'quantity_here' => $found->kind === ItemKind::Bulk ? $this->extensions->quantityHere($found) : null,
                 'kind' => $found->kind->value,
                 'retired' => $found->isRetired(),
                 'place' => Item::placeSummary($found->place()),

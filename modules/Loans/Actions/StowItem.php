@@ -2,10 +2,8 @@
 
 namespace Modules\Loans\Actions;
 
-use App\Actions\Inventory\MergeItem;
 use App\Actions\Inventory\MoveItem;
-use App\Actions\Inventory\RetireItem;
-use App\Enums\RetireReason;
+use App\Enums\ItemKind;
 use App\Models\Item;
 use App\Models\Location;
 use App\Models\User;
@@ -19,16 +17,15 @@ use Modules\Loans\Models\LoanItem;
 
 /**
  * Put an item back after the return ("Einräumen"). Stocks shows the home; the scan of the shelf
- * confirms it and moves the item there. A split off part of a bulk item goes back to its origin
- * instead (MergeItem). Until then the item is "angenommen, noch nicht eingeräumt".
+ * confirms it and moves the item there. A bulk item keeps its place during the loan: the scan
+ * must name that place and only confirms it. Until then the item is "angenommen, noch nicht
+ * eingeräumt".
  */
 class StowItem
 {
     public function __construct(
         private readonly CodeLookup $codes,
         private readonly MoveItem $moveItem,
-        private readonly MergeItem $mergeItem,
-        private readonly RetireItem $retireItem,
     ) {}
 
     /**
@@ -47,14 +44,18 @@ class StowItem
                 ->where(fn (Builder $query) => $query->whereNull('parent_id')->where(fn (Builder $query) => $query->whereNull('return_state')->orWhere('return_state', '!=', ReturnState::Missing)->orWhere('returned_quantity', '>', 0)))
                 ->orWhere('missing_resolution', 'found'))
             ->whereHas('loan', fn (Builder $query) => $query->where('status', '!=', LoanStatus::Cancelled))
+            // a bulk item keeps its place and waits until someone confirms it; a single item waits
+            // as long as it has no place (one that got a place some other way counts as put back)
             ->where(fn (Builder $query) => $query
-                ->whereHas('issuedItem', fn (Builder $query) => $query->whereNull('retired_at'))
-                ->orWhere(fn (Builder $query) => $query->whereNull('issued_item_id')->whereHas('item', fn (Builder $query) => $query->whereNull('retired_at')->whereNull('location_id')->whereNull('container_id'))));
+                ->where(fn (Builder $query) => $query->whereNull('parent_id')->whereHas('item', fn (Builder $query) => $query->whereNull('retired_at')->where('kind', ItemKind::Bulk)))
+                ->orWhereHas('item', fn (Builder $query) => $query->whereNull('retired_at')->whereNull('location_id')->whereNull('container_id')));
     }
 
     /**
-     * Put the item of a position at the scanned place (a split off part goes to its origin, the
-     * code is not needed then).
+     * Put the item of a position at the scanned place. A bulk item that has a place is not moved:
+     * the scanned place must be its place, which confirms that the pieces are back there; another
+     * place is refused with a hint. A bulk item without place (issued as a whole before bulk items
+     * stopped being split) is put at the scanned place like a single item.
      *
      * @throws ValidationException
      */
@@ -66,26 +67,21 @@ class StowItem
             if (! self::pending()->whereKey($row->id)->exists()) {
                 throw ValidationException::withMessages(['code' => 'Die Position wartet nicht aufs Einräumen.']);
             }
-            $row->refresh()->load(['item', 'issuedItem', 'loan']);
-
-            $returned = $row->returned_quantity ?? $row->quantity;
-
-            // a split off part: the quantity that came back goes to the origin
-            if ($row->issuedItem !== null) {
-                $origin = $this->mergeItem->handle($actor, $row->issuedItem, min($returned, $row->issuedItem->quantity), "Rückgabe {$row->loan->number}.");
-                $row->forceFill(['stowed_at' => now()])->save();
-
-                return "{$returned} {$origin->unit} zurück zu {$origin->number}.";
-            }
+            $row->refresh()->load(['item', 'loan']);
 
             $place = $this->codes->findPlace((string) $code)
                 ?? throw ValidationException::withMessages(['code' => $this->codes->notFoundMessage((string) $code, place: true)]);
             $item = $row->item;
 
-            // a whole bulk item that came back incomplete: the rest is lost
-            $short = $row->isBulk() ? $item->quantity - $returned : 0;
-            if ($short > 0) {
-                $this->retireItem->handle($actor, $item, RetireReason::Lost, "Fehlt nach {$row->loan->number}.", $short);
+            if ($row->isBulk() && ($current = $item->place()) !== null) {
+                if (! $current->is($place)) {
+                    throw ValidationException::withMessages(['code' => "{$item->number} gehört nach {$this->codeOf($current)}, nicht nach {$this->codeOf($place)}. Dort einräumen oder {$item->number} vorher umlagern."]);
+                }
+                $row->forceFill(['stowed_at' => now()])->save();
+                // what came back, plus missing pieces that turned up again
+                $returned = ($row->returned_quantity ?? $row->quantity) + ($row->missing_resolution === 'found' ? (int) $row->missing_quantity : 0);
+
+                return "{$returned} {$item->unit} von {$item->number} liegen wieder in {$this->codeOf($place)}.";
             }
 
             $this->moveItem->handle($actor, $item, $place, note: "Eingeräumt nach {$row->loan->number}.");
