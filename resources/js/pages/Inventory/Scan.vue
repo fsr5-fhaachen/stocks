@@ -46,38 +46,22 @@
 
     <div class="space-y-4">
       <!-- second step of moving, or putting everything at one place -->
-      <UiAlert v-if="mode?.type === 'move'" type="info">
-        <strong>{{ moveTitle }}:</strong> {{ mode.item.number }}
-        {{ mode.item.name }}
-        <template v-if="mode.item.kind === 'bulk' && moveMode !== 'home'">
-          ({{ moveQuantity }} {{ mode.item.unit }})</template
-        >. Scanne jetzt das Ziel.
-        <button
-          type="button"
-          class="ml-1 font-bold underline"
-          @click="mode = null"
-        >
-          Abbrechen
-        </button>
-        <InventoryMoveTargetSwitch v-model="moveMode" class="mt-2 flex w-fit" />
-      </UiAlert>
-      <UiAlert v-if="mode?.type === 'here'" type="info">
-        <strong>{{ hereTitle }}:</strong>
-        {{
-          moveMode === "home"
-            ? `Jeder gescannte Gegenstand bekommt ${mode.code} als Stammplatz.`
-            : moveMode === "both"
-              ? `Jeder gescannte Gegenstand kommt nach ${mode.code}, das wird auch sein Stammplatz.`
-              : `Jeder gescannte Gegenstand kommt nach ${mode.code}.`
-        }}
-        <button
-          type="button"
-          class="ml-1 font-bold underline"
-          @click="mode = null"
-        >
-          Beenden
-        </button>
-        <InventoryMoveTargetSwitch v-model="moveMode" class="mt-2 flex w-fit" />
+      <UiAlert v-if="mode" type="info">
+        <p>
+          <strong>{{ mode.type === "move" ? moveTitle : hereTitle }}:</strong>
+          {{ modeText }}
+        </p>
+        <!-- switch left, leaving the mode right: stays in place however long the text is -->
+        <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <InventoryMoveTargetSwitch v-model="moveMode" />
+          <button
+            type="button"
+            class="font-bold underline"
+            @click="mode = null"
+          >
+            {{ mode.type === "move" ? "Abbrechen" : "Beenden" }}
+          </button>
+        </div>
       </UiAlert>
       <UiAlert v-if="error" type="error">{{ error }}</UiAlert>
       <InventoryReservedConfirm
@@ -380,6 +364,27 @@ const moveTitle = computed(
       both: "Umlagern mit Stammplatz",
     })[moveMode.value],
 );
+// text of the move and "Hierher umlagern" notices, built here so no stray space lands before the
+// full stop
+const modeText = computed(() => {
+  const current = mode.value;
+  if (current?.type === "move") {
+    const { item } = current;
+    const amount =
+      item.kind === "bulk" && moveMode.value !== "home"
+        ? ` (${moveQuantity.value} ${item.unit})`
+        : "";
+    return `${item.number} ${item.name}${amount}. Scanne jetzt das Ziel.`;
+  }
+  if (current?.type === "here") {
+    return {
+      place: `Jeder gescannte Gegenstand kommt nach ${current.code}.`,
+      home: `Jeder gescannte Gegenstand bekommt ${current.code} als Stammplatz.`,
+      both: `Jeder gescannte Gegenstand kommt nach ${current.code}, das wird auch sein Stammplatz.`,
+    }[moveMode.value];
+  }
+  return "";
+});
 const hereTitle = computed(
   () =>
     ({

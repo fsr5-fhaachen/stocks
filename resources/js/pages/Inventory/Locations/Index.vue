@@ -165,6 +165,10 @@ const childTypes: Record<LocationType, LocationType[]> = {
   compartment: [],
 };
 
+// full codes as people count: R01.2 before R01.10 (App\Models\Location::naturally)
+const byCode = (a: string, b: string) =>
+  a.localeCompare(b, "de", { numeric: true });
+
 const tree = computed(() => {
   const children = new Map<number | null, LocationRow[]>();
   for (const location of props.locations) {
@@ -175,7 +179,10 @@ const tree = computed(() => {
   }
   const rows: { location: LocationRow; depth: number }[] = [];
   const walk = (parentId: number | null, depth: number) => {
-    for (const location of children.get(parentId) ?? []) {
+    const siblings = [...(children.get(parentId) ?? [])].sort((a, b) =>
+      byCode(a.full_code, b.full_code),
+    );
+    for (const location of siblings) {
       rows.push({ location, depth });
       walk(location.id, depth + 1);
     }
@@ -232,11 +239,13 @@ const unlabeled = computed(() =>
 );
 const visible = computed(() =>
   labelFilter.value
-    ? props.locations.filter(
-        (location) =>
-          location.type !== "address" &&
-          labelStatus(location) === labelFilter.value,
-      )
+    ? props.locations
+        .filter(
+          (location) =>
+            location.type !== "address" &&
+            labelStatus(location) === labelFilter.value,
+        )
+        .sort((a, b) => byCode(a.full_code, b.full_code))
     : tree.value
         .map((row) => row.location)
         .filter((location) => !isHidden(location)),

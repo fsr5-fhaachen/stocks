@@ -27,7 +27,7 @@ class LocationController extends Controller
     public function index(): Response
     {
         return Inertia::render('Inventory/Locations/Index', [
-            'locations' => Location::withCount(['items' => fn ($query) => $query->active()])->orderBy('full_code')->get()
+            'locations' => Location::naturally(Location::withCount(['items' => fn ($query) => $query->active()])->get())
                 ->map(fn (Location $location) => [
                     ...$location->summary(),
                     'parent_id' => $location->parent_id,
@@ -52,7 +52,7 @@ class LocationController extends Controller
         return Inertia::render('Inventory/Locations/Show', [
             'location' => [...$location->summary(), 'parent_id' => $location->parent_id, 'description' => $location->description, 'label_printed_at' => $location->label_printed_at?->toIso8601String(), 'no_label' => $location->no_label],
             'path' => $path,
-            'children' => $location->children()->withCount(['items' => fn ($query) => $query->active()])->get()
+            'children' => Location::naturally($location->children()->withCount(['items' => fn ($query) => $query->active()])->get(), 'code')
                 ->map(fn (Location $child) => [...$child->summary(), 'items_count' => $child->items_count]),
             'items' => $location->items()->active()->withCount('contents')->orderBy('name')->get()
                 ->map(fn (Item $item) => [
@@ -61,7 +61,7 @@ class LocationController extends Controller
                 ]),
             // for moving the location to another parent
             'locations' => fn () => request()->user()->can('locations.manage')
-                ? Location::orderBy('full_code')->get()->map(fn (Location $other) => $other->summary())
+                ? Location::naturally(Location::all())->map(fn (Location $other) => $other->summary())
                 : [],
         ]);
     }
