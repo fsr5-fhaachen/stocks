@@ -27,9 +27,10 @@ export const pxPerMmOf = (printer: PrinterData) =>
     : PAPER_PX_PER_MM;
 
 /**
- * Draw a label as the printer gets it. For niimbot printers in its dots, turned and shifted by
- * the settings of the printer and in hard black and white; "crop" cuts it to the print head (direct
- * print), without it the image keeps the full label size for the Niimbot app (50 × 30 mm → 400 × 240).
+ * Draw a label as the printer gets it. For niimbot printers in its dots and in hard black and
+ * white. "crop" is the direct print: turned and shifted by the settings of the printer and cut to
+ * the print head. Without it the image is for the Niimbot app: full label size (50 × 30 mm →
+ * 400 × 240), upright and centred, because the app places it on the label itself.
  */
 export const renderForPrinter = (
   label: PrintLabel,
@@ -50,6 +51,11 @@ export const renderForPrinter = (
     return { canvas, problems };
   }
 
+  if (!crop) {
+    toMonochrome(canvas);
+    return { canvas, problems };
+  }
+
   const prepared = transform(
     canvas,
     printer.settings.rotation ?? 0,
@@ -57,8 +63,7 @@ export const renderForPrinter = (
     (printer.settings.offset_y ?? 0) * k,
   );
   const head = Math.round((printer.model?.max_width_mm ?? Infinity) * k);
-  const result =
-    crop && prepared.width > head ? cropMiddle(prepared, head) : prepared;
+  const result = prepared.width > head ? cropMiddle(prepared, head) : prepared;
   toMonochrome(result);
 
   return { canvas: result, problems };
