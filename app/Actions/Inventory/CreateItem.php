@@ -8,6 +8,7 @@ use App\Models\Item;
 use App\Models\ItemCondition;
 use App\Models\ItemMovement;
 use App\Models\ItemPhoto;
+use App\Models\ItemStock;
 use App\Models\Location;
 use App\Models\ReservedNumber;
 use App\Models\User;
@@ -19,7 +20,8 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Create an item with a new number at its first place, or with the number of a stock label
- * (App\Models\ReservedNumber).
+ * (App\Models\ReservedNumber). The pieces of a bulk item go to the place as its stock, without
+ * place into the virtual compartment "Eingang".
  */
 class CreateItem
 {
@@ -45,9 +47,15 @@ class CreateItem
             }
             $item->condition()->associate($condition);
             $item->number = $reserved ? $this->useReserved($reserved) : $this->numbers->next();
-            $item->setPlace($place);
+            // a bulk item has no place of its own: its pieces lie at the place, without one in "Eingang"
+            $item->setPlace($item->isBulk() ? null : $place);
             $item->setHome($home);
             $item->save();
+            if ($item->isBulk() && $item->quantity > 0) {
+                $stock = ItemStock::for($item, $place);
+                $stock->quantity = $item->quantity;
+                $stock->save();
+            }
 
             ItemMovement::record($item, MovementType::Create, null, $place, $actor);
 

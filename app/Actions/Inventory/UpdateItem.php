@@ -3,9 +3,8 @@
 namespace App\Actions\Inventory;
 
 use App\Enums\ItemKind;
-use App\Enums\MovementType;
 use App\Models\Item;
-use App\Models\ItemMovement;
+use App\Models\ItemStock;
 use App\Models\Location;
 use App\Models\User;
 use App\Support\Extensions\ItemExtensions;
@@ -14,7 +13,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Change the data and the home of an item. A changed quantity is logged as counting.
+ * Change the data and the home of an item. The quantity of a bulk item does not change here: its
+ * stock changes through StockBook (Wareneingang, Zählen, Verbraucht). Turning a single item into a
+ * bulk item puts the piece as stock at its place.
  *
  * Place and condition do not change here, see MoveItem and ChangeItemCondition.
  */
@@ -31,31 +32,49 @@ class UpdateItem
     {
         Placement::check($item, $home, 'home');
 
+        $wasBulk = $item->isBulk();
         $oldQuantity = $item->quantity;
-        // pieces a module has away (lent, missing) belong to the stock: it can not drop below them
-        $away = $item->kind === ItemKind::Bulk ? $this->extensions->awayQuantity($item) : 0;
+        $place = $item->place();
         $item->fill($data);
-        if ($away > 0 && $item->kind !== ItemKind::Bulk) {
-            throw ValidationException::withMessages(['kind' => "{$away} {$item->unit} von {$item->number} sind gerade weg (verliehen oder vermisst). Die Art lässt sich erst danach ändern."]);
+
+        // the stock of a bulk item changes through StockBook (Wareneingang, Zählen, Verbraucht),
+        // never through the form
+        if ($wasBulk && $item->isBulk()) {
+            $item->quantity = $oldQuantity;
         }
-        if ($away > 0 && $item->quantity < $away) {
-            throw ValidationException::withMessages(['quantity' => "Die Menge ist der ganze Bestand und schließt die {$away} {$item->unit} ein, die gerade weg sind (verliehen oder vermisst)."]);
+        if ($wasBulk && ! $item->isBulk() && ($oldQuantity > 1 || $item->stocks()->count() > 1 || $this->extensions->awayQuantity($item) > 0)) {
+            throw ValidationException::withMessages(['kind' => "{$item->number} ist ein Mengenartikel mit {$oldQuantity} {$item->unit}. Zum Einzelstück wird er erst, wenn höchstens ein Stück an einer Stelle übrig ist."]);
         }
         if ($item->kind === ItemKind::Single) {
             $item->quantity = 1;
             $item->unit = null;
         }
 
-        if (! $item->is_container && $item->contents()->exists()) {
+        if (! $item->is_container && ($item->contents()->exists() || $item->stocksInside()->exists())) {
             throw ValidationException::withMessages(['is_container' => 'In der Box liegen noch Gegenstände. Räume sie erst aus.']);
         }
 
-        return DB::transaction(function () use ($actor, $item, $home, $oldQuantity) {
+        return DB::transaction(function () use ($item, $home, $wasBulk, $place) {
             $item->setHome($home);
+            // single → bulk: the piece becomes the stock at its place; bulk → single: the piece
+            // left (if any) gets the place of its stock
+            if (! $wasBulk && $item->isBulk()) {
+                $item->setPlace(null);
+            }
+            if ($wasBulk && ! $item->isBulk()) {
+                $stock = $item->stocks()->first();
+                $item->setPlace($stock?->place());
+                $item->quantity = 1;
+            }
             $item->save();
 
-            if ($item->quantity !== $oldQuantity) {
-                ItemMovement::record($item, MovementType::Count, $item->place(), $item->place(), $actor, note: "Menge {$oldQuantity} → {$item->quantity}");
+            if (! $wasBulk && $item->isBulk() && $item->quantity > 0) {
+                $stock = ItemStock::for($item, $place);
+                $stock->quantity = $item->quantity;
+                $stock->save();
+            }
+            if ($wasBulk && ! $item->isBulk()) {
+                $item->stocks()->delete();
             }
 
             return $item;

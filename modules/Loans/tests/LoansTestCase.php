@@ -3,6 +3,7 @@
 namespace Modules\Loans\Tests;
 
 use App\Models\Item;
+use App\Models\ItemStock;
 use App\Models\Location;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -57,11 +58,22 @@ abstract class LoansTestCase extends TestCase
     }
 
     /**
-     * An item on the shelf (its home).
+     * An item on the shelf (its home). A bulk item has no place of its own: its pieces lie in
+     * item_stocks at the given place (the shelf, a box, or "Eingang" for no place).
      */
     protected function item(array $attributes = []): Item
     {
-        return Item::factory()->create(['location_id' => $this->shelf->id, 'home_location_id' => $this->shelf->id, ...$attributes]);
+        $item = Item::factory()->create(['location_id' => $this->shelf->id, 'home_location_id' => $this->shelf->id, ...$attributes]);
+        if (! $item->isBulk()) {
+            return $item;
+        }
+
+        $stock = ItemStock::for($item, $item->container ?? $item->location);
+        $stock->quantity = $item->quantity;
+        $stock->save();
+        $item->forceFill(['location_id' => null, 'container_id' => null])->saveQuietly();
+
+        return $item->fresh();
     }
 
     /**

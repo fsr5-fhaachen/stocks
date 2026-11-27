@@ -163,6 +163,7 @@ class AppServiceProvider extends ServiceProvider
         $navigation->add('inventory', 'Erfassen', 'inventory.capture', 'plus', 'inventory.edit', mobile: true, order: 12);
         $navigation->add('inventory', 'Scannen', 'inventory.scan', 'qrcode', 'inventory.view', mobile: true, order: 15);
         $navigation->add('inventory', 'Umlagern', 'inventory.move', 'right-left', 'inventory.move', order: 20);
+        $navigation->add('inventory', 'Wareneingang', 'inventory.stock-in', 'truck-ramp-box', 'inventory.edit', order: 25);
         $navigation->add('inventory', 'Ohne Platz', 'inventory.items.misplaced', 'circle-question', 'inventory.view', order: 30);
         $navigation->add('inventory', 'Standorte', 'inventory.locations.index', 'location-dot', 'inventory.view', order: 40);
 

@@ -57,15 +57,12 @@ class LoanAwayItemsTest extends LoansTestCase
         $this->assertSame([$item->id], $this->misplaced());
     }
 
-    public function test_a_bulk_item_with_lent_pieces_stays_as_it_is(): void
+    public function test_a_bulk_item_with_lent_pieces_is_never_misplaced(): void
     {
-        // without place it stays misplaced: lent pieces do not hide the item
+        // its pieces lie in "Eingang" or at places, it has no place of its own to miss
         $cables = $this->item(['kind' => 'bulk', 'quantity' => 10, 'unit' => 'Stück', 'location_id' => null]);
         $this->issued([[$cables, 4]]);
-        $this->assertSame([$cables->id], $this->misplaced());
 
-        // at its place it is not misplaced, 4 pieces are away
-        $cables->forceFill(['location_id' => $this->shelf->id])->save();
         $this->assertSame([], $this->misplaced());
         $this->assertSame([$cables->id => 4], app(LoanAwayItems::class)->awayQuantities([$cables->id]));
     }

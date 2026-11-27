@@ -9,7 +9,7 @@
 Where to look first; details in `documentation/` (German). Search there before reading code.
 
 **Core (`app/`)**
-- Business logic lives in actions (`app/Actions/<Area>`, `modules/<Module>/Actions`), controllers stay thin. Inventory: `CreateItem`, `CreateItems` (equal pieces of the guided capture), `UpdateItem`, `MoveItem` (also `takeAway()` for modules), `MergeItem`, `RetireItem`, `ChangeItemCondition`, `SaveLocation` (levels, full codes of the subtree), `DeleteLocation`.
+- Business logic lives in actions (`app/Actions/<Area>`, `modules/<Module>/Actions`), controllers stay thin. Inventory: `CreateItem`, `CreateItems` (equal pieces of the guided capture), `UpdateItem`, `MoveItem` (also `takeAway()` for modules), `RetireItem`, `StockBook` (every change of the stock of a bulk item per place: `item_stocks`, "Eingang" = `IN`), `ChangeItemCondition`, `SaveLocation` (levels, full codes of the subtree), `DeleteLocation`.
 - Rules without a database write: `app/Support/Inventory` (`Placement::check`, `CodeLookup` finds items and locations by code, `ItemNumbers`, `ItemInput` rules and fields shared by item form and capture).
 - Lists with infinite scroll, search, sorting and live update: `app/Support/Table/Table.php`, one subclass per list (`ItemsTable`, `UsersTable`, `Modules\Loans\Support\LoansTable`), frontend `components/ui/Table.vue` (`UiTable`). See `documentation/TABLE_POLLING.md`.
 - Extension points for modules: `app/Support/Extensions` (`Navigation`, `DashboardTiles`, `ItemExtensions` with `ItemInfoProvider` and `ItemAwayProvider`, `SurfaceRoutes`, `DemoData`). The core never imports a module; modules register in their service provider. See `documentation/MODULES.md`.
@@ -28,6 +28,7 @@ Where to look first; details in `documentation/` (German). Search there before r
 
 **Pitfalls**
 - Names of loan contacts always through `Loan::borrowerName()` / `responsibleName()` and `Event::responsibleName()`: a deleted contact leaves only its name as text.
+- A bulk item has no place of its own (`location_id`/`container_id` stay null): its pieces lie in `item_stocks`; quantities only through `StockBook`, contents of boxes through `BoxContents`.
 - "Ohne Platz" is `ItemExtensions::misplaced()`, not `Item::misplaced()` alone (lent items are left out).
 - Full codes of locations come from `Location::fullCodeOf()`; a building without "Im Code zeigen" passes on the code of its address.
 - New permissions go into `module.json`; existing instances only give them to Admin (`stocks:sync`).

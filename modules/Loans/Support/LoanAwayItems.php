@@ -13,8 +13,9 @@ use Modules\Loans\Models\LoanItem;
  * "Ohne Platz" leaves them out (App\Support\Extensions\ItemExtensions::addAway()). Back but not
  * put away, or missing after the return, they count again.
  *
- * A bulk item keeps its place during a loan: its lent pieces and the pieces still missing after a
- * return are away (awayQuantities()), the item itself is not.
+ * Bulk items have no place of their own, their pieces lie at places (item_stocks). Pieces that left
+ * a place with a loan are away until they lie at a place again (awayQuantities()): out, back but
+ * not inspected, back but not put away, or still missing.
  */
 class LoanAwayItems implements ItemAwayProvider
 {
@@ -31,34 +32,35 @@ class LoanAwayItems implements ItemAwayProvider
     }
 
     /**
-     * Rows of a bulk item that keeps its place: a position of its own, not the contents of a box
-     * (those travel inside the box).
+     * Rows of bulk items (positions and contents of boxes).
      *
      * @param  Builder<LoanItem>  $query
      * @return Builder<LoanItem>
      */
-    public static function bulkPositions(Builder $query): Builder
+    public static function bulkRows(Builder $query): Builder
     {
-        return $query->whereNull('loan_items.parent_id')->whereHas('item', fn (Builder $query) => $query->where('kind', ItemKind::Bulk));
+        return $query->whereHas('item', fn (Builder $query) => $query->where('kind', ItemKind::Bulk));
     }
 
     /**
      * {@inheritDoc}
      *
-     * Single items and boxes that left, with the contents of boxes; not bulk positions, their item
-     * keeps its place.
+     * Single items and boxes that left, with the contents of boxes; never bulk items, they count
+     * by pieces.
      */
     public function awayItemIds(): Builder
     {
         return self::issuedRows()
-            ->where(fn (Builder $query) => $query->whereNotNull('parent_id')->orWhereHas('item', fn (Builder $query) => $query->where('kind', '!=', ItemKind::Bulk)))
+            ->whereHas('item', fn (Builder $query) => $query->where('kind', '!=', ItemKind::Bulk))
             ->select('item_id');
     }
 
     /**
      * {@inheritDoc}
      *
-     * Lent pieces of bulk positions plus the pieces still missing after a return.
+     * Pieces of bulk rows that left a place and are not at one again (stowed_at is set when they
+     * are: put away after the return, or back in their box at the inspection), plus the pieces still
+     * missing after a return. Before the inspection the whole row counts, after it what came back.
      */
     public function awayQuantities(array $itemIds): array
     {
@@ -67,17 +69,23 @@ class LoanAwayItems implements ItemAwayProvider
         }
 
         $away = [];
-        $out = self::bulkPositions(self::issuedRows())->whereIn('item_id', $itemIds)
-            ->selectRaw('item_id, SUM(quantity) as pieces')->groupBy('item_id')->pluck('pieces', 'item_id');
-        // missing_quantity is only set on bulk rows, also on the contents of a box
-        $missing = LoanItem::query()->stillMissing()->whereIn('item_id', $itemIds)
-            ->selectRaw('item_id, SUM(missing_quantity) as pieces')->groupBy('item_id')->pluck('pieces', 'item_id');
-        foreach ([$out, $missing] as $list) {
-            foreach ($list as $id => $pieces) {
-                $away[(int) $id] = ($away[(int) $id] ?? 0) + (int) $pieces;
-            }
+        $rows = self::bulkRows(LoanItem::query())
+            ->whereIn('item_id', $itemIds)
+            ->whereNotNull('issued_at')
+            ->whereNull('stowed_at')
+            ->whereHas('loan', fn (Builder $query) => $query->where('status', '!=', LoanStatus::Cancelled))
+            ->get(['item_id', 'quantity', 'returned_at', 'inspected_at', 'returned_quantity']);
+        foreach ($rows as $row) {
+            $pieces = $row->returned_at === null || $row->inspected_at === null ? $row->quantity : (int) ($row->returned_quantity ?? $row->quantity);
+            $away[$row->item_id] = ($away[$row->item_id] ?? 0) + $pieces;
         }
 
-        return $away;
+        $missing = LoanItem::query()->stillMissing()->whereIn('item_id', $itemIds)
+            ->selectRaw('item_id, SUM(missing_quantity) as pieces')->groupBy('item_id')->pluck('pieces', 'item_id');
+        foreach ($missing as $id => $pieces) {
+            $away[(int) $id] = ($away[(int) $id] ?? 0) + (int) $pieces;
+        }
+
+        return array_filter($away);
     }
 }

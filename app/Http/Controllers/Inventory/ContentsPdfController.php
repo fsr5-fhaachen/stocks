@@ -8,6 +8,7 @@ use App\Models\ItemPhoto;
 use App\Models\ItemUnit;
 use App\Support\Branding;
 use App\Support\ImageDecoding;
+use App\Support\Inventory\BoxContents;
 use App\Support\Labels\ShortLink;
 use App\Support\QrCode;
 use App\Support\Settings;
@@ -156,9 +157,11 @@ class ContentsPdfController extends Controller
         }
 
         $rows = [];
-        foreach ($box->contents()->active()->with('photos')->get() as $item) {
-            $rows[] = ['item' => $item, 'depth' => $depth, 'photo' => $withPhotos ? $this->photoOf($item->photos->first()) : null];
-            if ($item->is_container) {
+        // bulk pieces count with the quantity in this box
+        foreach (BoxContents::of($box, ['photos']) as $entry) {
+            $item = $entry['item'];
+            $rows[] = ['item' => $item, 'quantity' => $entry['quantity'], 'target' => $entry['stock']?->target_quantity, 'depth' => $depth, 'photo' => $withPhotos ? $this->photoOf($item->photos->first()) : null];
+            if ($entry['stock'] === null && $item->is_container) {
                 $rows = [...$rows, ...$this->rows($item, $withPhotos, $depth + 1)];
             }
         }

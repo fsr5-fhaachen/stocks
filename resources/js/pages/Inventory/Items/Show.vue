@@ -3,7 +3,7 @@
     <UiButton
       v-if="can('inventory.move') && !item.retired_at && !isLocked"
       icon="right-left"
-      @click="moveOpen = true"
+      @click="openMove()"
     >
       Umlagern
     </UiButton>
@@ -11,7 +11,7 @@
       v-if="consumable && can('inventory.move') && !item.retired_at"
       variant="secondary"
       icon="minus"
-      @click="consumeOpen = true"
+      @click="openConsume()"
     >
       Verbraucht
     </UiButton>
@@ -43,7 +43,7 @@
       v-if="can('inventory.retire') && !item.retired_at && !isLocked"
       variant="ghost"
       icon="box-archive"
-      @click="retireOpen = true"
+      @click="openRetire()"
     >
       Ausmustern
     </UiButton>
@@ -134,16 +134,10 @@
         Braucht doch eins
       </button>
     </UiAlert>
-    <UiAlert v-if="item.can_merge" type="info">
-      Abgeteilt von <InventoryPlaceLink :place="item.split_from" />.
-      <button
-        v-if="can('inventory.move')"
-        type="button"
-        class="ml-1 font-bold underline"
-        @click="mergeOpen = true"
-      >
-        Zurückbuchen
-      </button>
+    <!-- a split off part of old: its stock went into another item -->
+    <UiAlert v-if="item.merged_into" type="info">
+      Der Bestand liegt jetzt bei
+      <InventoryPlaceLink :place="item.merged_into" />.
     </UiAlert>
   </div>
 
@@ -169,23 +163,6 @@
               <template v-if="item.is_container"> · Box</template>
             </dd>
           </div>
-          <!-- bulk items: what is there; lent or missing pieces are part of the stock -->
-          <div v-if="item.kind === 'bulk' && item.quantity_here !== null">
-            <dt class="text-sm text-ink-muted">Vorhanden</dt>
-            <dd>
-              <span class="font-semibold"
-                >{{ item.quantity_here }} {{ item.unit }}</span
-              >
-              <span
-                v-if="item.quantity_here < item.quantity"
-                class="text-sm text-ink-muted"
-              >
-                von {{ item.quantity }},
-                {{ item.quantity - item.quantity_here }} unterwegs (siehe Reiter
-                „Verleih“)</span
-              >
-            </dd>
-          </div>
           <div>
             <dt class="text-sm text-ink-muted">Kategorie</dt>
             <dd>{{ item.category ?? "—" }}</dd>
@@ -199,10 +176,6 @@
                 {{ item.condition }}
               </UiBadge>
             </dd>
-          </div>
-          <div v-if="item.split_from">
-            <dt class="text-sm text-ink-muted">Abgeteilt von</dt>
-            <dd><InventoryPlaceLink :place="item.split_from" /></dd>
           </div>
           <div v-if="item.is_container">
             <dt class="text-sm text-ink-muted">Inhalt öffentlich</dt>
@@ -245,6 +218,25 @@
             :href="`/labels/print?box=${item.id}`"
           >
             Etiketten für den Inhalt
+          </UiButton>
+          <UiButton
+            v-if="can('inventory.move') && !item.retired_at"
+            variant="secondary"
+            size="sm"
+            icon="box-open"
+            @click="packOpen = 'box'"
+          >
+            Mengenartikel einpacken
+          </UiButton>
+          <UiButton
+            v-if="can('inventory.move') && hasShort && !item.retired_at"
+            variant="secondary"
+            size="sm"
+            icon="fill-drip"
+            :disabled="filling"
+            @click="fill"
+          >
+            Auffüllen
           </UiButton>
           <UiButton
             variant="secondary"
@@ -361,7 +353,23 @@
 
     <!-- place first on phones, it is what people look for -->
     <div class="order-first space-y-6 lg:order-none">
-      <UiCard title="Ort">
+      <InventoryStockCard
+        v-if="item.kind === 'bulk'"
+        :stocks="item.stocks"
+        :quantity="item.quantity"
+        :quantity-here="item.quantity_here ?? 0"
+        :away-quantity="item.away_quantity"
+        :unit="item.unit"
+        :home="item.home"
+        :consumable="consumable"
+        :can-act="!item.retired_at && !isLocked"
+        @move="openMove"
+        @consume="openConsume"
+        @retire="openRetire"
+        @pack="packOpen = 'item'"
+        @edit="editStock = $event"
+      />
+      <UiCard v-else title="Ort">
         <dl class="space-y-4">
           <div>
             <dt class="text-sm text-ink-muted">Liegt in</dt>
@@ -516,6 +524,15 @@
   <UiModal v-if="moveOpen" title="Umlagern" @close="moveOpen = false">
     <form class="space-y-5" @submit.prevent="move()">
       <InventoryMoveTargetSwitch v-model="moveForm.mode" />
+      <UiSelect
+        v-if="item.kind === 'bulk' && moveForm.mode !== 'home'"
+        v-model="moveForm.from"
+        label="Von"
+        :options="sourceOptions"
+        :placeholder="null"
+        :error="moveForm.errors.from"
+        @update:model-value="moveForm.quantity = stockAt(moveForm.from)"
+      />
       <InventoryPlaceInput
         v-model="moveForm.target_code"
         label="Ziel"
@@ -532,7 +549,7 @@
         label="Menge"
         type="number"
         inputmode="numeric"
-        :hint="`Von ${item.quantity} ${item.unit ?? ''}${item.quantity_here !== null && item.quantity_here < item.quantity ? `, vorhanden ${item.quantity_here}; eine Teilmenge geht nur bis dahin, alles nimmt die unterwegs mit an den neuen Ort` : ''}. Eine Teilmenge wird ein eigener Gegenstand mit eigener Nummer.`"
+        :hint="`Dort liegen ${stockAt(moveForm.from)} ${item.unit ?? ''}.`"
         :error="moveForm.errors.quantity"
       />
       <UiInput
@@ -560,28 +577,32 @@
     @done="conditionOpen = false"
   />
 
-  <!-- merge: book a split off part back to its origin -->
-  <UiModal v-if="mergeOpen" title="Zurückbuchen" @close="mergeOpen = false">
-    <form class="space-y-5" @submit.prevent="merge">
-      <UiInput
-        v-model="mergeForm.quantity"
-        label="Menge"
-        type="number"
-        inputmode="numeric"
-        required
-        :hint="`Von ${item.quantity} ${item.unit ?? ''}. Die Menge kommt zurück zu ${item.split_from?.code}; bei allem wird dieser Teil ausgemustert.`"
-        :error="mergeForm.errors.quantity ?? mergeForm.errors.item"
-      />
-      <UiButton type="submit" class="w-full" :disabled="mergeForm.processing">
-        Zurückbuchen
-      </UiButton>
-    </form>
-  </UiModal>
+  <!-- "Einpacken": pieces of this bulk item into a box or to a location; on a box: pieces of a
+       scanned bulk item into this box -->
+  <InventoryPackModal
+    v-if="packOpen"
+    :item="packOpen === 'item' ? item : null"
+    :target="packOpen === 'box' ? item.number : null"
+    :title="packOpen === 'box' ? 'Mengenartikel einpacken' : 'Einpacken'"
+    @close="packOpen = null"
+    @done="packOpen = null"
+  />
+  <!-- count a place and set its target ("Sollmenge") -->
+  <InventoryStockEditModal
+    v-if="editStock"
+    :item-id="item.id"
+    :unit="item.unit"
+    :stock="editStock"
+    @close="editStock = null"
+    @done="editStock = null"
+  />
 
   <!-- consume: quick action for consumables -->
   <InventoryConsumeModal
     v-if="consumeOpen"
     :item="item"
+    :from="consumeFrom"
+    :sources="item.stocks"
     @close="consumeOpen = false"
     @done="consumeOpen = false"
   />
@@ -589,15 +610,31 @@
   <!-- retire -->
   <UiModal v-if="retireOpen" title="Ausmustern" @close="retireOpen = false">
     <form class="space-y-5" @submit.prevent="retire()">
-      <UiInput
-        v-if="item.kind === 'bulk'"
-        v-model="retireForm.quantity"
-        label="Menge"
-        type="number"
-        inputmode="numeric"
-        :hint="`Vorhanden: ${item.quantity_here ?? item.quantity} von ${item.quantity} ${item.unit ?? ''}. Eine Teilmenge wird abgezogen, der Rest bleibt.`"
-        :error="retireForm.errors.quantity"
-      />
+      <!-- bulk items: pieces from one place; or the whole item with the rest of all places -->
+      <template v-if="item.kind === 'bulk'">
+        <UiCheckbox
+          v-model="retireForm.whole"
+          label="Den ganzen Mengenartikel ausmustern"
+          description="Die Nummer wird stillgelegt, was noch an Plätzen liegt, wird mit ausgebucht."
+        />
+        <template v-if="!retireForm.whole">
+          <UiSelect
+            v-model="retireForm.from"
+            label="Von"
+            :options="sourceOptions"
+            :placeholder="null"
+            :error="retireForm.errors.from"
+          />
+          <UiInput
+            v-model="retireForm.quantity"
+            label="Menge"
+            type="number"
+            inputmode="numeric"
+            :hint="`Dort liegen ${stockAt(retireForm.from)} ${item.unit ?? ''}.`"
+            :error="retireForm.errors.quantity"
+          />
+        </template>
+      </template>
       <p class="text-sm text-ink-muted">
         {{
           isPartialRetire
@@ -725,9 +762,12 @@ type Props = {
     home: Place | null;
     location: Place | null;
     away_from_home: boolean;
-    split_from: Place | null;
-    // split off part that can be booked back to split_from
-    can_merge: boolean;
+    // bulk item: pieces per place, pieces away (lent, missing, not put away), minimum stock
+    stocks: StockEntry[];
+    away_quantity: number;
+    min_quantity: number | null;
+    // split off part of old whose stock went into another item
+    merged_into: Place | null;
     retired_at: string | null;
     retired_reason: string | null;
     retired_note: string | null;
@@ -792,14 +832,37 @@ const photoErrorOf = (errors: Record<string, string>) =>
 
 // move
 const moveOpen = ref(false);
+// bulk item: its places as sources ("Von")
+const sourceOptions = computed<Option[]>(() =>
+  props.item.stocks
+    .filter((stock) => stock.quantity > 0)
+    .map((stock) => ({
+      value: stock.key,
+      label: `${stock.place ? stock.place.code : "Eingang"} (${stock.quantity} ${props.item.unit ?? ""})`,
+    })),
+);
+const stockAt = (key: string | null) =>
+  props.item.stocks.find((stock) => stock.key === key)?.quantity ?? 0;
+const firstSource = () =>
+  props.item.stocks.find((stock) => stock.quantity > 0)?.key ?? null;
+
 const moveForm = useForm({
   item_id: props.item.id,
   target_code: "",
   quantity: props.item.quantity as number | null,
+  // bulk item: the place the pieces come from
+  from: null as string | null,
   note: "",
   // "Ort / Stammplatz / beides", starts with "Ort"
   mode: "place" as MoveMode,
 });
+const openMove = (key: string | null = null) => {
+  if (props.item.kind === "bulk") {
+    moveForm.from = key ?? firstSource();
+    moveForm.quantity = stockAt(moveForm.from);
+  }
+  moveOpen.value = true;
+};
 // confirmed: asked before and answered "Ja, trotzdem" (the item is booked)
 const move = (confirmed = false) =>
   // the id is taken when sending, the page can show another item by now
@@ -808,6 +871,7 @@ const move = (confirmed = false) =>
       ...data,
       item_id: props.item.id,
       quantity: data.mode === "home" ? null : data.quantity,
+      from: props.item.kind === "bulk" ? data.from : null,
       confirmed,
     }))
     .post("/inventory/move", {
@@ -875,38 +939,66 @@ const uploadPhotos = async (event: Event) => {
 
 // retire and delete
 const retireOpen = ref(false);
-// book a split off part back to its origin
-const mergeOpen = ref(false);
-const mergeForm = useForm({ quantity: props.item.quantity as number | null });
-const merge = () =>
-  mergeForm.post(`/inventory/items/${props.item.id}/merge`, {
-    // the server shows the origin next: start with fresh forms for that item
-    preserveState: false,
-  });
 
-// consume a part of a consumable ("verbraucht")
+// consume a part of a consumable ("verbraucht"), from one place
 const consumeOpen = ref(false);
+const consumeFrom = ref<string | null>(null);
 
-// bulk items start with the whole quantity; less than all is a partial retire
+// "Einpacken" of this bulk item ("item") or into this box ("box"); counting a place
+const packOpen = ref<"item" | "box" | null>(null);
+const editStock = ref<StockEntry | null>(null);
+// "Auffüllen": bulk pieces below their target in this box get the difference from "Eingang"
+const hasShort = computed(() =>
+  props.item.contents.some((entry) => entry.stock?.short),
+);
+const filling = ref(false);
+const fill = () =>
+  router.post(
+    "/inventory/stocks/fill",
+    { code: props.item.number },
+    {
+      preserveScroll: true,
+      onStart: () => (filling.value = true),
+      onFinish: () => (filling.value = false),
+    },
+  );
+const openConsume = (key: string | null = null) => {
+  consumeFrom.value = key ?? firstSource();
+  consumeOpen.value = true;
+};
+
+// bulk items: pieces from one place, or the whole item ("whole")
 const retireForm = useForm({
   reason: "defective",
   note: "",
-  quantity: (props.item.quantity_here ?? props.item.quantity) as number | null,
+  quantity: 1 as number | null,
+  from: null as string | null,
+  whole: false,
 });
+const openRetire = (key: string | null = null) => {
+  if (props.item.kind === "bulk") {
+    retireForm.from = key ?? firstSource();
+    retireForm.quantity = stockAt(retireForm.from);
+    retireForm.whole = false;
+  }
+  retireOpen.value = true;
+};
 const isPartialRetire = computed(
-  () =>
-    props.item.kind === "bulk" &&
-    Number(retireForm.quantity) < props.item.quantity,
+  () => props.item.kind === "bulk" && !retireForm.whole,
 );
 const retire = (confirmed = false) =>
   retireForm
-    .transform((data) => ({ ...data, confirmed }))
+    .transform(({ whole, ...data }) => ({
+      ...data,
+      quantity: props.item.kind === "bulk" && !whole ? data.quantity : null,
+      from: props.item.kind === "bulk" && !whole ? data.from : null,
+      confirmed,
+    }))
     .post(`/inventory/items/${props.item.id}/retire`, {
       preserveScroll: true,
       onSuccess: () => {
         retireOpen.value = false;
         retireForm.note = "";
-        retireForm.quantity = props.item.quantity_here ?? props.item.quantity;
       },
     });
 

@@ -5,6 +5,7 @@ namespace Modules\Loans\Tests;
 use App\Enums\MovementType;
 use App\Models\Item;
 use App\Models\ItemCondition;
+use App\Models\ItemStock;
 use Illuminate\Http\UploadedFile;
 use Modules\Loans\Enums\DocumentType;
 use Modules\Loans\Enums\LoanStatus;
@@ -124,13 +125,12 @@ class ReturnTest extends LoansTestCase
         $receipt = $loan->documents()->where('type', DocumentType::ReturnReceipt)->firstOrFail();
         $this->assertTrue($receipt->snapshot['rows'][0]['manual']);
 
-        // 1 cable is missing: counted on the row, the item keeps stock and place; the 5 that came
-        // back are logged
+        // 1 cable is missing: counted on the row, the item keeps its stock; the 5 that came back
+        // wait to be put away, the shelf keeps the 4 that stayed
         $this->assertSame(1, $rows[$cables->id]->refresh()->missing_quantity);
+        $this->assertSame(5, $rows[$cables->id]->returned_quantity);
         $this->assertSame(10, $cables->refresh()->quantity);
-        $this->assertSame($this->shelf->id, $cables->location_id);
-        $this->assertSame(5, $cables->movements()->where('type', MovementType::Return)->value('quantity'));
-        $this->assertFalse(Item::whereNotNull('split_from_id')->exists());
+        $this->assertSame(4, ItemStock::for($cables, $this->shelf)->quantity);
     }
 
     public function test_a_defect_on_a_bulk_row_keeps_the_count(): void

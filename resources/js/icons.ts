@@ -82,6 +82,9 @@ import {
   faUsers,
   faUserShield,
   faXmark,
+  faTruckRampBox,
+  faFillDrip,
+  faCalculator,
 } from "@fortawesome/free-solid-svg-icons";
 
 /**
@@ -172,4 +175,7 @@ export default [
   faUsers,
   faUserShield,
   faXmark,
+  faTruckRampBox,
+  faFillDrip,
+  faCalculator,
 ];

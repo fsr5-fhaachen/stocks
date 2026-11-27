@@ -96,7 +96,20 @@
               <template v-if="card.is_container"
                 >Box mit {{ card.contents_count }} Gegenständen ·
               </template>
-              <InventoryPlaceLink :place="card.place" empty="kein Ort" />
+              <!-- bulk items lie at several places: their places with pieces -->
+              <template v-if="card.kind === 'bulk'">
+                <template v-for="(stock, index) in card.stocks" :key="stock.key"
+                  ><template v-if="index">, </template
+                  ><span class="font-mono">{{
+                    stock.place?.code ?? "Eingang"
+                  }}</span>
+                  {{ stock.quantity }}</template
+                >
+                <span v-if="!card.stocks.length" class="text-ink-muted"
+                  >an keinem Platz</span
+                >
+              </template>
+              <InventoryPlaceLink v-else :place="card.place" empty="kein Ort" />
             </p>
             <UiBadge :variant="card.condition_is_defect ? 'danger' : 'neutral'">
               {{ card.condition }}
@@ -114,15 +127,27 @@
             {{ notice.text }}
           </UiAlert>
         </template>
-        <UiInput
-          v-if="card.kind === 'bulk' && canMove"
-          v-model="moveQuantity"
-          class="mt-4"
-          label="Menge zum Umlagern"
-          type="number"
-          inputmode="numeric"
-          :hint="`Von ${card.quantity} ${card.unit ?? ''}${card.quantity_here !== null && card.quantity_here < card.quantity ? `, vorhanden ${card.quantity_here}` : ''}. Eine Teilmenge wird ein eigener Gegenstand.`"
-        />
+        <!-- bulk items: from which place and how many -->
+        <div
+          v-if="card.kind === 'bulk' && canMove && card.stocks.length"
+          class="mt-4 grid gap-3 sm:grid-cols-2"
+        >
+          <UiSelect
+            v-if="card.stocks.length > 1"
+            v-model="moveFrom"
+            label="Von"
+            :options="sourceOptions"
+            :placeholder="null"
+            @update:model-value="moveQuantity = stockAt(moveFrom)"
+          />
+          <UiInput
+            v-model="moveQuantity"
+            label="Menge zum Umlagern"
+            type="number"
+            inputmode="numeric"
+            :hint="`Dort liegen ${stockAt(moveFrom)} ${card.unit ?? ''}.`"
+          />
+        </div>
         <div
           class="mt-4 grid grid-cols-2 gap-2 [&>*]:min-h-[44px] lg:[&>*]:text-base"
         >
@@ -162,15 +187,6 @@
             @click="conditionOpen = true"
           >
             Zustand
-          </UiButton>
-          <UiButton
-            v-if="canMove && card.can_merge"
-            variant="secondary"
-            icon="rotate"
-            size="md"
-            @click="mergeOpen = true"
-          >
-            Zurückbuchen
           </UiButton>
           <UiButton
             v-if="can('labels.print') && !card.retired"
@@ -262,6 +278,8 @@
   <InventoryConsumeModal
     v-if="consumeOpen && card?.type === 'item'"
     :item="card"
+    :from="moveFrom"
+    :sources="card.stocks"
     @close="consumeOpen = false"
     @done="afterAction"
   />
@@ -272,23 +290,6 @@
     @close="conditionOpen = false"
     @done="afterAction"
   />
-  <UiModal
-    v-if="mergeOpen && card?.type === 'item'"
-    title="Zurückbuchen"
-    @close="mergeOpen = false"
-  >
-    <form class="space-y-5" @submit.prevent="merge">
-      <UiInput
-        v-model="mergeQuantity"
-        label="Menge"
-        type="number"
-        inputmode="numeric"
-        required
-        :hint="`Von ${card.quantity} ${card.unit ?? ''}. Die Menge kommt zurück zu ${card.split_from?.code}.`"
-      />
-      <UiButton type="submit" class="w-full">Zurückbuchen</UiButton>
-    </form>
-  </UiModal>
 </template>
 
 <script setup lang="ts">
@@ -315,8 +316,8 @@ type ScannedItem = {
   photo_url: string | null;
   contents_count: number;
   consumable: boolean;
-  can_merge: boolean;
-  split_from: Place | null;
+  // bulk item: pieces per place
+  stocks: StockEntry[];
   href: string | null;
   notices: ItemNotice[];
 };
@@ -354,6 +355,22 @@ const mode = ref<
   { type: "move"; item: ScannedItem } | { type: "here"; code: string } | null
 >(null);
 const moveQuantity = ref<number | string>(1);
+// bulk item: the place the pieces come from (item_stocks.place_key)
+const moveFrom = ref<string | null>(null);
+const stockAt = (key: string | null) =>
+  card.value?.type === "item"
+    ? (card.value.stocks?.find((stock) => stock.key === key)?.quantity ?? 0)
+    : 0;
+const sourceOptions = computed<Option[]>(() =>
+  card.value?.type === "item"
+    ? card.value.stocks
+        .filter((stock) => stock.quantity > 0)
+        .map((stock) => ({
+          value: stock.key,
+          label: `${stock.place ? stock.place.code : "Eingang"} (${stock.quantity})`,
+        }))
+    : [],
+);
 // the target becomes the place, the home or both; every move starts with "Ort"
 const moveMode = ref<MoveMode>("place");
 const moveTitle = computed(
@@ -443,14 +460,17 @@ const show = async (code: string) => {
   if (found) {
     card.value = found;
     if (found.type === "item") {
-      moveQuantity.value = found.quantity;
-      mergeQuantity.value = found.quantity;
+      // bulk items: the first place with pieces ("Eingang" first) and all that lies there
+      moveFrom.value =
+        found.stocks?.find((stock) => stock.quantity > 0)?.key ?? null;
+      moveQuantity.value =
+        found.kind === "bulk" ? stockAt(moveFrom.value) : found.quantity;
     }
   }
 };
 
 // a move: by the next scan (mode "move") or to the place of mode "here"
-// a split of a booked item asks first ("Ja, trotzdem" sends it again confirmed)
+// a booked item asks first ("Ja, trotzdem" sends it again confirmed)
 const reserved = ref<{ message: string; retry: () => void } | null>(null);
 const move = (
   itemId: number,
@@ -459,6 +479,7 @@ const move = (
   onSuccess?: () => void,
   confirmed = false,
   target: MoveMode = "place",
+  from: string | null = null,
 ) =>
   router.post(
     url("/inventory/move"),
@@ -466,6 +487,7 @@ const move = (
       item_id: itemId,
       target_code: targetCode,
       quantity: target === "home" ? null : quantity,
+      from,
       confirmed,
       mode: target,
     },
@@ -481,7 +503,7 @@ const move = (
           reserved.value = {
             message: errors.confirm,
             retry: () =>
-              move(itemId, targetCode, quantity, onSuccess, true, target),
+              move(itemId, targetCode, quantity, onSuccess, true, target, from),
           };
           return;
         }
@@ -490,6 +512,7 @@ const move = (
           errors.target ??
           errors.item ??
           errors.quantity ??
+          errors.from ??
           errors.mode ??
           null;
       },
@@ -510,6 +533,7 @@ const scanned = async (code: string) => {
       () => show(item.number),
       false,
       moveMode.value,
+      item.kind === "bulk" ? moveFrom.value : null,
     );
     return;
   }
@@ -567,25 +591,11 @@ const closeSheet = () => {
 // dialogs
 const consumeOpen = ref(false);
 const conditionOpen = ref(false);
-const mergeOpen = ref(false);
-const mergeQuantity = ref<number | string>(1);
 const afterAction = () => {
   consumeOpen.value = false;
   conditionOpen.value = false;
-  mergeOpen.value = false;
   if (card.value?.type === "item") {
     show(card.value.number);
   }
-};
-// booking back is a move to the origin (see MoveController), so the scan page stays open
-const merge = () => {
-  if (card.value?.type !== "item" || !card.value.split_from) {
-    return;
-  }
-  const origin = card.value.split_from.code;
-  move(card.value.id, origin, Number(mergeQuantity.value) || null, () => {
-    mergeOpen.value = false;
-    show(origin);
-  });
 };
 </script>

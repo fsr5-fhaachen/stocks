@@ -7,6 +7,7 @@ use App\Enums\LabelStatus;
 use App\Models\Category;
 use App\Models\Item;
 use App\Models\ItemCondition;
+use App\Models\ItemStock;
 use App\Models\User;
 use App\Support\Extensions\ItemExtensions;
 use Illuminate\Database\Eloquent\Builder;
@@ -69,7 +70,9 @@ class ItemsTable extends Table
     protected function query(): Builder
     {
         return $this->scope()->with(['category.parent', 'condition', 'location', 'container', 'photos'])
-            ->withCount(['contents' => fn (Builder $query) => $query->active()]);
+            ->withCount(['contents' => fn (Builder $query) => $query->active(), 'stocksInside' => fn (Builder $query) => $query->where('quantity', '>', 0)])
+            // bulk items: number of places with pieces, shown instead of a place
+            ->withCount(['stocks' => fn (Builder $query) => $query->where('quantity', '>', 0)]);
     }
 
     /**
@@ -122,15 +125,26 @@ class ItemsTable extends Table
     {
         $query = $box->contents()->active()
             ->with(['category.parent', 'condition', 'location', 'container', 'photos'])
-            ->withCount(['contents' => fn (Builder $query) => $query->active()]);
+            ->withCount(['contents' => fn (Builder $query) => $query->active(), 'stocksInside' => fn (Builder $query) => $query->where('quantity', '>', 0)]);
         $total = (clone $query)->count();
         $items = $query->reorder('name')->orderBy('id')->limit(self::CONTENTS_LIMIT)->get();
         $notices = app(ItemExtensions::class)->notices($items, $user);
         $away = app(ItemExtensions::class)->awayQuantities($items->modelKeys());
+        $rows = $items->map(fn (Item $item) => self::rowFor($item, $notices[$item->id] ?? [], $away[$item->id] ?? 0))->values()->all();
+
+        // pieces of bulk items in the box: the row of the item with the quantity in this box
+        $stocks = $box->stocksInside()->where('quantity', '>', 0)
+            ->whereHas('item', fn (Builder $query) => $query->whereNull('retired_at'))
+            ->with(['item' => fn ($query) => $query->with(['category.parent', 'condition', 'photos'])])
+            ->get()->sortBy(fn (ItemStock $stock) => $stock->item->name);
+        $room = max(0, self::CONTENTS_LIMIT - count($rows));
+        foreach ($stocks->take($room) as $stock) {
+            $rows[] = [...self::rowFor($stock->item, []), 'quantity' => $stock->quantity, 'quantity_here' => $stock->quantity, 'in_box' => true];
+        }
 
         return [
-            'rows' => $items->map(fn (Item $item) => self::rowFor($item, $notices[$item->id] ?? [], $away[$item->id] ?? 0))->values()->all(),
-            'more' => max(0, $total - self::CONTENTS_LIMIT),
+            'rows' => $rows,
+            'more' => max(0, $total - self::CONTENTS_LIMIT) + max(0, $stocks->count() - $room),
         ];
     }
 
@@ -215,8 +229,10 @@ class ItemsTable extends Table
             'photo_url' => $model->photos->first()?->thumbUrl(),
             'label_printed_at' => $model->label_printed_at?->toIso8601String(),
             'label_status' => LabelStatus::of($model)->value,
-            // active items directly in the box, for the grouped list
-            'contents_count' => $model->is_container ? (int) $model->contents_count : 0,
+            // active items and bulk places directly in the box, for the grouped list
+            'contents_count' => $model->is_container ? (int) $model->contents_count + (int) $model->stocks_inside_count : 0,
+            // bulk item: places with pieces (instead of a place)
+            'places_count' => $model->kind === ItemKind::Bulk ? (int) $model->stocks_count : null,
             // short notices of modules, e.g. "ausgegeben bis 12.11."
             'badges' => array_values(array_filter(array_map(
                 fn (array $notice) => $notice['badge'] ? ['text' => $notice['badge'], 'variant' => $notice['variant']] : null,

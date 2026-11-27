@@ -5,6 +5,7 @@ namespace Database\Factories;
 use App\Enums\ItemKind;
 use App\Models\Item;
 use App\Models\ItemCondition;
+use App\Models\ItemStock;
 use App\Models\Location;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -46,6 +47,19 @@ class ItemFactory extends Factory
     public function bulk(int $quantity = 10, string $unit = 'Stück'): static
     {
         return $this->state(['kind' => ItemKind::Bulk, 'quantity' => $quantity, 'unit' => $unit]);
+    }
+
+    /**
+     * A bulk item whose whole quantity lies at one place ("Eingang" without place). Bulk items have
+     * no place of their own, their stock lies in item_stocks.
+     */
+    public function stockedAt(Location|Item|null $place = null): static
+    {
+        return $this->afterCreating(function (Item $item) use ($place) {
+            $stock = ItemStock::for($item, $place);
+            $stock->quantity = $item->quantity;
+            $stock->save();
+        });
     }
 
     /**

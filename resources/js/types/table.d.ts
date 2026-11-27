@@ -43,6 +43,8 @@ declare global {
     label_status: "missing" | "printed" | "none";
     // active items directly in the box
     contents_count: number;
+    // bulk item: places with pieces (instead of a place)
+    places_count: number | null;
     badges: { text: string; variant: string }[];
     _version?: number;
   }

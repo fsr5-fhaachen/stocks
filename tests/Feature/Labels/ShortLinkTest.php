@@ -53,7 +53,7 @@ class ShortLinkTest extends TestCase
     {
         $box = Item::factory()->container()->create(['public_contents' => true]);
         $inner = Item::factory()->container()->at($box)->create(['name' => 'Kabelkiste']);
-        Item::factory()->bulk(5, 'Rollen')->at($inner)->create(['name' => 'Gaffa']);
+        Item::factory()->bulk(5, 'Rollen')->stockedAt($inner)->create(['name' => 'Gaffa']);
         Item::factory()->at($box)->create(['retired_at' => now()]);
 
         $this->get("/s/{$box->number}")->assertInertia(fn ($page) => $page

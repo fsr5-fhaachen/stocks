@@ -31,9 +31,19 @@
             item.number
           }}</span>
         </span>
-        <span class="shrink-0 text-sm font-semibold">
+        <!-- bulk pieces: the quantity in this box, with its target ("6 von 8") -->
+        <span
+          :class="[
+            'shrink-0 text-sm font-semibold',
+            item.stock?.short ? 'text-red-600' : '',
+          ]"
+        >
           {{
-            item.kind === "bulk" ? `${item.quantity} ${item.unit ?? ""}` : "1"
+            item.kind === "bulk"
+              ? item.stock?.target_quantity
+                ? `${item.quantity} von ${item.stock.target_quantity} ${item.unit ?? ""}`
+                : `${item.quantity} ${item.unit ?? ""}`
+              : "1"
           }}
         </span>
       </label>
@@ -51,6 +61,8 @@
 
 <script setup lang="ts">
 export type PublicItem = {
+  key?: string;
+  stock?: StockMark | null;
   number: string;
   name: string;
   quantity: number;

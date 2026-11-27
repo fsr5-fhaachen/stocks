@@ -2,14 +2,13 @@
 
 namespace App\Actions\Inventory;
 
-use App\Enums\ItemKind;
 use App\Enums\MovementType;
 use App\Models\Item;
 use App\Models\ItemMovement;
+use App\Models\ItemStock;
 use App\Models\Location;
 use App\Models\User;
 use App\Support\Extensions\ItemExtensions;
-use App\Support\Inventory\ItemNumbers;
 use App\Support\Inventory\Placement;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -17,22 +16,20 @@ use Illuminate\Validation\ValidationException;
 /**
  * Move an item to a location or into a box. The contents of a box move with it.
  *
- * Moving a part of a bulk item splits it: the part becomes a new item with its own number and a
- * copy of the photos at the new place, the rest stays. Both get a row in the movement log. The
- * part has no label for its number yet. Pieces a module has away (lent, missing) are part of the
- * stock but not here: a part can be at most what is here, the whole item moves with them.
+ * A bulk item has no place of its own: moving it moves pieces from one of its places to another
+ * (StockBook::transfer). No new number, no split off part.
  */
 class MoveItem
 {
-    public function __construct(private readonly ItemNumbers $numbers, private readonly ItemExtensions $extensions) {}
+    public function __construct(private readonly ItemExtensions $extensions, private readonly StockBook $stock) {}
 
     /**
-     * @param  int|null  $quantity  part of a bulk item to move, null for everything
-     * @return Item the moved item: the item itself or the new part
+     * @param  int|null  $quantity  pieces of a bulk item to move, null for all at the source
+     * @param  string|null  $from  bulk item: key of the source place (item_stocks.place_key), null for the default
      *
      * @throws ValidationException
      */
-    public function handle(User $actor, Item $item, Location|Item $target, ?int $quantity = null, ?string $note = null): Item
+    public function handle(User $actor, Item $item, Location|Item $target, ?int $quantity = null, ?string $note = null, ?string $from = null): Item
     {
         if ($item->isRetired()) {
             throw ValidationException::withMessages(['item' => "{$item->number} ist ausgemustert."]);
@@ -41,24 +38,24 @@ class MoveItem
             throw ValidationException::withMessages(['item' => $lock]);
         }
         Placement::check($item, $target, 'target');
+
+        if ($item->isBulk()) {
+            $source = StockBook::sourceOf($item, $from);
+            if (ItemStock::keyOf($source) === ItemStock::keyOf($target)) {
+                throw ValidationException::withMessages(['target' => "{$item->number} liegt schon dort."]);
+            }
+            $quantity ??= ItemStock::for($item, $source)->quantity;
+            $this->stock->transfer($actor, $item, $source, $target, $quantity, $note);
+
+            return $item;
+        }
+
         if ($item->place()?->is($target)) {
             throw ValidationException::withMessages(['target' => "{$item->number} liegt schon dort."]);
         }
 
-        $quantity ??= $item->quantity;
-        if ($quantity < 1 || $quantity > $item->quantity) {
-            throw ValidationException::withMessages(['quantity' => "Die Menge muss zwischen 1 und {$item->quantity} liegen."]);
-        }
-        if ($item->kind === ItemKind::Bulk && $quantity < $item->quantity && $quantity > ($here = $this->extensions->quantityHere($item))) {
-            throw ValidationException::withMessages(['quantity' => self::notHereMessage($item, $here)]);
-        }
-
-        return DB::transaction(function () use ($actor, $item, $target, $quantity, $note) {
+        return DB::transaction(function () use ($actor, $item, $target, $note) {
             $from = $item->place();
-
-            if ($item->kind === ItemKind::Bulk && $quantity < $item->quantity) {
-                return $this->split($actor, $item, $from, $target, $quantity, $note);
-            }
 
             $item->setPlace($target);
             $item->save();
@@ -69,20 +66,10 @@ class MoveItem
     }
 
     /**
-     * Message when more pieces of a bulk item are asked for than are here.
-     */
-    public static function notHereMessage(Item $item, int $here): string
-    {
-        $away = $item->quantity - $here;
-
-        return "Hier sind nur {$here} {$item->unit} von {$item->number}, {$away} sind gerade weg (verliehen oder vermisst).";
-    }
-
-    /**
      * Take an item away from its place without a new place, e.g. when a module lends it out or it
      * goes missing. The movement log gets a row of the given type. Locks are not checked, the
-     * caller owns the reason for taking it away. Pieces of a bulk item are never taken away: the
-     * module keeps count of them (see ItemAwayProvider::awayQuantities()).
+     * caller owns the reason for taking it away. Pieces of a bulk item are never taken away here:
+     * they leave a place through StockBook::takeOut() and the module counts them.
      *
      * @throws ValidationException
      */
@@ -101,31 +88,5 @@ class MoveItem
 
             return $item;
         });
-    }
-
-    /**
-     * Split a part off a bulk item and put it at the target. Its number has no label yet.
-     */
-    private function split(User $actor, Item $item, Location|Item|null $from, Location|Item $target, int $quantity, ?string $note): Item
-    {
-        $part = $item->replicate(['number', 'location_id', 'container_id', 'home_location_id', 'home_container_id', 'label_printed_at']);
-        $part->number = $this->numbers->next();
-        $part->quantity = $quantity;
-        $part->split_from_id = $item->id;
-        $part->setPlace($target);
-        $part->save();
-
-        // the part shows the same photos; a photo S3 can not copy is left out, the move still counts
-        foreach ($item->photos as $photo) {
-            $photo->copyTo($part);
-        }
-
-        $item->decrement('quantity', $quantity);
-
-        $splitNote = trim("{$quantity} {$item->unit} als {$part->number} abgeteilt. ".$note);
-        ItemMovement::record($item, MovementType::Split, $from, $target, $actor, $quantity, $splitNote);
-        ItemMovement::record($part, MovementType::Split, $from, $target, $actor, $quantity, trim("Abgeteilt von {$item->number}. ".$note));
-
-        return $part;
     }
 }

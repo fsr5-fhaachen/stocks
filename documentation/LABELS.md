@@ -172,12 +172,12 @@ Wer eine reservierte Nummer scannt und `inventory.edit` hat, landet in „Gegens
 
 | Gescannt | Aktionen (je nach Recht) |
 |---|---|
-| Gegenstand | Umlagern (der nächste Scan ist das Ziel; Umschalter „Ort / Stammplatz / Beides“ mit `inventory.edit`), Verbraucht, Zustand, Zurückbuchen bei Teilen, Etikett, Öffnen |
+| Gegenstand | Umlagern (der nächste Scan ist das Ziel; Umschalter „Ort / Stammplatz / Beides“ mit `inventory.edit`), Verbraucht, Zustand, Etikett, Öffnen; bei Mengenartikeln der Bestand je Stelle und „Von“ fürs Umlagern |
 | Box | dasselbe, „Inhalt“ öffnet die Seite der Box |
 | Standort | Hierher umlagern (jeder folgende Gegenstand wird dorthin gebucht, bis man beendet; mit dem Umschalter auch als Stammplatz oder nur als Stammplatz), Etikett, Öffnen |
 | reservierte Nummer | Gegenstand anlegen |
 
-Die Dialoge für Verbraucht und Zustand sind dieselben Komponenten wie auf der Seite des Gegenstands (`InventoryConsumeModal`, `InventoryConditionModal`). Zurückbuchen läuft als Umlagern auf den Ursprung (`MoveController`), damit die Seite offen bleibt. Die Kamera startet beim nächsten Besuch von selbst, wenn sie zuletzt an war (`localStorage.scanCamera`).
+Die Dialoge für Verbraucht und Zustand sind dieselben Komponenten wie auf der Seite des Gegenstands (`InventoryConsumeModal`, `InventoryConditionModal`). Die Kamera startet beim nächsten Besuch von selbst, wenn sie zuletzt an war (`localStorage.scanCamera`).
 
 Die Seite „Umlagern“ hat einen Kamera-Knopf; der erste Scan wählt den Gegenstand, der zweite das Ziel.
 

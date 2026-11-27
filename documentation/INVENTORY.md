@@ -68,11 +68,15 @@ Ort und Stammplatz zeigen jeweils auf einen Standort **oder** eine Box (`locatio
 - Nur Gegenstände mit „ist Behälter“ nehmen etwas auf; das Merkmal lässt sich nicht entfernen, solange etwas darin liegt.
 - „Inhalt öffentlich zeigen“ (Standard: an) nutzt erst die öffentliche Box-Ansicht per QR-Code.
 
-**Mengenartikel.** Wird nur ein Teil umgelagert, teilt Stocks den Gegenstand: Der Teil wird ein neuer Gegenstand mit eigener Nummer, gleichem Namen, gleicher Kategorie, Kopien der Fotos und Verweis auf den Ursprung (`split_from_id`). So kann jeder Teil sein eigenes Etikett tragen; der Teil gilt als **noch nicht etikettiert** (`label_printed_at` leer, seit 27.11.2026; vorher wurde der Wert des Ursprungs mitkopiert). Eine geänderte Menge beim Bearbeiten wird als Zählung protokolliert.
+**Mengenartikel** (seit 28.11.2026). Ein Mengenartikel hat keinen Ort; seine Stücke liegen an Stellen (`item_stocks`, `App\Models\ItemStock`): Standorte, Boxen oder das virtuelle Fach **„Eingang“** (`place_key` `IN`). Je Stelle gibt es eine Menge und optional eine Sollmenge (`target_quantity`, unterschritten = Mangel). Der Stammplatz ist nur ein Vorschlag. Alle Änderungen laufen durch `App\Actions\Inventory\StockBook`: `receive` (Eingang), `transfer` (Umlagern zwischen Stellen), `takeOut`/`putBack` (Verleih), `remove` (verbraucht, ausgemustert), `count` (Zählen), `setTarget`. `StockBook::sourceOf()` wählt die Stelle, von der etwas kommt: die gewählte (`from`), sonst die einzige mit Stücken, sonst der Eingang; liegen Stücke an mehreren Stellen, muss man wählen („Von“ in Umlagern, Verbraucht, Ausmustern und Ausgabe). Erfasste Mengenartikel ohne Ort landen im Eingang. Das Formular ändert die Menge nicht. In Boxen stehen die Stücke als Inhalt (`BoxContents`, „8 / soll 10“), auf der Seite eines Standorts unter „Gegenstände hier“, in Listen „an N Stellen“. Abteilen und Zurückbuchen gibt es nicht mehr; alte Teile hat die Migration zusammengeführt (siehe [DECISIONS.md](DECISIONS.md)), ihr Scan führt zum Gegenstand, in den sie eingingen (`merged_into_id`).
 
-**Stücke, die nicht hier sind.** `quantity` ist der ganze Bestand. Ein Modul kann Stücke weg haben, ohne dass der Gegenstand seinen Ort verliert (der Verleih: ausgegeben oder vermisst, `ItemExtensions::awayQuantity()`). Hier ist dann nur der Rest (`quantityHere()`): Umlagern einer Teilmenge, Verbrauchen und Ausmustern gehen höchstens bis dahin („Hier sind nur 28 Stück …, 12 sind gerade weg“), der ganze Gegenstand darf umziehen. Beim Bearbeiten darf die Menge nicht unter die Stücke fallen, die weg sind, und die Art nicht wechseln. Angezeigt wird das als **„Vorhanden“** (`quantity_here`): auf der Seite eigenes Feld „Vorhanden: 38 Stück von 50, 12 unterwegs“, auf der Scan-Karte „50 Stück (38 vorhanden)“, in der Liste „38 / 50 Stück“, in den Dialogen Umlagern, Verbrauchen und Ausmustern als Hinweis (Ausmustern beginnt mit dem Vorhandenen).
+**Wareneingang** (seit 28.11.2026, Seite `/inventory/stock-in`, Menü „Wareneingang“, Recht `inventory.edit`, `StockController`). Einbuchen: Nummer des Mengenartikels oder Barcode der Verpackung (EAN, `Gtin::normalize`) scannen oder tippen, Menge, Notiz („Bestellung Reichelt“); `StockBook::receive` legt die Stücke ins Eingang (Bewegung `receive`). Nur aktive Mengenartikel; neue Artikel entstehen über „Erfassen“ (ohne Ort ebenfalls im Eingang). Darunter die Liste „Im Eingang“ mit „Einräumen“ (Ziel scannen, Vorschlag Stammplatz). Die Dashboard-Kachel nennt „Im Eingang: N Stück in M Artikeln“ (`/inventory/stats`).
 
-**Zurückbuchen.** Ein abgeteilter Teil lässt sich zu seinem Ursprung zurückbuchen (`MergeItem`), ganz oder teilweise: auf seiner Seite über „Zurückbuchen“ oder auf der Seite „Umlagern“, indem man als Ziel die Nummer des Ursprungs scannt. Die Menge kommt beim Ursprung dazu, beide bekommen eine Bewegung `merge`. Ein ganz zurückgebuchter Teil wird mit Grund „zurückgebucht“ ausgemustert und behält seine Nummer und seinen Verlauf. Ist der Ursprung selbst schon zurückgebucht (ein Teil von einem Teil, z. B. fehlende Stücke eines verliehenen Teils), geht es weiter zu dessen Ursprung (`Item::mergeTarget()`). Recht: `inventory.move`.
+**Einpacken** (`InventoryPackModal`) ist Umlagern mit Quelle (`POST /inventory/move` mit `from`): auf der Mengenartikel-Seite („Einpacken“, Ziel frei), auf der Box-Seite („Mengenartikel einpacken“, der Artikel wird gescannt) und auf der Standort-Seite („Mengenartikel einräumen“). Vorgabe der Quelle ist das Eingang.
+
+**Zählen und Sollmenge** (`InventoryStockEditModal`, `POST /inventory/items/{item}/stocks`, Recht `inventory.edit`): Je Stelle die gezählte Menge (`StockBook::count`, der Gesamtbestand folgt, Bewegung `count` mit Differenz) und optional eine Sollmenge (nicht im Eingang). Eine Stelle mit Sollmenge bleibt auch bei 0 bestehen. Liegt weniger als die Sollmenge dort, ist die Stelle ein Mangel („5 / soll 8“, rot). **Auffüllen** (`POST /inventory/stocks/fill`, Recht `inventory.move`) an Box und Standort holt für jede solche Stelle die Differenz aus dem Eingang, soweit dort genug liegt, und nennt, was noch fehlt.
+
+**Stücke, die nicht hier sind.** `quantity` ist der ganze Bestand: Summe der Stellen plus was ein Modul weg hat (der Verleih: ausgegeben, vermisst, zurück und noch nicht eingeräumt, `ItemExtensions::awayQuantity()`). Hier ist die Summe der Stellen (`quantityHere()`); Umlagern, Verbrauchen und Ausmustern gehen höchstens bis zur Menge der gewählten Stelle („In B-12 liegen nur 3 Stück.“). Ein Mengenartikel wird nur zum Einzelstück, wenn höchstens ein Stück an einer Stelle liegt und nichts weg ist. Angezeigt wird das als **„Vorhanden“** (`quantity_here`): auf der Seite eigenes Feld „Vorhanden: 38 Stück von 50, 12 unterwegs“, auf der Scan-Karte „50 Stück (38 vorhanden)“, in der Liste „38 / 50 Stück“, in den Dialogen Umlagern, Verbrauchen und Ausmustern als Hinweis (Ausmustern beginnt mit dem Vorhandenen).
 
 **„Ohne Platz“** listet Gegenstände ohne Ort und solche mit Stammplatz, die nicht dort liegen (`Item::misplaced()`). Gegenstände, die ein Modul bewusst unterwegs hat, fehlen dort (seit Review Phase 5, `ItemExtensions::misplaced()` mit `withoutAway()`): der Verleih nimmt ausgegebene Gegenstände heraus. Zurück, aber noch nicht eingeräumt, und vermisst stehen wieder dort. Dasselbe gilt für die Zahl auf dem Dashboard.
 
@@ -103,11 +107,11 @@ Der letzte Knopf heißt „Erstellen und drucken“, wenn gleich gedruckt werden
 - **Gespeicherte Form** (`Gtin::normalize()`): Prüfziffer geprüft, UPC-A bekommt die führende 0 (EAN-13), UPC-E wird erst zu UPC-A. `items.ean`, auch im Formular „Bearbeiten“ und in der Suche der Liste. Die Seite „Scannen“ erkennt EANs nicht (bewusst).
 - **Cache je Code:** ein Treffer 30 Tage (ein zweiter Scan derselben Packung kostet keine Abfrage), „nichts gefunden“ einen Tag; Antworten mit nicht erreichbarer Quelle werden nicht gemerkt. Ist das Tageskontingent von UPCitemdb aufgebraucht (429 oder `X-RateLimit-Remaining` 0), pausiert die Quelle bis zum Reset.
 - **Bilder** lädt der Server (`GET /inventory/capture/product/{code}/images/{index}`, `ImageFetcher`): nur Bilder aus dem gemerkten Treffer, nur öffentliche Adressen (Host vorher aufgelöst, private und reservierte Adressen abgelehnt, Verbindung zur geprüften Adresse, Weiterleitungen einzeln geprüft), höchstens 10 MB, als JPEG über `ImageDecoding`. Im Browser werden sie wie eigene Fotos verkleinert.
-- **Herkunft der Fotos:** `item_photos.source`, `source_url`, `license`, `author`, `source_host` (der Browser schickt nur `photo_refs[i]` = „Code:Index“, die Angaben kommen aus dem Treffer auf dem Server). Am Foto ein kleines „©“; Antippen zeigt „Foto: Open Food Facts contributors, CC BY-SA 3.0“ bzw. „Bild über UPCitemdb, Quelle: shop.de“ mit Link. Über `source_host` lassen sich alle Bilder eines Shops finden. Kopien (mehrere Stücke, Abteilen) behalten die Angaben.
+- **Herkunft der Fotos:** `item_photos.source`, `source_url`, `license`, `author`, `source_host` (der Browser schickt nur `photo_refs[i]` = „Code:Index“, die Angaben kommen aus dem Treffer auf dem Server). Am Foto ein kleines „©“; Antippen zeigt „Foto: Open Food Facts contributors, CC BY-SA 3.0“ bzw. „Bild über UPCitemdb, Quelle: shop.de“ mit Link. Über `source_host` lassen sich alle Bilder eines Shops finden. Kopien (mehrere Stücke) behalten die Angaben.
 - **Bedingungen:** Open Food Facts verlangt einen eigenen User-Agent (`Stocks/<Version> (<APP_URL>; <Kontaktadresse>)`, `UserAgent`), höchstens 100 Produktabfragen pro Minute, Namensnennung (ODbL für Daten, CC BY-SA für Bilder). UPCitemdb: Nutzung für den eigenen Betrieb, keine Namensnennung verlangt; die Rechte an den Shop-Bildern bleiben bei Shops und Herstellern. Die Quellenangabe steht klein unter dem Treffer.
 - **Einstellung** `inventory.product_lookup` (Verwaltung › Einstellungen › Allgemein, „Produktdaten per Barcode“, Vorgabe an): aus = keine Abfragen nach außen, nur das Feld EAN.
 
-**Mengenartikel oder mehrere Einzelstücke:** Ist egal, welches Stück jemand bekommt, und muss man es nicht einzeln wiedererkennen: Menge (eine Nummer, ein Etikett). Sonst Einzelstücke (je Stück Nummer, Etikett, Zustand und Ort). Das Erfassen legt nie abgeteilte Teile an.
+**Mengenartikel oder mehrere Einzelstücke:** Ist egal, welches Stück jemand bekommt, und muss man es nicht einzeln wiedererkennen: Menge (eine Nummer, ein Etikett). Sonst Einzelstücke (je Stück Nummer, Etikett, Zustand und Ort). Ein Mengenartikel liegt danach an seinem Ort oder im Eingang.
 
 ## Artikelnummern
 
@@ -123,7 +127,7 @@ Der letzte Knopf heißt „Erstellen und drucken“, wenn gleich gedruckt werden
 
 Die Seite **Umlagern** arbeitet in zwei Schritten: erst den Gegenstand oder die Box scannen, dann das Ziel (Kennziffer oder Boxnummer). Danach wird sofort gebucht, und die Seite wartet auf den nächsten Scan. Ein Barcode-Handscanner tippt den Code wie eine Tastatur. Bei Mengenartikeln fragt die Seite die Menge ab, vorausgefüllt mit allem. Auf der Seite eines Gegenstands gibt es dasselbe als Dialog mit Vorschlägen.
 
-**Ort / Stammplatz / Beides** (seit 27.11.2026, `InventoryMoveTargetSwitch`): Mit `inventory.edit` zeigen Seite „Umlagern“, Scan-Karte („Umlagern“, „Hierher umlagern“) und der Dialog am Gegenstand einen Umschalter, Vorgabe „Ort“. `POST /inventory/move` nimmt `mode`: `place` (wie bisher), `home` (nur der Stammplatz ändert sich, der Gegenstand bleibt liegen; kein Eintrag im Bewegungsverlauf, das Änderungsprotokoll hält alten und neuen Stammplatz fest) oder `both` (umlagern, und das Ziel wird Stammplatz; bei einer abgeteilten Teilmenge der Teil). Ohne `inventory.edit` lehnt der Server `home` und `both` ab. Für den Stammplatz gelten dieselben Regeln wie für einen Ort (`Placement::check`).
+**Ort / Stammplatz / Beides** (seit 27.11.2026, `InventoryMoveTargetSwitch`): Mit `inventory.edit` zeigen Seite „Umlagern“, Scan-Karte („Umlagern“, „Hierher umlagern“) und der Dialog am Gegenstand einen Umschalter, Vorgabe „Ort“. `POST /inventory/move` nimmt `mode`: `place` (wie bisher), `home` (nur der Stammplatz ändert sich, der Gegenstand bleibt liegen; kein Eintrag im Bewegungsverlauf, das Änderungsprotokoll hält alten und neuen Stammplatz fest) oder `both` (umlagern, und das Ziel wird Stammplatz; bei einem Mengenartikel der Vorschlag). Ohne `inventory.edit` lehnt der Server `home` und `both` ab. Für den Stammplatz gelten dieselben Regeln wie für einen Ort (`Placement::check`).
 
 Jede Änderung des Orts schreibt eine Zeile in `item_movements`:
 
@@ -131,16 +135,16 @@ Jede Änderung des Orts schreibt eine Zeile in `item_movements`:
 |---|---|---|
 | Anlegen | `CreateItem` | `create`, von nirgends an den Ort |
 | Umlagern, auch zurück an den Stammplatz | `MoveItem` | `move` |
-| Teilmenge umlagern | `MoveItem` mit Menge | `split`, je eine Zeile für Ursprung und neuen Teil |
-| Menge ändern | `UpdateItem` | `count`, Notiz „Menge alt → neu“ |
+| Stücke eines Mengenartikels umlagern | `MoveItem` mit Menge und Stelle (`StockBook::transfer`) | `move` mit Menge, von Stelle zu Stelle |
+| Wareneingang | `StockBook::receive` | `receive` mit Menge, an die Stelle (ohne Stelle: Eingang) |
+| Zählen einer Stelle | `StockBook::count` | `count` |
 | Ausmustern | `RetireItem` | `retire`, vom Ort nach nirgends, Notiz „Grund: Notiz“ |
-| Zurückbuchen eines Teils | `MergeItem` | `merge` bei Teil und Ursprung |
-| Verbraucht | `RetireItem` mit Grund verbraucht und Menge | `consume` mit Menge; der Gegenstand bleibt am Ort |
-| Teilmenge ausmustern | `RetireItem` mit Menge | `retire` mit Menge; der Gegenstand bleibt am Ort |
-| Ausgabe mit einer Buchung (Modul Verleih) | `MoveItem::takeAway` | `issue`, vom Ort nach nirgends, Notiz mit der Buchungsnummer; bei Mengenartikeln vorher `split` |
-| Rücknahme (Modul Verleih) | `ItemMovement::record` | `return`, ohne Ort; eingeräumt wird danach mit `move` oder `merge` |
+| Verbraucht | `RetireItem` mit Grund verbraucht, Menge und Stelle | `consume` mit Menge von der Stelle; auch bei 0 Stück bleibt der Gegenstand |
+| Teilmenge ausmustern | `RetireItem` mit Menge und Stelle | `retire` mit Menge |
+| Ausgabe mit einer Buchung (Modul Verleih) | `MoveItem::takeAway`, bei Mengenartikeln `StockBook::takeOut` | `issue`, vom Ort (der Stelle) nach nirgends, Notiz mit der Buchungsnummer |
+| Rücknahme (Modul Verleih) | `ItemMovement::record` | `return`, ohne Ort; Einzelstücke werden danach mit `move` eingeräumt, Stücke eines Mengenartikels mit `StockBook::putBack` (`return` an die Stelle) |
 
-**Sperren durch Module.** Ein Modul kann einen Gegenstand sperren (`ItemExtensions::lockOf`, siehe [MODULES.md](MODULES.md#gegenstände)). Solange er ausgegeben ist (Einzelstück, Box, Inhalt einer Box; nicht ausgegebene Stücke eines Mengenartikels), lehnen `MoveItem`, `RetireItem` und `MergeItem` ab und nennen den Grund; Seite und Scan-Karte zeigen „Umlagern“ und „Ausmustern“ dann nicht.
+**Sperren durch Module.** Ein Modul kann einen Gegenstand sperren (`ItemExtensions::lockOf`, siehe [MODULES.md](MODULES.md#gegenstände)). Solange er ausgegeben ist (Einzelstück, Box, Inhalt einer Box; nicht ausgegebene Stücke eines Mengenartikels), lehnen `MoveItem` und `RetireItem` ab und nennen den Grund; Seite und Scan-Karte zeigen „Umlagern“ und „Ausmustern“ dann nicht.
 
 Wird eine Box bewegt, bekommt nur die Box eine Zeile. Zeilen werden nie geändert; ein falscher Ort wird durch eine neue Bewegung korrigiert. Feldänderungen an Gegenständen, Standorten und Kategorien stehen zusätzlich im Änderungsprotokoll.
 
@@ -191,8 +195,8 @@ Fotos liegen immer auf der Disk `s3` unter `items/<id>/<zufälliger Name>`; der 
 | Recht | Erlaubt | Freies Mitglied | FSR-Mitglied | Vorstand |
 |---|---|---|---|---|
 | `inventory.view` | Inventar ansehen | ja | ja | ja |
-| `inventory.move` | Umlagern, Zustand ändern, Verbrauchsmaterial ausbuchen | ja | ja | ja |
-| `inventory.edit` | Anlegen, Bearbeiten, Fotos | – | ja | ja |
+| `inventory.move` | Umlagern, Einpacken, Auffüllen, Zustand ändern, Verbrauchsmaterial ausbuchen | ja | ja | ja |
+| `inventory.edit` | Anlegen, Bearbeiten, Fotos, Wareneingang, Zählen und Sollmenge | – | ja | ja |
 | `locations.manage` | Standorte und Kategorien | – | ja | ja |
 | `inventory.options.manage` | Zustände und Einheiten verwalten | – | – | – (nur Admin) |
 | `inventory.history.delete` | Einträge aus dem Verlauf löschen | – | – | – (nur Admin) |

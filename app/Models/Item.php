@@ -41,6 +41,9 @@ use OwenIt\Auditing\Contracts\Auditable;
  * @property int|null $home_location_id
  * @property int|null $home_container_id
  * @property int|null $split_from_id
+ * @property int|null $merged_into_id split off part that went into this item when the stock moved to places
+ * @property int|null $min_quantity bulk item: minimum stock ("Mindestbestand"), see isShort()
+ * @property Carbon|null $components_checked_at item or box with components: last checked as complete
  * @property Carbon|null $retired_at
  * @property RetireReason|null $retired_reason
  * @property string|null $retired_note
@@ -73,6 +76,7 @@ class Item extends Model implements Auditable, AuditSubject
         'label_hint',
         'ean',
         'no_label',
+        'min_quantity',
     ];
 
     /**
@@ -100,6 +104,8 @@ class Item extends Model implements Auditable, AuditSubject
             'public_contents' => 'boolean',
             'no_label' => 'boolean',
             'quantity' => 'integer',
+            'min_quantity' => 'integer',
+            'components_checked_at' => 'datetime',
             'retired_at' => 'datetime',
             'label_printed_at' => 'datetime',
         ];
@@ -174,21 +180,6 @@ class Item extends Model implements Auditable, AuditSubject
     }
 
     /**
-     * Where a part goes back to: the item it was split from, or, when that went back itself (e.g.
-     * a lent part that was stowed), the one that went back to. Null when there is none.
-     */
-    public function mergeTarget(): ?Item
-    {
-        $origin = $this->splitFrom;
-        // the limit only protects against broken data
-        for ($depth = 0; $origin !== null && $origin->retired_reason === RetireReason::Merged && $depth < 20; $depth++) {
-            $origin = $origin->splitFrom;
-        }
-
-        return $origin;
-    }
-
-    /**
      * Photos of the gallery, the first one is the preview.
      *
      * @return HasMany<ItemPhoto, $this>
@@ -224,18 +215,66 @@ class Item extends Model implements Auditable, AuditSubject
     }
 
     /**
-     * Items without a current place, or with a home they are not at.
+     * Items without a current place, or with a home they are not at. Bulk items have no place of
+     * their own, their pieces lie at places (stocks()), so they never count.
      */
     #[Scope]
     protected function misplaced(Builder $query): void
     {
-        $query->where(fn (Builder $query) => $query
+        $query->where('kind', '!=', ItemKind::Bulk)->where(fn (Builder $query) => $query
             ->where(fn (Builder $query) => $query->whereNull('location_id')->whereNull('container_id'))
             ->orWhere(fn (Builder $query) => $query
                 ->where(fn (Builder $query) => $query->whereNotNull('home_location_id')->orWhereNotNull('home_container_id'))
                 ->where(fn (Builder $query) => $query
                     ->whereRaw('COALESCE(location_id, 0) <> COALESCE(home_location_id, 0)')
                     ->orWhereRaw('COALESCE(container_id, 0) <> COALESCE(home_container_id, 0)'))));
+    }
+
+    /**
+     * Stock of a bulk item per place ("Bestand"), see App\Actions\Inventory\StockBook.
+     *
+     * @return HasMany<ItemStock, $this>
+     */
+    public function stocks(): HasMany
+    {
+        return $this->hasMany(ItemStock::class);
+    }
+
+    /**
+     * Stock of bulk items lying in this box.
+     *
+     * @return HasMany<ItemStock, $this>
+     */
+    public function stocksInside(): HasMany
+    {
+        return $this->hasMany(ItemStock::class, 'container_id');
+    }
+
+    /**
+     * Components ("Bestandteile"), in their order.
+     *
+     * @return HasMany<ItemComponent, $this>
+     */
+    public function components(): HasMany
+    {
+        return $this->hasMany(ItemComponent::class)->orderBy('position')->orderBy('id');
+    }
+
+    /**
+     * A bulk item: quantity and unit, stock per place.
+     */
+    public function isBulk(): bool
+    {
+        return $this->kind === ItemKind::Bulk;
+    }
+
+    /**
+     * Bulk item below its minimum stock ("Mindestbestand"): the whole stock, lent pieces included,
+     * without missing ones.
+     */
+    public function isShort(int $missing = 0): bool
+    {
+        return $this->isBulk() && $this->min_quantity !== null && $this->quantity - $missing < $this->min_quantity;
     }
 
     /**
@@ -279,7 +318,8 @@ class Item extends Model implements Auditable, AuditSubject
      */
     public function isAwayFromHome(): bool
     {
-        if ($this->home_location_id === null && $this->home_container_id === null) {
+        // a bulk item has no place of its own, its home is only a suggestion
+        if ($this->isBulk() || ($this->home_location_id === null && $this->home_container_id === null)) {
             return false;
         }
 
@@ -382,6 +422,7 @@ class Item extends Model implements Auditable, AuditSubject
             'label_hint' => 'Hinweis fürs Etikett',
             'ean' => 'EAN',
             'no_label' => 'Kein Etikett nötig',
+            'min_quantity' => 'Mindestbestand',
             'history' => 'Verlaufseintrag',
         ];
     }

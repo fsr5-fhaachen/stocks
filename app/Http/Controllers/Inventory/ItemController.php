@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Inventory;
 use App\Actions\Inventory\ChangeItemCondition;
 use App\Actions\Inventory\CreateItem;
 use App\Actions\Inventory\DeleteItem;
-use App\Actions\Inventory\MergeItem;
 use App\Actions\Inventory\MoveItem;
 use App\Actions\Inventory\RetireItem;
 use App\Actions\Inventory\UpdateItem;
@@ -20,10 +19,12 @@ use App\Models\ItemCondition;
 use App\Models\ItemConditionChange;
 use App\Models\ItemMovement;
 use App\Models\ItemPhoto;
+use App\Models\ItemStock;
 use App\Models\ItemUnit;
 use App\Models\Location;
 use App\Models\ReservedNumber;
 use App\Support\Extensions\ItemExtensions;
+use App\Support\Inventory\BoxContents;
 use App\Support\Inventory\CodeLookup;
 use App\Support\Inventory\ItemInput;
 use App\Support\Labels\ShortLink;
@@ -103,7 +104,7 @@ class ItemController extends Controller
      */
     public function show(Request $request, Item $item): Response
     {
-        $item->load(['category.parent', 'condition', 'location', 'container', 'homeLocation', 'homeContainer', 'splitFrom', 'photos']);
+        $item->load(['category.parent', 'condition', 'location', 'container', 'homeLocation', 'homeContainer', 'photos', 'stocks.location', 'stocks.container']);
 
         return Inertia::render('Inventory/Items/Show', [
             'item' => [
@@ -122,12 +123,15 @@ class ItemController extends Controller
                 'home' => Item::placeSummary($item->home()),
                 'location' => Item::placeSummary($item->container ? $item->effectiveLocation() : null),
                 'away_from_home' => $item->isAwayFromHome(),
-                'split_from' => Item::placeSummary($item->mergeTarget()),
-                'can_merge' => ($target = $item->mergeTarget()) !== null && ! $target->isRetired() && ! $item->isRetired(),
+                // bulk item: its places ("Bestand"), "Eingang" first; the rest of its quantity is away
+                'stocks' => $item->isBulk() ? $this->stocksOf($item) : [],
+                'away_quantity' => $item->isBulk() ? $this->extensions->awayQuantity($item) : 0,
+                'min_quantity' => $item->min_quantity,
                 'retired_at' => $item->retired_at?->toIso8601String(),
                 'retired_reason' => $item->retired_reason?->label(),
                 'photos' => $item->photos->map(fn (ItemPhoto $photo) => ['id' => $photo->id, 'url' => $photo->url(), 'credit' => $photo->credit()]),
                 'contents' => $item->is_container ? $this->contentsTree($item) : [],
+                'merged_into' => Item::placeSummary($item->merged_into_id ? Item::find($item->merged_into_id) : null),
             ],
             // notices and tabs of modules, e.g. "ausgegeben an … bis …" and the tab "Verleih"
             'notices' => $this->extensions->notices(collect([$item]), $request->user())[$item->id] ?? [],
@@ -221,12 +225,14 @@ class ItemController extends Controller
             'reason' => ['required', Rule::enum(RetireReason::class)],
             'note' => ['nullable', 'string', 'max:2000'],
             'quantity' => ['nullable', 'integer', 'min:1'],
+            // bulk item: the place the pieces come from (item_stocks.place_key)
+            'from' => ['nullable', 'string', 'max:20'],
             'confirmed' => ['boolean'],
         ]);
         $reason = RetireReason::from($validated['reason']);
         $this->extensions->ensureConfirmed($item, $request->boolean('confirmed'), 'ausbuchen');
 
-        $retireItem->handle($request->user(), $item, $reason, $validated['note'] ?? null, $validated['quantity'] ?? null);
+        $retireItem->handle($request->user(), $item, $reason, $validated['note'] ?? null, $validated['quantity'] ?? null, $validated['from'] ?? null);
 
         return back()->with('success', $item->isRetired()
             ? "{$item->number} wurde ausgemustert."
@@ -242,27 +248,17 @@ class ItemController extends Controller
         $validated = $request->validate([
             'quantity' => ['required', 'integer', 'min:1'],
             'note' => ['nullable', 'string', 'max:2000'],
+            // the place the pieces come from (item_stocks.place_key), null for the default
+            'from' => ['nullable', 'string', 'max:20'],
         ]);
         if ($item->kind !== ItemKind::Bulk || ! ItemUnit::isConsumable($item->unit)) {
             throw ValidationException::withMessages(['quantity' => "{$item->number} ist kein Verbrauchsmaterial."]);
         }
         $this->extensions->ensureConfirmed($item, $request->boolean('confirmed'), 'als verbraucht ausbuchen');
 
-        $retireItem->handle($request->user(), $item, RetireReason::Consumed, $validated['note'] ?? null, $validated['quantity']);
+        $retireItem->handle($request->user(), $item, RetireReason::Consumed, $validated['note'] ?? null, $validated['quantity'], $validated['from'] ?? null);
 
         return back()->with('success', "{$validated['quantity']} {$item->unit} von {$item->number} als verbraucht ausgebucht.");
-    }
-
-    /**
-     * Book a split off part back to the item it came from.
-     */
-    public function merge(Request $request, Item $item, MergeItem $mergeItem): RedirectResponse
-    {
-        $validated = $request->validate(['quantity' => ['nullable', 'integer', 'min:1']]);
-
-        $origin = $mergeItem->handle($request->user(), $item, $validated['quantity'] ?? null);
-
-        return to_route('inventory.items.show', $origin)->with('success', "Zurück zu {$origin->number} gebucht, dort sind jetzt {$origin->quantity} {$origin->unit}.");
     }
 
     /**
@@ -284,23 +280,23 @@ class ItemController extends Controller
         $found = $this->codes->find($code);
 
         if ($found instanceof Item) {
-            $found->load(['condition', 'location', 'container', 'photos', 'splitFrom']);
+            $found->load(['condition', 'location', 'container', 'photos', 'homeLocation', 'homeContainer', 'stocks.location', 'stocks.container']);
 
             return response()->json([
                 'type' => 'item',
-                ...$found->only(['id', 'number', 'name', 'quantity', 'unit', 'is_container', 'split_from_id']),
+                ...$found->only(['id', 'number', 'name', 'quantity', 'unit', 'is_container']),
                 'quantity_here' => $found->kind === ItemKind::Bulk ? $this->extensions->quantityHere($found) : null,
                 'kind' => $found->kind->value,
                 'retired' => $found->isRetired(),
                 'place' => Item::placeSummary($found->place()),
+                'home' => Item::placeSummary($found->home()),
                 'condition_id' => $found->condition_id,
                 'condition' => $found->condition->name,
                 'condition_is_defect' => $found->condition->is_defect,
                 'photo_url' => ($photo = $found->photos->first()) ? Surface::route('inventory.photos.show', [$photo, 'thumb' => 1]) : null,
-                'contents_count' => $found->is_container ? $found->contents()->active()->count() : 0,
+                'contents_count' => $found->is_container ? BoxContents::count($found) : 0,
                 'consumable' => $found->kind === ItemKind::Bulk && ItemUnit::isConsumable($found->unit),
-                'can_merge' => ($target = $found->mergeTarget()) !== null && ! $target->isRetired() && ! $found->isRetired(),
-                'split_from' => Item::placeSummary($found->mergeTarget()),
+                'stocks' => $found->isBulk() ? $this->stocksOf($found) : [],
                 'href' => Surface::link('inventory.items.show', $found),
                 'notices' => $this->extensions->notices(collect([$found]), $request->user())[$found->id] ?? [],
             ]);
@@ -370,9 +366,14 @@ class ItemController extends Controller
      */
     public function stats(): JsonResponse
     {
+        $incoming = ItemStock::query()->where('place_key', ItemStock::INCOMING)->where('quantity', '>', 0)
+            ->whereHas('item', fn ($query) => $query->whereNull('retired_at'));
+
         return response()->json([
             'items' => Item::active()->count(),
             'misplaced' => $this->extensions->misplaced()->count(),
+            // "Im Eingang: 12 Stück in 3 Artikeln"
+            'incoming' => ['pieces' => (int) (clone $incoming)->sum('quantity'), 'items' => $incoming->count()],
         ]);
     }
 
@@ -439,12 +440,24 @@ class ItemController extends Controller
             return [];
         }
 
-        return $box->contents()->with('photos')->get()->map(fn (Item $item) => [
-            ...$item->only(['id', 'number', 'name', 'quantity', 'unit', 'is_container']),
-            'kind' => $item->kind->value,
-            'photo_url' => $item->photos->first()?->thumbUrl(),
-            'contents' => $item->is_container ? $this->contentsTree($item, $depth + 1) : [],
+        return BoxContents::of($box, ['photos'])->map(fn (array $entry) => [
+            ...BoxContents::fields($entry),
+            'photo_url' => $entry['item']->photos->first()?->thumbUrl(),
+            'contents' => $entry['stock'] === null && $entry['item']->is_container ? $this->contentsTree($entry['item'], $depth + 1) : [],
         ])->all();
+    }
+
+    /**
+     * Places of a bulk item for the frontend, "Eingang" first, then by code.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function stocksOf(Item $item): array
+    {
+        return $item->stocks
+            ->sortBy(fn (ItemStock $stock) => $stock->place_key === ItemStock::INCOMING ? '' : (Item::placeSummary($stock->place())['code'] ?? ''), SORT_NATURAL)
+            ->map(fn (ItemStock $stock) => $stock->summary())
+            ->values()->all();
     }
 
     /**

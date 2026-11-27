@@ -4,6 +4,7 @@ namespace Modules\Loans\Tests;
 
 use App\Enums\RetireReason;
 use App\Models\Item;
+use App\Models\ItemStock;
 use App\Support\Extensions\ItemExtensions;
 use Illuminate\Support\Carbon;
 use Modules\Loans\Models\Loan;
@@ -72,23 +73,25 @@ class MissingTest extends LoansTestCase
         $row = $loan->positions()->first();
         $admin = $this->admin();
 
-        // no part of its own: the item keeps stock and place, 2 pieces are away
+        // the item keeps its stock: 4 on the shelf, 2 missing, 4 back but not put away yet
         $this->assertSame(2, $row->missing_quantity);
         $this->assertNull($row->missing_item_id);
-        $this->assertFalse(Item::whereNotNull('split_from_id')->exists());
         $this->assertSame(10, $cables->refresh()->quantity);
-        $this->assertSame($this->shelf->id, $cables->location_id);
-        $this->assertSame(2, app(ItemExtensions::class)->awayQuantity($cables));
+        $this->assertSame(4, ItemStock::for($cables, $this->shelf)->quantity);
+        $this->assertSame(6, app(ItemExtensions::class)->awayQuantity($cables));
         $this->actingAs($admin)->getJson("/inventory/lookup?code={$cables->number}")->assertJsonFragment(['badge' => 'vermisst']);
         $this->actingAs($admin)->get("/loans/{$loan->id}")->assertInertia(fn ($page) => $page->where('missing.0.quantity', 2)->where('missing.0.number', $cables->number));
         $this->actingAs($admin)->getJson("/loans/items/{$cables->id}")->assertJsonFragment(['quantity' => 2, 'variant' => 'danger']);
 
-        // found: stock again at once; the 4 that came back are confirmed at the place
+        // found: the 2 lie in "Eingang" at once; the 4 that came back go to the scanned place
         $this->actingAs($admin)->post("/loans/{$loan->id}/missing/{$row->id}/found")->assertSessionHasNoErrors();
-        $this->assertSame(0, app(ItemExtensions::class)->awayQuantity($cables));
+        $this->assertSame(2, ItemStock::for($cables, null)->quantity);
+        $this->assertSame(4, app(ItemExtensions::class)->awayQuantity($cables));
         $this->actingAs($admin)->post('/loans/returns/stow', ['row_id' => $row->id, 'code' => 'R1'])->assertSessionHasNoErrors();
         $this->assertNotNull($row->refresh()->stowed_at);
         $this->assertSame(10, $cables->refresh()->quantity);
+        $this->assertSame(8, ItemStock::for($cables, $this->shelf)->quantity);
+        $this->assertSame(0, app(ItemExtensions::class)->awayQuantity($cables));
     }
 
     public function test_closing_the_defects_takes_missing_pieces_off_the_stock(): void
@@ -101,7 +104,8 @@ class MissingTest extends LoansTestCase
         $this->assertSame(8, $cables->refresh()->quantity);
         $this->assertNull($cables->retired_at);
         $this->assertSame('lost', $loan->positions()->first()->missing_resolution);
-        $this->assertSame(0, app(ItemExtensions::class)->awayQuantity($cables));
+        // only the 4 that came back and wait to be put away
+        $this->assertSame(4, app(ItemExtensions::class)->awayQuantity($cables));
     }
 
     public function test_closing_the_defects_writes_off_what_is_still_missing(): void

@@ -16,6 +16,8 @@ enum MovementType: string
     case Retire = 'retire';
     case Consume = 'consume';
     case Merge = 'merge';
+    // bulk item: new pieces into "Eingang" ("Wareneingang")
+    case Receive = 'receive';
     // written by modules: an item leaves with a loan and comes back (note names the loan)
     case Issue = 'issue';
     case Return = 'return';
@@ -30,6 +32,7 @@ enum MovementType: string
             self::Retire => 'ausgemustert',
             self::Consume => 'verbraucht',
             self::Merge => 'zurückgebucht',
+            self::Receive => 'eingegangen',
             self::Issue => 'ausgegeben',
             self::Return => 'zurückgenommen',
         };

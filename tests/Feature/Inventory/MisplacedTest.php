@@ -3,6 +3,7 @@
 namespace Tests\Feature\Inventory;
 
 use App\Models\Item;
+use App\Models\ItemStock;
 use App\Models\Location;
 use App\Support\Extensions\ItemAwayProvider;
 use App\Support\Extensions\ItemExtensions;
@@ -35,7 +36,11 @@ class MisplacedTest extends TestCase
     {
         $shelf = Location::forceCreate(['type' => 'room', 'code' => 'R1', 'full_code' => 'R1']);
         Location::forceCreate(['type' => 'room', 'code' => 'R2', 'full_code' => 'R2']);
-        $cables = Item::factory()->bulk(10)->create(['location_id' => $shelf->id]);
+        // 10 pieces: 6 on the shelf, 4 away
+        $cables = Item::factory()->bulk(10)->create();
+        $stock = ItemStock::for($cables, $shelf);
+        $stock->quantity = 6;
+        $stock->save();
         FakeAwayItems::$quantities = [$cables->id => 4];
         app(ItemExtensions::class)->addAway(FakeAwayItems::class);
         $admin = $this->admin();
@@ -43,9 +48,9 @@ class MisplacedTest extends TestCase
         $this->assertSame(6, app(ItemExtensions::class)->quantityHere($cables));
         $this->actingAs($admin)->post('/inventory/move', ['item_id' => $cables->id, 'target_code' => 'R2', 'quantity' => 7])->assertSessionHasErrors('quantity');
         $this->actingAs($admin)->post("/inventory/items/{$cables->id}/retire", ['reason' => 'lost', 'quantity' => 7])->assertSessionHasErrors('quantity');
-        $this->actingAs($admin)->put("/inventory/items/{$cables->id}", ['name' => $cables->name, 'kind' => 'bulk', 'quantity' => 3, 'unit' => $cables->unit, 'condition_id' => $cables->condition_id])->assertSessionHasErrors('quantity');
         $this->actingAs($admin)->post('/inventory/move', ['item_id' => $cables->id, 'target_code' => 'R2', 'quantity' => 6])->assertSessionHasNoErrors();
-        $this->assertSame(4, $cables->refresh()->quantity);
+        $this->assertSame(10, $cables->refresh()->quantity);
+        $this->assertSame(0, ItemStock::for($cables, $shelf)->quantity);
         FakeAwayItems::$quantities = [];
     }
 }

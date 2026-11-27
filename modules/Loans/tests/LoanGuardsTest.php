@@ -4,6 +4,7 @@ namespace Modules\Loans\Tests;
 
 use App\Models\Item;
 use App\Models\ItemCondition;
+use App\Models\Location;
 use Illuminate\Validation\ValidationException;
 use Modules\Loans\Actions\ChangePositions;
 use Modules\Loans\Actions\IssueLoan;
@@ -258,7 +259,9 @@ class LoanGuardsTest extends LoansTestCase
             ->assertSessionHasErrors(['confirm' => "{$item->number} ist gebucht: {$loan->number}, ab {$loan->pickup_at->format('d.m., H:i')} Uhr. Trotzdem ausbuchen?"]);
         $this->assertNull($item->refresh()->retired_at);
         $this->actingAs($admin)->post("/inventory/items/{$item->id}/condition", ['condition_id' => $defect->id, 'reason' => 'Bruch'])->assertSessionHasErrors('confirm');
-        $this->actingAs($admin)->post('/inventory/move', ['item_id' => $consumable->id, 'target_code' => $this->shelf->full_code, 'quantity' => 2])->assertSessionHasErrors('confirm');
+        // pieces of a bulk item move freely: the booking counts pieces, not places
+        Location::forceCreate(['type' => 'room', 'code' => 'R2', 'full_code' => 'R2']);
+        $this->actingAs($admin)->post('/inventory/move', ['item_id' => $consumable->id, 'target_code' => 'R2', 'quantity' => 2])->assertSessionHasNoErrors();
 
         // answered "Ja, trotzdem"
         $this->actingAs($admin)->post("/inventory/items/{$item->id}/condition", ['condition_id' => $defect->id, 'reason' => 'Bruch', 'confirmed' => true])->assertSessionHasNoErrors();

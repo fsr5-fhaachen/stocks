@@ -2,6 +2,17 @@
 
 Warum Stocks so gebaut ist, wie es gebaut ist. Neue Einträge oben; jeder Eintrag mit Datum, Entscheidung, Grund und verworfener Alternative.
 
+## 2026-11-28 · Bestand von Mengenartikeln je Stelle
+
+**Ein Mengenartikel hat keinen Ort mehr, sein Bestand liegt je Stelle** (Entscheidungen von Maurice, Testrunde 27.11.2026 Punkt 1). Tabelle `item_stocks`: je Gegenstand und Stelle (Standort `L<id>`, Box `B<id>` oder virtuelles Fach „Eingang“ `IN`) eine Menge und eine optionale Sollmenge. `items.quantity` ist der ganze Bestand: Summe der Stellen plus ausgegeben, vermisst und zurück, aber noch nicht eingeräumt. Alle Mengenänderungen laufen durch `StockBook` (sperrt die Zeile des Gegenstands, schreibt den Bewegungsverlauf). Grund: Kabel in drei Kisten waren drei Gegenstände mit drei Nummern; jetzt ist es einer mit einer Nummer, der an drei Stellen liegt. Verworfen: Abteilen behalten.
+
+- **Abteilen und Zurückbuchen entfallen ganz** (`MergeItem`, Bewegung `split`/`merge` nur noch im alten Verlauf). Die Migration (`StockMigration`) führt bestehende Teile zusammen: Wurzel ist der Ursprung, ist er ausgemustert, der älteste aktive Teil (behält seine Nummer); die übrigen werden als „zusammengeführt“ ausgemustert, `merged_into_id` zeigt auf die Wurzel, ihr Scan führt dorthin (Entscheidung von Maurice).
+- **Stammplatz ist nur ein Vorschlag** (Entscheidung von Maurice): fürs Einräumen nach dem Verleih und später fürs Auffüllen.
+- **Buchung reserviert nur eine Anzahl, abgezogen wird bei der Ausgabe** (Entscheidung von Maurice), von der gewählten Stelle (`loan_items.source_key`) oder der einzigen. Umlagern von Stücken fragt deshalb nicht mehr nach, wenn eine Buchung damit rechnet.
+- **Einräumen nach dem Verleih: der Scan entscheidet die Stelle** (Entscheidung von Maurice); vorgeschlagen wird die Stelle, von der die Stücke kamen, sonst der Stammplatz. Zurück, aber noch nicht eingeräumt, darf gleich wieder ausgegeben werden: die Ausgabe räumt diese Stücke dann an der Quelle ein. Gefundene vermisste Stücke landen im Eingang.
+- **Ganz verbraucht heißt nicht ausgemustert**: ein Mengenartikel mit 0 Stück bleibt, damit er wieder aufgefüllt werden kann. Ausmustern als Ganzes geht weiter über „Ausmustern“ ohne Menge.
+- **Das Formular ändert die Menge nicht mehr**; sie folgt den Stellen (Wareneingang, Zählen, Verbraucht).
+
 ## 2026-11-27 · Barcode der Verpackung beim Erfassen
 
 **Nur kostenlose Quellen, UPCitemdb zuerst** (Entscheidungen von Maurice): UPCitemdb (Free-Plan) kennt Technik am besten, Open Food Facts und Open Products Facts eher Verbrauchsmaterial. Verworfen: EAN-Search (bezahlt, ohne Produktbilder), Go-UPC und Barcode Lookup (bezahlt).

@@ -21,7 +21,8 @@ class DeleteItem
     {
         $hasHistory = $item->movements()->where('type', '!=', MovementType::Create)->exists()
             || $item->conditionChanges()->exists();
-        $isUsed = Item::where('container_id', $item->id)->orWhere('home_container_id', $item->id)->orWhere('split_from_id', $item->id)->exists();
+        $isUsed = Item::where('container_id', $item->id)->orWhere('home_container_id', $item->id)->orWhere('split_from_id', $item->id)->orWhere('merged_into_id', $item->id)->exists()
+            || $item->stocksInside()->exists();
 
         if ($hasHistory || $isUsed) {
             throw ValidationException::withMessages(['item' => "{$item->number} hat schon eine Geschichte und kann nur ausgemustert werden."]);

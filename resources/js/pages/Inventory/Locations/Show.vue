@@ -27,6 +27,23 @@
       Gegenstand hier anlegen
     </UiButton>
     <UiButton
+      v-if="canStock"
+      variant="secondary"
+      icon="box-open"
+      @click="packOpen = true"
+    >
+      Mengenartikel einräumen
+    </UiButton>
+    <UiButton
+      v-if="canStock && stocks.some((entry) => entry.stock.short)"
+      variant="secondary"
+      icon="fill-drip"
+      :disabled="filling"
+      @click="fill"
+    >
+      Auffüllen
+    </UiButton>
+    <UiButton
       v-if="can('labels.print')"
       variant="secondary"
       icon="tag"
@@ -99,7 +116,7 @@
     </UiCard>
 
     <UiCard title="Gegenstände hier" flush>
-      <ul v-if="items.length" class="divide-y divide-line">
+      <ul v-if="items.length || stocks.length" class="divide-y divide-line">
         <li
           v-for="item in items"
           :key="item.id"
@@ -121,10 +138,42 @@
             {{ item.contents_count }} darin
           </span>
         </li>
+        <!-- pieces of bulk items lying here, with their target ("Sollmenge") -->
+        <li
+          v-for="stock in stocks"
+          :key="stock.stock.key + stock.id"
+          class="flex flex-wrap items-center gap-2 px-4 py-3 sm:px-6"
+        >
+          <FontAwesomeIcon
+            :icon="['fas', 'boxes-stacked']"
+            class="text-ink-muted"
+          />
+          <UiLink :href="`/inventory/items/${stock.id}`">{{
+            stock.name
+          }}</UiLink>
+          <span class="font-mono text-xs text-ink-muted">{{
+            stock.number
+          }}</span>
+          <UiBadge :variant="stock.stock.short ? 'danger' : 'neutral'"
+            >{{ stock.quantity
+            }}<template v-if="stock.stock.target_quantity">
+              / soll {{ stock.stock.target_quantity }}</template
+            >
+            {{ stock.unit }}</UiBadge
+          >
+        </li>
       </ul>
       <UiEmptyState v-else icon="boxes-stacked" title="Hier liegt nichts" />
     </UiCard>
   </div>
+
+  <InventoryPackModal
+    v-if="packOpen"
+    :target="location.full_code"
+    title="Mengenartikel einräumen"
+    @close="packOpen = false"
+    @done="packOpen = false"
+  />
 
   <InventoryLocationModal
     v-if="editOpen"
@@ -136,7 +185,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
+import { router } from "@inertiajs/vue3";
 
 type LocationSummary = {
   id: number;
@@ -153,7 +203,7 @@ type LocationSummary = {
  * A location with the locations and the items directly in it. Items in boxes are listed on the
  * page of the box.
  */
-defineProps<{
+const props = defineProps<{
   location: LocationSummary & {
     description: string | null;
   };
@@ -169,10 +219,39 @@ defineProps<{
     is_container: boolean;
     contents_count: number;
   }[];
+  // pieces of bulk items lying here
+  stocks: {
+    id: number;
+    number: string;
+    name: string;
+    unit: string | null;
+    quantity: number;
+    stock: StockMark;
+  }[];
   // all locations, for moving this one
   locations: LocationSummary[];
 }>();
 
 const { can } = usePermissions();
 const editOpen = ref(false);
+
+// bulk pieces: "einräumen" from another place, "Auffüllen" up to the targets from "Eingang"
+const canStock = computed(
+  () =>
+    can("inventory.move") &&
+    props.location.type !== "address" &&
+    props.location.type !== "building",
+);
+const packOpen = ref(false);
+const filling = ref(false);
+const fill = () =>
+  router.post(
+    "/inventory/stocks/fill",
+    { code: props.location.full_code },
+    {
+      preserveScroll: true,
+      onStart: () => (filling.value = true),
+      onFinish: () => (filling.value = false),
+    },
+  );
 </script>

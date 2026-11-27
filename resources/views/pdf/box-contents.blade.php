@@ -145,7 +145,7 @@
                                 @endif
                             </td>
                             <td class="mono" style="font-size: 8pt;">{{ $item->number }}</td>
-                            <td style="text-align: right;">{{ $item->kind->value === 'bulk' ? trim($item->quantity.' '.$item->unit) : '1' }}</td>
+                            <td style="text-align: right;">{{ $item->kind->value === 'bulk' ? trim($row['quantity'].' '.$item->unit) : '1' }}@if ($row['target'] !== null)<div class="text">soll {{ $row['target'] }}</div>@endif</td>
                         </tr>
                     @endforeach
                 </tbody>

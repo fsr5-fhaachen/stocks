@@ -46,7 +46,7 @@ class UnitTest extends TestCase
     public function test_consumables_can_be_marked_as_used_up_by_members(): void
     {
         $member = $this->userWithRoles('Freies Mitglied');
-        $ties = Item::factory()->bulk(100, 'Packungen')->create();
+        $ties = Item::factory()->bulk(100, 'Packungen')->stockedAt()->create();
 
         $this->actingAs($member)->get("/inventory/items/{$ties->id}")->assertInertia(fn ($page) => $page->where('consumable', true));
         $this->actingAs($member)->post("/inventory/items/{$ties->id}/consume", ['quantity' => 3, 'note' => 'Aufbau Party'])

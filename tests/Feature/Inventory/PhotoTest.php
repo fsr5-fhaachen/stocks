@@ -4,7 +4,6 @@ namespace Tests\Feature\Inventory;
 
 use App\Models\Item;
 use App\Models\ItemPhoto;
-use App\Models\Location;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Mockery;
@@ -64,24 +63,6 @@ class PhotoTest extends TestCase
         ])->assertSessionHasErrors('photos');
 
         $this->assertDatabaseCount('items', 0);
-    }
-
-    public function test_a_split_off_part_gets_copies_of_the_photos(): void
-    {
-        $actor = $this->userWithPermissions('inventory.view', 'inventory.move');
-        Location::factory()->create(['code' => 'GO']);
-        $tape = Item::factory()->bulk(10, 'Rollen')->create();
-        [$photo] = ItemPhoto::uploadAll($tape, [UploadedFile::fake()->image('tape.jpg')]);
-
-        $this->actingAs($actor)->post('/inventory/move', ['item_id' => $tape->id, 'target_code' => 'GO', 'quantity' => 4])->assertSessionHasNoErrors();
-
-        $copy = Item::where('split_from_id', $tape->id)->sole()->photos()->sole();
-        $this->assertNotSame($photo->path, $copy->path);
-        Storage::disk(ItemPhoto::DISK)->assertExists([$photo->path, $copy->path]);
-
-        // deleting the copy keeps the photo of the origin
-        $copy->deleteWithFile();
-        Storage::disk(ItemPhoto::DISK)->assertExists($photo->path);
     }
 
     public function test_only_images_up_to_five_megabytes_are_accepted(): void

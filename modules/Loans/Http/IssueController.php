@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Inventory\ItemPhotoController;
 use App\Models\ItemCondition;
 use App\Models\ItemPhoto;
+use App\Models\ItemStock;
 use App\Support\Surface;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -65,6 +66,11 @@ class IssueController extends Controller
                 'checked_at' => $row->checked_at?->toIso8601String(),
                 'checked_by_scan' => $row->checked_by_scan,
                 'stock' => $row->item->quantity,
+                // bulk position: places with pieces to take them from, and the chosen one
+                'sources' => $row->parent_id === null && $row->isBulk()
+                    ? $row->item->stocks()->where('quantity', '>', 0)->with(['location', 'container'])->get()->map(fn (ItemStock $stock) => $stock->summary())->values()->all()
+                    : [],
+                'source_key' => $row->source_key,
                 'box_checks' => $row->boxChecks->map(fn (LoanBoxCheck $check) => "kontrolliert von {$check->name} am {$check->checked_at->format('d.m. H:i')} (".count($check->ticks)." von {$check->total})")->all(),
                 'hints' => $row->parent_id === null && $row->item->is_container ? $availability->check($row->item, 1, $loan->pickup_at, $loan->return_at, $loan)['hints'] : [],
                 'issue_state' => $row->issue_state?->value,
@@ -91,9 +97,11 @@ class IssueController extends Controller
             'code' => ['nullable', 'required_without:row_id', 'string', 'max:200'],
             'row_id' => ['nullable', 'integer'],
             'quantity' => ['nullable', 'integer', 'min:1'],
+            // bulk position: place the pieces leave from (item_stocks.place_key)
+            'from' => ['nullable', 'string', 'max:20'],
         ]);
 
-        $result = $this->issueLoan->check($request->user(), $loan, $validated['code'] ?? null, $validated['row_id'] ?? null, $validated['quantity'] ?? null);
+        $result = $this->issueLoan->check($request->user(), $loan, $validated['code'] ?? null, $validated['row_id'] ?? null, $validated['quantity'] ?? null, $validated['from'] ?? null);
         if ($foreign = $result['foreign']) {
             $check = $availability->check($foreign->load('condition'), 1, $loan->pickup_at, $loan->return_at, $loan);
 

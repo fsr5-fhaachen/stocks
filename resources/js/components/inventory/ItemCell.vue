@@ -72,7 +72,15 @@
   <template v-else-if="column === 'category'">{{ row.category }}</template>
 
   <template v-else-if="column === 'place'">
-    <InventoryPlaceLink :place="row.place" empty="kein Ort" />
+    <!-- bulk items lie at their places, not at one -->
+    <span v-if="row.kind === 'bulk'" class="text-ink-muted">
+      {{
+        row.places_count === 1
+          ? "an 1 Stelle"
+          : `an ${row.places_count ?? 0} Stellen`
+      }}
+    </span>
+    <InventoryPlaceLink v-else :place="row.place" empty="kein Ort" />
     <UiBadge v-if="row.away_from_home" variant="warning" class="ml-2">
       nicht am Stammplatz
     </UiBadge>

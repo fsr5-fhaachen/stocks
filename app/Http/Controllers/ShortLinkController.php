@@ -7,6 +7,7 @@ use App\Models\ItemPhoto;
 use App\Models\Location;
 use App\Models\ReservedNumber;
 use App\Support\Extensions\ItemExtensions;
+use App\Support\Inventory\BoxContents;
 use App\Support\Inventory\CodeLookup;
 use App\Support\Settings;
 use Illuminate\Http\RedirectResponse;
@@ -136,11 +137,11 @@ class ShortLinkController extends Controller
             return [];
         }
 
-        return $box->contents()->active()->with('photos')->get()->map(fn (Item $item) => [
-            ...$item->only(['number', 'name', 'quantity', 'unit', 'is_container']),
-            'kind' => $item->kind->value,
-            'photo_url' => $this->photoUrl($item->photos->first(), thumb: true),
-            'contents' => $item->is_container ? $this->contents($item, $depth + 1) : [],
+        // bulk pieces in the box show the quantity in this box, with its target quantity
+        return BoxContents::of($box, ['photos'])->map(fn (array $entry) => [
+            ...collect(BoxContents::fields($entry))->except(['id'])->all(),
+            'photo_url' => $this->photoUrl($entry['item']->photos->first(), thumb: true),
+            'contents' => $entry['stock'] === null && $entry['item']->is_container ? $this->contents($entry['item'], $depth + 1) : [],
         ])->all();
     }
 
