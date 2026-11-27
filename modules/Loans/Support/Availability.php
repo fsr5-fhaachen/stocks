@@ -22,7 +22,8 @@ use Modules\Loans\Models\LoanItem;
  *
  * An item is taken in a time if a confirmed or issued loan holds it in an overlapping time:
  * - directly, or through a box it lies in (a booked box takes its whole contents),
- * - a bulk item counts its quantity: free is the stock minus the quantities of overlapping loans,
+ * - a bulk item counts its quantity: free is the stock minus the quantities of overlapping loans
+ *   and minus the pieces still missing after a return (a bulk item is never split for a loan),
  * - an overdue loan holds its items until they are back, so it overlaps every later time,
  * - between two loans the setting "loans.buffer_hours" stays free.
  *
@@ -171,7 +172,6 @@ class Availability
         $rows = $this->overlapping(LoanStatus::reserving(), $from, $to, $except)
             ->where(fn (Builder $query) => $query
                 ->where('loan_items.item_id', $item->id)
-                ->orWhere('loan_items.issued_item_id', $item->id)
                 // a box that is out holds what lies in it, unless its row came back already
                 // (partial return of the contents)
                 ->orWhere(fn (Builder $query) => $query->whereIn('loan_items.item_id', $boxIds)
@@ -187,20 +187,17 @@ class Availability
             return [$conflicts, 0];
         }
 
-        // stock: what is here plus the parts that are out with an issued loan and come back, plus
-        // the parts that came back and are not put away (merged) yet
-        $out = LoanItem::where('item_id', $item->id)->whereNotNull('issued_item_id')->whereNull('returned_at')
-            ->whereHas('loan', fn (Builder $query) => $query->where('status', LoanStatus::Issued))->sum('quantity');
-        $back = LoanItem::where('item_id', $item->id)->whereNotNull('issued_item_id')->whereNotNull('returned_at')->whereNull('stowed_at')
-            ->with('issuedItem')->get()->sum(fn (LoanItem $row) => $row->issuedItem && ! $row->issuedItem->isRetired() ? $row->issuedItem->quantity : 0);
+        // the stock holds what is out too (it is in the rows of the overlapping loans); pieces still
+        // missing after a return are not there
+        $missing = LoanItem::where('item_id', $item->id)->stillMissing()->sum('missing_quantity');
         $booked = $rows->where('item_id', $item->id)->sum('quantity');
 
-        return [$conflicts, $item->quantity + (int) $out + (int) $back - (int) $booked];
+        return [$conflicts, $item->quantity - (int) $missing - (int) $booked];
     }
 
     /**
      * Check if the item is free despite the conflicts: a bulk item if enough is left, unless a row
-     * holds it as a whole (a box around it, or it is a part that is out with a loan).
+     * holds it as a whole (a box around it).
      *
      * @param  list<array{row: LoanItem}>  $conflicts
      */

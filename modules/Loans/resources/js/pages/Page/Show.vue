@@ -173,6 +173,7 @@
         <li v-for="document in documents" :key="document.id">
           <a
             :href="document.url"
+            data-file-viewer
             class="flex min-h-[44px] items-center gap-3 px-4 py-3 hover:bg-surface-muted sm:px-6"
           >
             <FontAwesomeIcon
@@ -303,8 +304,11 @@
                 >{{ row.name }}</span
               >
               <span class="text-xs text-ink-muted">
-                <span class="font-mono">{{ row.number }}</span
-                ><template v-if="row.amount"> · {{ row.amount }}</template>
+                <span class="font-mono">{{ row.number }}</span><template
+                  v-if="row.amount"
+                >
+                  · {{ row.amount }}</template
+                >
               </span>
             </span>
             <UiButton

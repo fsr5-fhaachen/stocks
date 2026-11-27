@@ -28,11 +28,14 @@ class ItemPhotoController extends Controller
     }
 
     /**
-     * Deliver a photo. Browsers keep it for a day, photos never change under their url.
+     * Deliver a photo, with "?thumb=1" its small preview. Browsers keep it for a day, photos never
+     * change under their url.
      */
-    public function show(ItemPhoto $photo): StreamedResponse
+    public function show(Request $request, ItemPhoto $photo): StreamedResponse
     {
-        return Storage::disk(ItemPhoto::DISK)->response($photo->path, headers: [
+        $path = $request->boolean('thumb') ? $photo->thumbnailPath() : $photo->path;
+
+        return Storage::disk(ItemPhoto::DISK)->response($path, headers: [
             'Cache-Control' => 'private, max-age=86400',
         ]);
     }

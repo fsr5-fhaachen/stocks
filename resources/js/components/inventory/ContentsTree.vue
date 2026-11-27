@@ -19,11 +19,21 @@
           />
         </button>
         <span v-else class="w-4" />
-        <FontAwesomeIcon
-          v-if="item.is_container"
-          :icon="['fas', 'box']"
-          class="text-ink-muted"
+        <img
+          v-if="item.photo_url"
+          :src="item.photo_url"
+          alt=""
+          class="h-8 w-8 shrink-0 rounded object-cover"
+          loading="lazy"
         />
+        <div
+          v-else
+          class="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-surface-muted text-sm text-ink-muted"
+        >
+          <FontAwesomeIcon
+            :icon="['fas', item.is_container ? 'box' : 'boxes-stacked']"
+          />
+        </div>
         <!-- the kiosk has no item pages -->
         <span v-if="kiosk">{{ item.name }}</span>
         <UiLink v-else :href="`/inventory/items/${item.id}`">{{

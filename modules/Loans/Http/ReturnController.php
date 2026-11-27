@@ -60,7 +60,7 @@ class ReturnController extends Controller
                 'state_label' => $row->return_state?->label(),
                 'note' => $row->return_note,
                 'consumable' => $row->isBulk() && ItemUnit::isConsumable($row->item->unit),
-                'condition_id' => $row->physicalItem()->condition_id,
+                'condition_id' => $row->item->condition_id,
                 'single_check' => $inspect || in_array($row->item_id, $uncheckedBoxes, true),
                 // documented when it left, so nobody answers for it at the return
                 'issue_defect' => $row->issueDefect(),
@@ -87,7 +87,7 @@ class ReturnController extends Controller
 
         $row = $this->returnLoan->check($request->user(), $loan, $mode === 'inspect', $validated['code'] ?? null, $validated['row_id'] ?? null, $validated['quantity'] ?? null, $validated['quantities'] ?? []);
 
-        return back()->with('success', "{$row->physicalItem()->number} abgehakt.");
+        return back()->with('success', "{$row->item->number} abgehakt.");
     }
 
     /**

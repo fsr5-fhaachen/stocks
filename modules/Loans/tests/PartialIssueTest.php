@@ -2,6 +2,7 @@
 
 namespace Modules\Loans\Tests;
 
+use App\Support\Extensions\ItemExtensions;
 use Illuminate\Http\UploadedFile;
 use Modules\Loans\Enums\DocumentType;
 use Modules\Loans\Enums\LoanStatus;
@@ -83,7 +84,9 @@ class PartialIssueTest extends LoansTestCase
         $this->actingAs($admin)->post("/loans/{$loan->id}/issue/check", ['row_id' => $position->id, 'quantity' => 7]);
         $this->actingAs($admin)->post("/loans/{$loan->id}/issue/complete", $this->signatures())->assertSessionHasNoErrors();
 
-        $this->assertSame(33, $benches->refresh()->quantity);
+        // the stock stays, 7 are out
+        $this->assertSame(40, $benches->refresh()->quantity);
+        $this->assertSame(7, app(ItemExtensions::class)->awayQuantity($benches));
         $rest = $loan->positions()->whereNull('issued_at')->first();
         $this->assertSame(3, $rest->quantity);
         // the rest is no defect: the return of the 7 closes nothing while the rest may still leave

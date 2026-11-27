@@ -17,10 +17,23 @@ use Tests\TestCase;
  */
 class KioskDemoTest extends TestCase
 {
-    public function test_the_generator_pairs_two_tablets_that_the_demo_accounts_can_unlock(): void
+    /**
+     * One test with two generator runs (several seconds each): the first in a transaction for the
+     * pairing urls, the second stays for the unlock.
+     */
+    public function test_the_generator_pairs_two_tablets_with_the_same_urls_for_the_same_seed(): void
     {
         Storage::fake('s3');
+        $tokens = fn (): array => KioskDevice::orderBy('id')->get()->map(fn (KioskDevice $device) => $device->token)->all();
+
+        DB::beginTransaction();
         app(DemoGenerator::class)->run();
+        $first = $tokens();
+        DB::rollBack();
+        Cache::flush();
+
+        app(DemoGenerator::class)->run();
+        $this->assertSame($first, $tokens(), 'the same seed gives the same pairing urls');
 
         $this->assertSame(['Lager-Tablet' => KioskPlatform::Android, 'iPad Ausgabe' => KioskPlatform::Ipados], KioskDevice::orderBy('id')->get()->mapWithKeys(fn (KioskDevice $device) => [$device->name => $device->platform])->all());
 
@@ -29,21 +42,5 @@ class KioskDemoTest extends TestCase
         $this->withCookie(KioskDevice::COOKIE_NAME, $device->cookieValue())
             ->post('/kiosk/unlock', ['user_id' => $member->id, 'pin' => UserFactory::PIN])
             ->assertRedirect('/kiosk/home');
-    }
-
-    public function test_the_same_seed_gives_the_same_pairing_urls(): void
-    {
-        Storage::fake('s3');
-        $tokens = function (): array {
-            DB::beginTransaction();
-            app(DemoGenerator::class)->run(7);
-            $tokens = KioskDevice::orderBy('id')->get()->map(fn (KioskDevice $device) => $device->token)->all();
-            DB::rollBack();
-            Cache::flush();
-
-            return $tokens;
-        };
-
-        $this->assertSame($tokens(), $tokens());
     }
 }

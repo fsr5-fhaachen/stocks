@@ -23,14 +23,19 @@ use Modules\Loans\Models\LoanItem;
 use Modules\Loans\Models\LoanMessage;
 use Modules\Loans\Models\LoanNotification;
 use Modules\Loans\Support\Availability;
+use Modules\Loans\Support\LoanAwayItems;
 
 /**
  * Demo data of the loan module and the full test sheet (documentation/DEMO.md).
  */
 class DemoTest extends LoansTestCase
 {
-    public function test_the_generator_creates_loans_in_every_status_and_every_case(): void
+    /**
+     * One generator run (several seconds) for every check of the module: loans, test sheet and borrower pages.
+     */
+    public function test_the_generator_creates_every_case_the_sheet_and_the_borrower_pages_without_sending(): void
     {
+        Notification::fake();
         app(DemoGenerator::class)->run();
 
         $this->assertSame(79, Contact::count());
@@ -46,6 +51,7 @@ class DemoTest extends LoansTestCase
         $this->assertGreaterThan(1, LoanBoxCheck::count());
         $this->assertGreaterThan(1, StowItem::pending()->count());
         $this->assertTrue(LoanItem::stillMissing()->exists(), 'vermisst');
+        $this->assertTrue(LoanAwayItems::bulkPositions(LoanAwayItems::issuedRows())->exists(), 'Mengenartikel teils ausgegeben');
         $this->assertTrue(Contact::whereNull('phone')->exists());
         $this->assertTrue(Contact::whereNull('council_id')->exists() && Contact::whereNotNull('council_id')->exists());
         $this->assertTrue(Loan::where('status', LoanStatus::ClosedWithDefects)->whereNotNull('defects_closed_at')->exists());
@@ -62,11 +68,8 @@ class DemoTest extends LoansTestCase
         // a draft that collides with a confirmed loan
         $collides = Loan::where('status', LoanStatus::Draft)->get()->contains(fn (Loan $loan) => app(Availability::class)->problems($loan) !== []);
         $this->assertTrue($collides);
-    }
 
-    public function test_the_test_sheet_has_24_codes_that_exist_in_the_data(): void
-    {
-        app(DemoGenerator::class)->run();
+        // the full test sheet: 24 codes that exist in the data
         $labels = app(Settings::class)->get('demo.labels');
 
         $this->assertCount(TestSheet::LABELS, $labels);
@@ -86,13 +89,8 @@ class DemoTest extends LoansTestCase
         }
 
         $this->assertStringStartsWith('%PDF', app(TestSheet::class)->pdf());
-    }
 
-    public function test_the_generator_fills_the_borrower_pages_without_sending(): void
-    {
-        Notification::fake();
-        app(DemoGenerator::class)->run();
-
+        // the borrower pages are filled, nothing was sent
         Notification::assertNothingSent();
         $this->assertGreaterThanOrEqual(3, Loan::has('messages')->count());
         $this->assertSame(1, LoanMessage::where('sender', 'contact')->whereNull('read_by_staff_at')->distinct()->count('loan_id'));

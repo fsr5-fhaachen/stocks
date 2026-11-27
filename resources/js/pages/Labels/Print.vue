@@ -22,8 +22,8 @@
   <template v-else>
     <!-- the address in the codes can not change for printed labels -->
     <UiAlert v-if="!baseUrlConfirmed" type="warning" class="mb-6">
-      Die Codes führen auf <strong class="font-mono">{{ baseUrl }}</strong
-      >. Ändert sich diese Adresse später, öffnet die Handykamera die Etiketten
+      Die Codes führen auf <strong class="font-mono">{{ baseUrl }}</strong>.
+      Ändert sich diese Adresse später, öffnet die Handykamera die Etiketten
       nicht mehr (der Scan in Stocks liest weiter die Nummer). Die Adresse steht
       unter Verwaltung › Einstellungen › Allgemein.
       <button
@@ -195,11 +195,7 @@
                     Drucken
                   </UiButton>
                 </template>
-                <p v-else class="text-sm text-ink-muted">
-                  Direkt drucken geht nur in Chrome oder Edge am PC und unter
-                  Android. Hier das Bild herunterladen und mit der Niimbot-App
-                  drucken.
-                </p>
+                <LabelsDirectPrintHint v-else />
                 <UiButton
                   :variant="connections.length ? 'secondary' : 'primary'"
                   class="w-full"

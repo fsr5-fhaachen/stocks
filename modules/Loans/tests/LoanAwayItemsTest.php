@@ -5,6 +5,7 @@ namespace Modules\Loans\Tests;
 use App\Models\Item;
 use App\Support\Extensions\ItemExtensions;
 use Modules\Loans\Models\Loan;
+use Modules\Loans\Support\LoanAwayItems;
 
 /**
  * Lent items are not "Ohne Platz"; back but not put away or missing they are again.
@@ -56,16 +57,17 @@ class LoanAwayItemsTest extends LoansTestCase
         $this->assertSame([$item->id], $this->misplaced());
     }
 
-    public function test_of_a_bulk_item_only_the_lent_part_is_left_out(): void
+    public function test_a_bulk_item_with_lent_pieces_stays_as_it_is(): void
     {
+        // without place it stays misplaced: lent pieces do not hide the item
         $cables = $this->item(['kind' => 'bulk', 'quantity' => 10, 'unit' => 'Stück', 'location_id' => null]);
-        $loan = $this->issued([[$cables, 4]]);
-        $part = $loan->positions()->first()->issued_item_id;
-        $this->assertNotNull($part);
-
-        // the stock lies nowhere and stays misplaced, the lent part is away
+        $this->issued([[$cables, 4]]);
         $this->assertSame([$cables->id], $this->misplaced());
-        $this->assertNotContains($part, $this->misplaced());
+
+        // at its place it is not misplaced, 4 pieces are away
+        $cables->forceFill(['location_id' => $this->shelf->id])->save();
+        $this->assertSame([], $this->misplaced());
+        $this->assertSame([$cables->id => 4], app(LoanAwayItems::class)->awayQuantities([$cables->id]));
     }
 
     public function test_with_the_module_off_lent_items_count_again(): void

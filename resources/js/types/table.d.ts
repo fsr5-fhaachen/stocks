@@ -22,6 +22,8 @@ declare global {
     name: string;
     category: string | null;
     quantity: number;
+    // bulk items: pieces there, without those a module has away (lent, missing)
+    quantity_here: number | null;
     unit: string | null;
     kind: "single" | "bulk";
     is_container: boolean;

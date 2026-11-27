@@ -7,6 +7,7 @@ import AuthLayout from "./layouts/AuthLayout.vue";
 import PublicLayout from "./layouts/PublicLayout.vue";
 import SurfaceLayout from "./layouts/SurfaceLayout.vue";
 import coreIcons from "./icons";
+import FileViewer from "./components/ui/FileViewer.vue";
 
 // icons of the core and of all modules (modules/<Module>/resources/js/icons.ts)
 const moduleIcons = import.meta.glob<{ default: typeof coreIcons }>(
@@ -68,7 +69,8 @@ createInertiaApp({
     color: "rgb(var(--color-accent, 34 148 140))",
   },
   setup({ el, App, props, plugin }) {
-    createApp({ render: () => h(App, props) })
+    // the file viewer of the home screen app on iOS (pdfs with share button) lies over every page
+    createApp({ render: () => [h(App, props), h(FileViewer)] })
       .use(plugin)
       .component("FontAwesomeIcon", FontAwesomeIcon)
       .mount(el);

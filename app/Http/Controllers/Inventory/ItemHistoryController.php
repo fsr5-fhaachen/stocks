@@ -39,7 +39,7 @@ class ItemHistoryController extends Controller
      */
     public function destroyConditionChange(Item $item, ItemConditionChange $conditionChange): RedirectResponse
     {
-        $paths = $conditionChange->photos()->pluck('path')->all();
+        $paths = ItemPhoto::filesOf($conditionChange->photos()->get());
 
         // the photo rows are deleted by the database (cascade)
         $conditionChange->delete();

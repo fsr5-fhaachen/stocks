@@ -3,7 +3,9 @@
 namespace Modules\Loans\Tests;
 
 use App\Enums\MovementType;
+use App\Models\Item;
 use App\Models\Location;
+use App\Support\Extensions\ItemExtensions;
 use Illuminate\Http\UploadedFile;
 use Modules\Loans\Actions\IssueLoan;
 use Modules\Loans\Enums\DocumentType;
@@ -114,20 +116,34 @@ class IssueTest extends LoansTestCase
         unset($later);
     }
 
-    public function test_bulk_items_are_split_at_the_issue(): void
+    public function test_bulk_items_are_not_split_at_the_issue(): void
     {
         $benches = $this->item(['kind' => 'bulk', 'quantity' => 40, 'unit' => 'Stück', 'name' => 'Bierbank']);
         $loan = $this->issued([[$benches, 20]]);
 
-        $position = $loan->positions()->first();
-        $this->assertNotNull($position->issued_item_id);
-        $this->assertSame(20, $benches->refresh()->quantity);
-        $this->assertSame(20, $position->issuedItem->quantity);
-        $this->assertNull($position->issuedItem->location_id);
-        // the rest at home is not locked, the part is
+        // the item keeps its whole stock and its place, the row counts what left
+        $this->assertFalse(Item::whereNotNull('split_from_id')->exists());
+        $this->assertSame(40, $benches->refresh()->quantity);
+        $this->assertSame($this->shelf->id, $benches->location_id);
+        $this->assertSame(20, $loan->positions()->first()->quantity);
+        $this->assertSame(20, $benches->movements()->where('type', MovementType::Issue)->sole()->quantity);
+        $this->assertSame(20, app(ItemExtensions::class)->awayQuantity($benches));
+
+        // not locked: the 20 here can move or be used up, not more
+        $this->actingAs($this->admin())->get("/inventory/items/{$benches->id}")->assertInertia(fn ($page) => $page->where('item.quantity_here', 20)->where('notices.0.lock', false)->where('notices.0.text', fn ($text) => str_starts_with($text, '20 Stück ausgegeben an')));
+        // "vorhanden" on the scan card and in the list
+        $this->actingAs($this->admin())->getJson("/inventory/lookup?code={$benches->number}")->assertJsonPath('quantity_here', 20)->assertJsonPath('quantity', 40);
+        $this->actingAs($this->admin())->get('/inventory/items')->assertInertia(fn ($page) => $page->where('items.data', fn ($rows) => collect($rows)->firstWhere('id', $benches->id)['quantity_here'] === 20));
         Location::forceCreate(['type' => 'room', 'code' => 'R2', 'full_code' => 'R2']);
-        $this->actingAs($this->admin())->post('/inventory/move', ['item_id' => $benches->id, 'target_code' => 'R2', 'quantity' => 1])->assertSessionHasNoErrors();
-        $this->actingAs($this->admin())->post('/inventory/move', ['item_id' => $position->issued_item_id, 'target_code' => $this->shelf->full_code])->assertSessionHasErrors('item');
+        $this->actingAs($this->admin())->post('/inventory/move', ['item_id' => $benches->id, 'target_code' => 'R2', 'quantity' => 21])->assertSessionHasErrors('quantity');
+        $this->actingAs($this->admin())->post("/inventory/items/{$benches->id}/retire", ['reason' => 'lost'])->assertSessionHasErrors('quantity');
+        $this->actingAs($this->admin())->post('/inventory/move', ['item_id' => $benches->id, 'target_code' => 'R2', 'quantity' => 5])->assertSessionHasNoErrors();
+        $this->assertSame(35, $benches->refresh()->quantity);
+        // the whole item may move: the lent pieces come back to its new place
+        $this->actingAs($this->admin())->post('/inventory/move', ['item_id' => $benches->id, 'target_code' => 'R2'])->assertSessionHasNoErrors();
+
+        // the tab "Verleih" shows where the pieces are
+        $this->actingAs($this->admin())->getJson("/loans/items/{$benches->id}")->assertJsonPath('pieces.0.quantity', 20)->assertJsonPath('pieces.0.loan.number', $loan->number);
     }
 
     public function test_signatures_are_required_unless_signed_on_paper(): void

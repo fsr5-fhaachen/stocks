@@ -2,6 +2,22 @@
 
 Warum Stocks so gebaut ist, wie es gebaut ist. Neue Einträge oben; jeder Eintrag mit Datum, Entscheidung, Grund und verworfener Alternative.
 
+## 2026-11-27 · Mengenartikel im Verleih ohne Abteilen
+
+**Ein Mengenartikel wird für eine Buchung nicht mehr abgeteilt** (Entscheidung von Maurice). Die Zeile hält fest, wie viele draußen (`quantity`), zurück (`returned_quantity`) und vermisst (`missing_quantity`) sind; der Gegenstand behält Bestand, Ort und Nummer. Grund: Ein verliehener Teil liegt nirgends und braucht keine eigene Nummer; das Abteilen brauchte Sonderwege (Rückgabe-Scan über den Ursprung, Zurückbuchen beim Einräumen, Rückbuchen vor der Ausgabe, vermisste Teile) und erzeugte Nummern ohne Etikett. Der Kern erfährt über `ItemAwayProvider::awayQuantities()`, wie viele Stücke weg sind, und begrenzt Umlagern einer Teilmenge, Verbrauchen und Ausmustern darauf. Eine beschädigte Teilmenge bleibt eine Notiz am Mangel (Entscheidung von Maurice). Einräumen bestätigt den Ort per Scan, ein anderer Ort wird abgelehnt (Entscheidung von Maurice). Die Migration bucht bestehende abgeteilte Teile in ihren Ursprung zurück (ausgemustert als „zusammengeführt“, Nummer bleibt) und entfernt `issued_item_id`. Verworfen: Abteilen behalten und nur `label_printed_at` beim Teil leeren.
+
+**Abgeteilte Teile gelten als unetikettiert.** Beim Umlagern einer Teilmenge kopierte `replicate()` `label_printed_at` mit; der Teil fehlte im Filter „noch nicht etikettiert“.
+
+## 2026-11-25 · Schnellere Tests
+
+**Die Tests nutzen eine SQLite-Datei statt `:memory:`** (`database/testing.sqlite`, angelegt von `tests/bootstrap.php`). Mit `:memory:` migriert `RefreshDatabase` vor jedem Test neu, bei über 450 Tests und allen Migrationen von Kern und Modulen der größte Grundaufwand; mit einer Datei migriert es einmal je Lauf und rollt jeden Test in einer Transaktion zurück. Verworfen: Schema-Dump (muss bei jeder Migration neu erzeugt werden).
+
+**Ein Generator-Lauf je Demo-Test** (Wunsch von Maurice: CI zu langsam). Ein Lauf des Demo-Generators dauert mehrere Sekunden; die neun Demo-Tests riefen ihn elfmal auf, gut 40 % der Laufzeit. Jetzt prüft je Datei ein Test alles an denselben Daten (Kern und Kiosk: ein Lauf in einer Transaktion für den Vergleich gleicher Startwert, ein zweiter bleibt für die übrigen Prüfungen; Verleih: ein Lauf), zusammen fünf Läufe. Der Vergleich nutzt jetzt den Standard-Startwert statt 7. Verworfen: Tests parallel mit paratest (neue Abhängigkeit, erst wenn es noch nicht reicht).
+
+## 2026-11-25 · Klon auf einem Windows-Laufwerk
+
+**Mit dem Klon auf einem Windows-Laufwerk (z. B. `P:`) gilt Weg C1** (Entscheidung von Maurice): PHP und Node nativ, nur MariaDB, Redis und MinIO in Docker. `./vendor/bin/sail` scheitert dort, weil WSL den Pfad nicht übersetzen kann; ein Container, der die App direkt von diesem Laufwerk ausführt, ist spürbar langsamer als `php artisan serve` nativ, weil er jede Datei über die Freigabe von Docker Desktop liest. `WWWUSER`/`WWWGROUP` haben in `docker-compose.sail.yaml` die Vorgabe 1000, damit `docker compose` ohne Sail nicht an einer leeren Gruppen-ID scheitert. Verworfen: eigener Weg „Docker aus PowerShell“ mit `sail.ps1` (zu langsam), `vendor/` in einem Docker-Volume (IDE sieht die Pakete nicht mehr).
+
 ## 2026-11-24 · Version und „Update verfügbar“ im Menü
 
 **Die Version kommt aus dem Image** (`STOCKS_VERSION`, Build-Argument der Workflows): der Tag des Releases oder `dev-<commit>`. Einzige Quelle sind die Git-Tags; `package.json` und `composer.json` bleiben unberührt. Verworfen: Version von Hand in einer Datei pflegen.
@@ -42,6 +58,12 @@ Gehört zu Phase 5, keine neue Phase. Entscheidungen von Maurice vom 15.11. und 
 
 **„Nach Boxen gruppieren“ als Schalter** in „Gegenstände“ und „Ohne Platz“ (23.11.), je Gerät und Liste gemerkt; Boxen aufklappbar, bei Suche und Filtern flach. Verworfen: Gruppierung als Vorgabe.
 
+**Gruppierung doch als Vorgabe, Wahl als Cookie** (26.11., v0.1.1). „Nach Boxen gruppieren“ ist an, bis man es auf einem Gerät ausschaltet; die Wahl liegt in einem Cookie, das der Server setzt und liest, damit schon die erste Seite richtig kommt. Verworfen: weiter `localStorage` (die Seite lud erst flach und dann gruppiert).
+
+**Vorschaubilder für Fotos auf dem Server** (26.11., v0.1.1). Zu jedem Foto ein JPEG bis 256 Pixel neben dem Foto; die Migration erzeugt sie für vorhandene Fotos, fehlende entstehen beim ersten Abruf. Die Fotos selbst bleiben, wie der Browser sie hochgeladen hat (1600 Pixel). Grund: Listen und der Inhalt großer Boxen luden sonst je Zeile ein volles Foto.
+
+**Direktdruck am iPhone über Bluefy** (26.11., v0.1.1). Safari und alle Browser auf iOS haben kein Web Bluetooth; der Browser Bluefy hat es. Stocks zeigt dort einen Hinweis mit Link zum App Store. Verworfen: Safari-Erweiterung WebBLE mit Polyfill (Beta, neues Paket), eigene App.
+
 **Betrieb:** Akzentfarbe nur aus den Einstellungen (vorher von `app.css` je nach Ladereihenfolge überschrieben); Mailserver-Status prüft der Scheduler alle 5 Minuten; `queue:work --memory=512`; `pint --test` in der CI; `TRUSTED_PROXIES` mit Vorgabe `*`, in Produktion die Adresse des Proxys; alte Images nach einer Woche löschen; Palette-PNGs behalten ihre Transparenz.
 
 ## 2026-11-12 · Dev-Instanz über GitLab CI/CD (abgelöst am 2026-11-24)
@@ -60,7 +82,7 @@ Gehört zu Phase 5, keine neue Phase. Entscheidungen von Maurice vom 15.11. und 
 
 **Limits der Verleihseite je Adresse und Buchung.** Viele Entleiher teilen sich eine Adresse (Hochschul-WLAN); 60 Abfragen je Minute und Adresse reichten dann für etwa fünf offene Seiten. Gegen das Durchprobieren von Links gibt es zusätzlich 600 je Adresse.
 
-**Zurückgekommene Teilmengen bucht die Ausgabe selbst zurück** (Entscheidung von Maurice). Sie zählen schon vor dem Einräumen als frei; fehlt dem Ursprung Menge, holt die Ausgabe sie wie beim Einräumen zurück. Verworfen: erst nach dem Einräumen frei, oder nur ein Hinweis bei der Ausgabe.
+**Zurückgekommene Teilmengen bucht die Ausgabe selbst zurück** (Entscheidung von Maurice; abgelöst am 27.11.2026, Mengenartikel werden nicht mehr abgeteilt). Sie zählen schon vor dem Einräumen als frei; fehlt dem Ursprung Menge, holt die Ausgabe sie wie beim Einräumen zurück. Verworfen: erst nach dem Einräumen frei, oder nur ein Hinweis bei der Ausgabe.
 
 **Offene Verlängerungsanfragen erledigen sich** bei Rückgabe oder Storno (Status `done`, Chat-Eintrag, keine Mail; Entscheidung von Maurice). Verworfen: automatisch ablehnen mit Mail, stehen lassen.
 
@@ -168,7 +190,7 @@ Gehört zu Phase 5, keine neue Phase. Entscheidungen von Maurice vom 15.11. und 
 
 **„Verschmutzt“ als Verlaufseintrag ohne neuen Zustand.** Fotos hängen nach dem Detailplan an einer Zustandsänderung. Für „verschmutzt“ schreibt die Rückgabe einen Eintrag mit gleichem altem und neuem Zustand, damit Notiz und Fotos im Verlauf des Gegenstands stehen. Verworfen: eigene Tabelle für Fotos von Mängeln.
 
-**Ausgabe über `MoveItem::takeAway()`.** Der Kern bekommt eine Methode, die einen Gegenstand ohne neuen Ort wegnimmt und bei Mengen abteilt, mit der Bewegungsart des Aufrufers (`issue`). Grund: Teilen bleibt an einer Stelle. Verworfen: eigene Mengenlogik im Modul.
+**Ausgabe über `MoveItem::takeAway()`.** (Seit 27.11.2026 nur für Einzelstücke und Boxen; Mengenartikel behalten ihren Ort.) Der Kern bekommt eine Methode, die einen Gegenstand ohne neuen Ort wegnimmt und bei Mengen abteilt, mit der Bewegungsart des Aufrufers (`issue`). Grund: Teilen bleibt an einer Stelle. Verworfen: eigene Mengenlogik im Modul.
 
 **„Noch nicht eingeräumt“ wird abgeleitet.** Eine zurückgebuchte Position ohne `stowed_at`, deren Gegenstand keinen Ort hat (oder deren abgeteilter Teil noch besteht), wartet aufs Einräumen. Wer den Gegenstand auf anderem Weg an einen Ort bringt, hat ihn damit eingeräumt. Verworfen: ein Listener im Kern, der `stowed_at` setzt.
 

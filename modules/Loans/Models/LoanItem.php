@@ -17,12 +17,15 @@ use Modules\Loans\Enums\ReturnState;
  * its current contents; at the issue the contents become rows below the box (parent_id), so the
  * material list stays as it was signed even if the box is packed differently later.
  *
+ * A bulk item is never split for a loan: the row holds how many left (quantity), came back
+ * (returned_quantity) and are missing (missing_quantity); the item keeps its whole stock and its
+ * place. See documentation/LOANS.md.
+ *
  * @property int $id
  * @property int $loan_id
  * @property int|null $parent_id
  * @property int $item_id
  * @property int $quantity
- * @property int|null $issued_item_id part of a bulk item that left with the loan
  * @property string|null $condition_at_issue
  * @property Carbon|null $checked_at
  * @property int|null $checked_by
@@ -42,7 +45,8 @@ use Modules\Loans\Enums\ReturnState;
  * @property Carbon|null $inspected_at
  * @property int|null $inspected_by
  * @property Carbon|null $stowed_at
- * @property int|null $missing_item_id what went missing: the item, or the part split off a bulk item
+ * @property int|null $missing_item_id single item that went missing (it has no place then)
+ * @property int|null $missing_quantity missing pieces of a bulk row; the bulk item keeps its place
  * @property string|null $missing_resolution "found" or "lost"
  * @property Carbon|null $missing_resolved_at
  */
@@ -61,6 +65,7 @@ class LoanItem extends Model
         return [
             'quantity' => 'integer',
             'returned_quantity' => 'integer',
+            'missing_quantity' => 'integer',
             'checked_at' => 'datetime',
             'checked_by_scan' => 'boolean',
             'issued_at' => 'datetime',
@@ -76,15 +81,17 @@ class LoanItem extends Model
     }
 
     /**
-     * Rows whose item is still missing ("vermisst"): not found, not written off, and the item did
-     * not get a place or go back some other way (moved by hand, booked back).
+     * Rows with something still missing ("vermisst"), not found and not written off: pieces of a
+     * bulk row, or a single item that did not get a place some other way (moved by hand).
      *
      * @param  Builder<LoanItem>  $query
      */
     public function scopeStillMissing(Builder $query): void
     {
         $query->whereNull('missing_resolution')
-            ->whereHas('missingItem', fn (Builder $query) => $query->whereNull('retired_at')->whereNull('location_id')->whereNull('container_id'));
+            ->where(fn (Builder $query) => $query
+                ->where('missing_quantity', '>', 0)
+                ->orWhereHas('missingItem', fn (Builder $query) => $query->whereNull('retired_at')->whereNull('location_id')->whereNull('container_id')));
     }
 
     /**
@@ -109,14 +116,6 @@ class LoanItem extends Model
     public function item(): BelongsTo
     {
         return $this->belongsTo(Item::class);
-    }
-
-    /**
-     * @return BelongsTo<Item, $this>
-     */
-    public function issuedItem(): BelongsTo
-    {
-        return $this->belongsTo(Item::class, 'issued_item_id');
     }
 
     /**
@@ -153,14 +152,6 @@ class LoanItem extends Model
     public function checker(): BelongsTo
     {
         return $this->belongsTo(User::class, 'checked_by');
-    }
-
-    /**
-     * The item that physically left: the split off part of a bulk item, or the item itself.
-     */
-    public function physicalItem(): Item
-    {
-        return $this->issuedItem ?? $this->item;
     }
 
     /**

@@ -22,9 +22,10 @@ Stocks hat mehrere Oberflächen für dieselben Vorgänge. Wenn ein Vorgang neu d
 |---|---|---|---|---|
 | Logo aus den Einstellungen | ✓ oben links, Quadrat 64 px mit Name | ✓ obere Leiste, klein mit Name | ✓ Kopfzeile, klein mit Name | ✓ Quadrat 250 px mittig über dem Namen |
 | Logo für helle Hintergründe im hellen Modus, sonst das Logo für dunkle (Review Phase 5) | ✓ | ✓ | ✓ | ✓ (auch Verleihseite) |
-| Favicon aus den Einstellungen | ✓ | ✓ | ✓ | ✓ |
-| Icon auf dem Home-Bildschirm: helles Logo auf Weiß, sonst weißes „S“ auf der Akzentfarbe | ✓ | ✓ | ✓ (eigenes Manifest) | n. v. |
+| Favicon aus den Einstellungen (PNG oder ICO; seit v0.1.1 mit dem Typ aus den Bytes ausgeliefert) | ✓ | ✓ | ✓ | ✓ |
+| Icon auf dem Home-Bildschirm: eigenes Symbol ohne Rand (seit v0.1.1), sonst helles Logo auf Weiß, sonst weißes „S“ auf der Akzentfarbe | ✓ | ✓ | ✓ (eigenes Manifest) | n. v. |
 | Akzentfarbe aus den Einstellungen wirkt überall (Review Phase 5: vorher von `app.css` überschrieben) | ✓ | ✓ | ✓ | ✓ (auch Verleihseite) |
+| PDFs und Bilder in der Home-Bildschirm-App und in Bluefy auf iPhone und iPad (v0.2.0, `UiFileViewer`, `useFileViewer`, `usesFileViewer()`; Bluefy erkannt an iPhone/iPad mit Bluetooth, Safari hat nie Bluetooth): eigene Vorschau im Vollbild (pdf.js, mit zwei Fingern oder Doppeltippen zoomen, Seitenanzeige „Seite x von y“ unten rechts) mit rundem Teilen-Knopf unten links → Teilen-Menü von iOS (Drucken, In Dateien sichern, Senden). Grund: iOS zeigt PDFs in der Home-Bildschirm-App ohne Teilen, ignoriert `window.print()` und hängt bei Downloads; Bluefy reagiert auf Downloads gar nicht und zeigt PDFs schlecht. Greift für alle Links auf `.pdf` und Links mit `data-file-viewer` (Dokumente der Buchung, Fotos am Gegenstand); mehrere Bilder (Etiketten für die Niimbot-App) teilt der Knopf zusammen; Safari, PC und Android behalten den normalen Link | n. v. (normaler Link) | ✓ als Home-Bildschirm-App und in Bluefy auf iOS | ✓ wenn das iPad Stocks vom Home-Bildschirm startet | n. v. (Verleihseite: ✓ als Home-Bildschirm-App) |
 | Version und „Update verfügbar“ (24.11.2026, `LayoutAppVersion`) | ✓ Seitenleiste zwischen Abmelden und Impressum/Datenschutz; eingeklappt nur Symbol mit Tooltip | ✓ Menü „Mehr“ unter Abmelden | n. v. | n. v. |
 
 ## Vorgänge des Inventars
@@ -34,22 +35,25 @@ Stocks hat mehrere Oberflächen für dieselben Vorgänge. Wenn ein Vorgang neu d
 | Vorgang | Web PC | Web Handy | Kiosk | Anmerkung für spätere Oberflächen |
 |---|---|---|---|---|
 | Gegenstände suchen und ansehen | ✓ | ✓ | nur Scan-Karte | Suche nimmt Artikelnummer und Kennziffer, mit und ohne Bindestrich |
-| „Nach Boxen gruppieren“ in „Gegenstände“ und „Ohne Platz“ (Review Phase 5) | ✓ | ✓ | n. v. | Schalter in der Filterleiste, je Gerät und Liste gemerkt; Boxen mit Pfeil und „N Teile“ klappen ihren Inhalt auf (auch Boxen in Boxen); bei Suche und Filtern flach; am Handy Inhalt mit Strich links statt Einrückung. Tabellen-Slot `after-row` in `UiTable` |
+| „Nach Boxen gruppieren“ in „Gegenstände“ und „Ohne Platz“ (Review Phase 5) | ✓ | ✓ | n. v. | Schalter in der Filterleiste, seit v0.1.1 standardmäßig an, je Gerät und Liste als Cookie gemerkt; Boxen mit Pfeil und „N Teile“ klappen ihren Inhalt auf (auch Boxen in Boxen); bei Suche und Filtern flach; am Handy Inhalt mit Strich links statt Einrückung. Tabellen-Slot `after-row` in `UiTable` |
 | „Ohne Platz“ ohne ausgegebene Gegenstände (Review Phase 5) | ✓ | ✓ | n. v. | ausgegebene stehen nur in der Gesamtliste mit „ausgegeben bis …“; zurück, aber nicht eingeräumt, und vermisst bleiben in „Ohne Platz“; gilt auch für die Dashboard-Zahl |
 | Gebäude als Standort-Stufe (Review Phase 5) | ✓ | ✓ | n. v. | Standorte: an einer Adresse „+ Raum“ und „+ Gebäude“, Schalter „Im Code zeigen“ mit Rückfrage, wie viele Kennziffern sich ändern; Gebäude mit eigenem Symbol im Baum und in „Darin“; Gegenstände liegen nicht in Gebäuden (auch nicht in der Ortswahl, am Kiosk ebenso); Kiosk-Standortwahl braucht nichts Neues |
-| Gegenstand anlegen, mit Fotos | ✓ | ✓ | n. v. | Fotos werden im Browser verkleinert (`useImageCompression`) |
+| Gegenstand anlegen, mit Fotos | ✓ | ✓ | n. v. | Fotos werden im Browser verkleinert (`useImageCompression`); seit v0.1.1 legt der Server zu jedem Foto ein Vorschaubild für Listen an |
+| Inhalt einer Box auf der Seite der Box, mit Vorschaubild je Zeile (seit v0.1.1) | ✓ | ✓ | n. v. (keine Gegenstandsseiten) | Baum `InventoryContentsTree`, Boxen in Boxen aufklappbar; die öffentliche Ansicht zeigt ihre Inhaltsliste mit Vorschaubildern |
 | Umlagern per Scan (zwei Schritte) | ✓ | ✓ | ✓ | auf der Seite „Scannen“; die Seite „Umlagern“ gibt es am Kiosk nicht |
 | Umlagern über den Gegenstand | ✓ | ✓ | n. v. | Dialog mit Ortsvorschlägen |
 | Zustand ändern mit Begründung und Fotos | ✓ | ✓ | ✓ | Zustände kommen aus der Liste der Einstellungen; Fotos werden nacheinander hinzugefügt (`UiPhotoPicker`), auch einzeln mit der Handykamera |
 | Rückfrage bei gebuchtem Material („Ja, trotzdem“) | ✓ | ✓ | ✓ | vor Ausmustern, Verbrauchen, Abteilen (Umlagern einer Teilmenge) und einem Zustand, der als Schaden gilt, wenn eine bestätigte Buchung oder ein Rest damit rechnet; `InventoryReservedConfirm` in den Dialogen, auf „Scannen“ und „Umlagern“ |
-| Abgeteilten Teil zurückbuchen | ✓ | ✓ | ✓ | Knopf am Teil oder Ursprungsnummer als Ziel scannen |
+| Abgeteilten Teil zurückbuchen | ✓ | ✓ | ✓ | Knopf am Teil oder Ursprungsnummer als Ziel scannen; abgeteilt wird nur noch beim Umlagern einer Teilmenge, nicht mehr im Verleih (27.11.2026) |
+| Mengenartikel: „Vorhanden“ (Bestand ohne verliehene und vermisste Stücke, 27.11.2026) | ✓ | ✓ | ✓ (Scan-Karte) | Seite: Feld „Vorhanden“; Scan-Karte „(38 vorhanden)“; Liste „38 / 50“; Hinweise in Umlagern, Verbrauchen, Ausmustern |
+| Mengenartikel: was gerade nicht hier ist (27.11.2026) | ✓ | ✓ | n. v. | Reiter „Verleih“ am Gegenstand, Abschnitt „Gerade nicht hier“: je Buchung Anzahl, Zustand (ausgegeben, zurück nicht eingeräumt, vermisst) und Notizen; Hinweis „12 Stück ausgegeben an …“ ohne Sperre; der Kiosk hat keine Gegenstandsseite mit Reitern |
 | **Verbraucht** (Verbrauchsmaterial ausbuchen) | ✓ | ✓ | ✓ | eigener Knopf, nur wenn die Einheit Verbrauchsmaterial ist |
 | Ausmustern, auch Teilmengen | ✓ | ✓ | n. v. | Recht `inventory.retire` |
 | Verlaufseintrag löschen | ✓ | ✓ | n. v. | nur Admin |
 | Zustände und Einheiten verwalten | ✓ | ✓ | n. v. | Untermenü Verwaltung › Einstellungen |
 | Mailserver einstellen, Status, Test-Mail | ✓ | ✓ | n. v. | Verwaltung › Einstellungen › Benachrichtigungen (bis Phase 4 „E-Mail“); Status als Badge im Menü, unter dem Titel; seit Review Phase 5 prüft der Scheduler alle 5 Minuten, das Badge steht ohne Aufruf der Seite; die Test-Mail hat das Design aller Mails |
 | Vorschau der Mails (Test-Mail, Einladung) | ✓ | ✓ | n. v. | Links unter „Test-Mail“, öffnen im neuen Tab, verschickt nichts |
-| Logos hochladen (dunkle und helle Hintergründe, Druck-Logo, Favicon) | ✓ | ✓ | n. v. | Verwaltung › Einstellungen › Allgemein, Karte „Logo und Symbol“; Vorschau auf dem passenden Hintergrund |
+| Logos hochladen (dunkle und helle Hintergründe, Druck-Logo, Favicon, seit v0.1.1 Symbol für den Home-Bildschirm) | ✓ | ✓ | n. v. | Verwaltung › Einstellungen › Allgemein, Karte „Logo und Symbol“; Vorschau auf dem passenden Hintergrund |
 | Hinweis fürs Etikett pflegen | ✓ | ✓ | n. v. | Feld im Formular des Gegenstands |
 | Box-Inhaltsliste als PDF | ✓ | ✓ | n. v. | Knopf auf der Box, wahlweise als Brief (DIN 5008) mit eingegebenem Empfänger, Vorschaubilder wählbar; nicht in der öffentlichen Ansicht |
 
@@ -63,7 +67,7 @@ Seit Phase 2, siehe [LABELS.md](LABELS.md); am Kiosk seit Phase 4.
 | Scannen mit Handscanner ohne Feld | ✓ | ✓ | ✓ | n. v. | `useScannerInput` |
 | Kamera auf der Seite „Umlagern“ | ✓ | ✓ | n. v. | n. v. | |
 | „Hierher umlagern“ (alles an einen Standort scannen) | ✓ | ✓ | ✓ | n. v. | auf der Seite „Scannen“ am Standort |
-| Etikett drucken (Vorschau mit echten Daten) | ✓ | ✓ | ✓ | n. v. | Direktdruck Niimbot nur Chrome/Edge (PC, Android); iPhone und iPad laden das Bild für die Niimbot-App. Am Kiosk entscheidet die Plattform des Geräts, „Als Vorlage speichern“ fehlt dort |
+| Etikett drucken (Vorschau mit echten Daten) | ✓ | ✓ | ✓ | n. v. | Direktdruck Niimbot per Bluetooth in Chrome/Edge (PC, Android) und seit v0.1.1 im Browser Bluefy auf iPhone und iPad (Geräteauswahl seit v0.2.0 nur nach Namensanfang, sonst zeigte Bluefy keine Geräte), seriell/USB auch in Firefox über HTTPS (Hinweis mit Link zum App Store, `LabelsDirectPrintHint`); sonst laden iPhone und iPad das Bild für die Niimbot-App. Papier in der Home-Bildschirm-App und in Bluefy auf iPhone und iPad (kein Druckdialog dort): seit v0.2.0 als PDF in der Vorschau, drucken über Teilen → Drucken; das Bild für die Niimbot-App dort ebenfalls in der Vorschau statt als Download (Teilen → Bild sichern). Am Kiosk entscheidet die Plattform des Geräts, „Als Vorlage speichern“ fehlt dort |
 | Sammeldruck (Auswahl, Box-Inhalt, Fächer unter einem Standort) | ✓ | ✓ | – | n. v. | Recht `labels.print`; „Alle drucken“ oder „Einzeln“ mit Auswahl; am Kiosk nur das Etikett der Scan-Karte |
 | Etiketten auf Vorrat, Reservierungen freigeben | ✓ | ✓ | n. v. | n. v. | Verwaltung › Einstellungen › Etiketten auf Vorrat |
 | Gegenstand aus reservierter Nummer anlegen | ✓ | ✓ | n. v. | n. v. | Scan oder Kurzlink öffnet das Formular mit der Nummer |
@@ -92,11 +96,11 @@ Seit Phase 3, siehe [LOANS.md](LOANS.md). Ausgabe, Rückgabe, Prüfung und Einr�
 | Teilausgabe (weniger Stück oder einzelne Positionen), Rest später nachausgeben oder streichen | ✓ | ✓ | ✓ | n. v. | n. v. | Schritt „Rest“; Nachausgabe mit eigener Materialliste „Nachtrag“ und Unterschriften, ohne neuen Vertrag; am Kiosk unter „Heute abholen“ mit „Rest nachausgeben“; nach dem Rückgabetermin nur noch „Rest streichen“ (die Ausgabeseite zeigt dann nur den Schritt „Rest“) |
 | Mangel bei der Ausgabe (beschädigt, verschmutzt, unvollständig), auf Wunsch nicht ausgeben | ✓ | ✓ | ✓ | n. v. | n. v. | Knopf „Mangel“ an der Zeile; steht auf der Materialliste und bei der Rückgabe („Schon bei der Ausgabe“) |
 | Unterschrift auf dem Bildschirm oder „auf Papier unterschrieben“ | ✓ | ✓ | ✓ | n. v. | n. v. | Unterschriftenfeld `SignaturePad`, groß (am Tablet zwei nebeneinander), erst nach dem Abhaken; Foto des Blatts anhängbar |
-| Leihvertrag, Materialliste, Buchungsbestätigung, Rückgabebeleg als PDF | ✓ | ✓ | nur Vorschau | n. v. | ✓ (ohne Papier-Scan) | Download von der Buchung, nur mit `loans.issue` oder `loans.manage` (auch die Unterschriften); seit Phase 5 mit QR-Code der Verleihseite, per Mail an den Entleiher und auf der Verleihseite; am Kiosk Leihvertrag und Materialliste vor der Unterschrift |
+| Leihvertrag, Materialliste, Buchungsbestätigung, Rückgabebeleg als PDF | ✓ | ✓ | nur Vorschau | n. v. | ✓ (ohne Papier-Scan) | Download von der Buchung, nur mit `loans.issue` oder `loans.manage` (auch die Unterschriften); seit Phase 5 mit QR-Code der Verleihseite, per Mail an den Entleiher und auf der Verleihseite; am Kiosk Leihvertrag und Materialliste vor der Unterschrift; in der Home-Bildschirm-App auf iOS in der eigenen Vorschau mit Teilen-Knopf (v0.2.0) |
 | Box-Kontrolle mit Pack-PIN | n. v. | n. v. | n. v. | ✓ | Pack-PIN sichtbar | auf `/s/{code}` der Box, ohne Konto; nach fünf falschen PINs 15 Minuten warten (je Box und Adresse) |
 | Rückgabe in Schritten (Material, Übersicht, Unterschriften) per Scan, Teilrückgabe, Mängel mit Foto | ✓ | ✓ | ✓ | n. v. | n. v. | „Rückgabe dieser Buchung“ auch auf der Scan-Karte; eine abgehakte Box hakt ihren Inhalt mit ab (auch bei der Ausgabe); am Handy Name oben, Anzahl und Mangel darunter |
 | Ungeprüft annehmen, spätere Prüfung | ✓ | ✓ | ✓ | n. v. | n. v. | Liste „Prüfung offen“ unter Verleih › Rückgaben |
-| Einräumen per Scan (Gegenstand, dann Regal) | ✓ | ✓ | ✓ | n. v. | n. v. | Liste „Noch nicht eingeräumt“ mit Knopf „Einräumen“ je Zeile; Tipp auf den Gegenstand öffnet am PC seine Seite, am Kiosk ein Info-Fenster; „Einräumen“ auf der Scan-Karte |
+| Einräumen per Scan (Gegenstand, dann Regal; Mengenartikel: Scan ihres Ortes bestätigt, ein anderer Ort wird abgelehnt, seit 27.11.2026) | ✓ | ✓ | ✓ | n. v. | n. v. | Liste „Noch nicht eingeräumt“ mit Knopf „Einräumen“ je Zeile; Tipp auf den Gegenstand öffnet am PC seine Seite, am Kiosk ein Info-Fenster; „Einräumen“ auf der Scan-Karte |
 | Mängel abschließen | ✓ | ✓ | ✓ | n. v. | Mängel sichtbar | Recht `loans.cancel`; was noch vermisst ist, wird als verloren ausgemustert; am Kiosk im Fenster der Buchung (Liste „Mit Mängeln“) |
 | Vermisstes „Wieder da“ | ✓ | ✓ | ✓ | n. v. | n. v. | auf der Buchung (Abschnitt „Vermisst“), Hinweis mit Link auf Seite und Scan-Karte des Gegenstands; Recht `loans.issue`; am Kiosk im Fenster der Buchung |
 | Kontakte, Fachschaften, Veranstaltungen | ✓ | ✓ | n. v. | n. v. | n. v. | Fachschaften unter Verwaltung › Einstellungen › Verleih |

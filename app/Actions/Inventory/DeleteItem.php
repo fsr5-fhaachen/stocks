@@ -27,7 +27,7 @@ class DeleteItem
             throw ValidationException::withMessages(['item' => "{$item->number} hat schon eine Geschichte und kann nur ausgemustert werden."]);
         }
 
-        $paths = ItemPhoto::where('item_id', $item->id)->pluck('path')->all();
+        $paths = ItemPhoto::filesOf(ItemPhoto::where('item_id', $item->id)->get());
         $item->delete();
         if ($paths) {
             Storage::disk(ItemPhoto::DISK)->delete($paths);

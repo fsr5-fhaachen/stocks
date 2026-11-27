@@ -25,7 +25,7 @@ class RowTree
 
         $flat = [];
         $walk = function (LoanItem $row, int $depth) use (&$walk, &$flat, $byParent, $extra) {
-            $item = $row->physicalItem();
+            $item = $row->item;
             $flat[] = [
                 'id' => $row->id,
                 'parent_id' => $row->parent_id,

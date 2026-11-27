@@ -16,12 +16,13 @@
       <div class="space-y-4">
         <UiAlert v-if="current" type="info">
           <strong>{{ current.number }} {{ current.name }}</strong>
-          <template v-if="current.merge_to">
-            geht zurück zu {{ current.merge_to }}.</template
-          >
+          <template v-if="current.place">
+            : liegt in <strong>{{ current.place.code }}</strong>. Scanne dieses
+            Regal zum Bestätigen.
+          </template>
           <template v-else>
-            : Stammplatz <strong>{{ current.home?.code ?? "keiner" }}</strong
-            >. Scanne jetzt das Regal.
+            : Stammplatz <strong>{{ current.home?.code ?? "keiner" }}</strong>.
+            Scanne jetzt das Regal.
           </template>
           <button
             type="button"
@@ -31,14 +32,6 @@
             Abbrechen
           </button>
         </UiAlert>
-        <UiButton
-          v-if="current?.merge_to"
-          icon="rotate"
-          class="w-full"
-          @click="stow(null)"
-        >
-          Zurückbuchen zu {{ current.merge_to }}
-        </UiButton>
         <LoansScanInput
           :placeholder="current ? 'Regal scannen' : 'Gegenstand scannen'"
           @scan="scanned"
@@ -68,8 +61,8 @@
                 >
                 · aus {{ row.loan.number }} ·
                 {{
-                  row.merge_to
-                    ? `zurück zu ${row.merge_to}`
+                  row.place
+                    ? `liegt in ${row.place.code}`
                     : `Stammplatz ${row.home?.code ?? "–"}`
                 }}
               </span>
@@ -166,7 +159,7 @@
     </p>
     <p>
       <span class="text-ink-muted">Gehört nach:</span>
-      {{ infoRow.merge_to ?? infoRow.home?.code ?? "kein Stammplatz" }}
+      {{ infoRow.place?.code ?? infoRow.home?.code ?? "kein Stammplatz" }}
     </p>
   </InventoryItemInfoModal>
   <LoansLoanModal v-if="loanId" :loan-id="loanId" @close="loanId = null" />
@@ -189,7 +182,8 @@ type PendingRow = {
   quantity: number | null;
   unit: string | null;
   loan: { id: number; number: string };
-  merge_to: string | null;
+  // bulk item that kept its place: the scan of that place confirms it
+  place: Place | null;
   home: Place | null;
 };
 

@@ -22,14 +22,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Use PHP ${{ matrix.php-version }}
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php-version }}
           extensions: redis
       - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4.0.3
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: ${{ matrix.node-version }}
           cache: "npm"
@@ -68,5 +68,6 @@ jobs:
           DB_DATABASE: database/database.sqlite
         run: |
           php artisan db:seed
-      - name: Execute tests (Unit and Feature tests) via PHPUnit
-        run: vendor/bin/phpunit
+      # one process per core (paratest); every process gets its own sqlite file and fake disks
+      - name: Execute tests (Unit and Feature tests) in parallel
+        run: php artisan test --parallel

@@ -140,6 +140,23 @@
               <template v-if="item.is_container"> · Box</template>
             </dd>
           </div>
+          <!-- bulk items: what is there; lent or missing pieces are part of the stock -->
+          <div v-if="item.kind === 'bulk' && item.quantity_here !== null">
+            <dt class="text-sm text-ink-muted">Vorhanden</dt>
+            <dd>
+              <span class="font-semibold"
+                >{{ item.quantity_here }} {{ item.unit }}</span
+              >
+              <span
+                v-if="item.quantity_here < item.quantity"
+                class="text-sm text-ink-muted"
+              >
+                von {{ item.quantity }},
+                {{ item.quantity - item.quantity_here }} unterwegs (siehe Reiter
+                „Verleih“)</span
+              >
+            </dd>
+          </div>
           <div>
             <dt class="text-sm text-ink-muted">Kategorie</dt>
             <dd>{{ item.category ?? "—" }}</dd>
@@ -293,6 +310,7 @@
                 :key="photo.id"
                 :href="photo.url"
                 target="_blank"
+                data-file-viewer
               >
                 <img
                   :src="photo.url"
@@ -339,7 +357,12 @@
             :class="['space-y-2', index === 0 ? 'col-span-2' : '']"
           >
             <div class="relative">
-              <a :href="photo.url" target="_blank" class="block">
+              <a
+                :href="photo.url"
+                target="_blank"
+                data-file-viewer
+                class="block"
+              >
                 <img
                   :src="photo.url"
                   alt=""
@@ -427,7 +450,7 @@
         label="Menge"
         type="number"
         inputmode="numeric"
-        :hint="`Von ${item.quantity} ${item.unit ?? ''}. Eine Teilmenge wird ein eigener Gegenstand mit eigener Nummer.`"
+        :hint="`Von ${item.quantity} ${item.unit ?? ''}${item.quantity_here !== null && item.quantity_here < item.quantity ? `, vorhanden ${item.quantity_here}; eine Teilmenge geht nur bis dahin, alles nimmt die unterwegs mit an den neuen Ort` : ''}. Eine Teilmenge wird ein eigener Gegenstand mit eigener Nummer.`"
         :error="moveForm.errors.quantity"
       />
       <UiInput
@@ -490,7 +513,7 @@
         label="Menge"
         type="number"
         inputmode="numeric"
-        :hint="`Von ${item.quantity} ${item.unit ?? ''}. Eine Teilmenge wird abgezogen, der Rest bleibt.`"
+        :hint="`Vorhanden: ${item.quantity_here ?? item.quantity} von ${item.quantity} ${item.unit ?? ''}. Eine Teilmenge wird abgezogen, der Rest bleibt.`"
         :error="retireForm.errors.quantity"
       />
       <p class="text-sm text-ink-muted">
@@ -597,6 +620,8 @@ type Props = {
     kind: "single" | "bulk";
     kind_label: string;
     quantity: number;
+    // pieces there, without those lent or missing; null for single items
+    quantity_here: number | null;
     unit: string | null;
     is_container: boolean;
     public_contents: boolean;
@@ -750,7 +775,7 @@ const consumeOpen = ref(false);
 const retireForm = useForm({
   reason: "defective",
   note: "",
-  quantity: props.item.quantity as number | null,
+  quantity: (props.item.quantity_here ?? props.item.quantity) as number | null,
 });
 const isPartialRetire = computed(
   () =>
@@ -765,7 +790,7 @@ const retire = (confirmed = false) =>
       onSuccess: () => {
         retireOpen.value = false;
         retireForm.note = "";
-        retireForm.quantity = props.item.quantity;
+        retireForm.quantity = props.item.quantity_here ?? props.item.quantity;
       },
     });
 

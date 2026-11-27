@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Inventory\PhotoThumbnail;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Http\UploadedFile;
@@ -15,6 +16,7 @@ use Illuminate\Validation\ValidationException;
  * @property int $item_id
  * @property int|null $condition_change_id photo of a condition change instead of the gallery
  * @property string $path
+ * @property string|null $thumb_path small preview for lists, see App\Support\Inventory\PhotoThumbnail
  * @property int $sort
  */
 class ItemPhoto extends Model
@@ -41,6 +43,7 @@ class ItemPhoto extends Model
     protected $fillable = [
         'condition_change_id',
         'path',
+        'thumb_path',
         'sort',
     ];
 
@@ -74,7 +77,7 @@ class ItemPhoto extends Model
         $sort = (int) self::where('item_id', $item->id)->max('sort');
 
         return array_map(function (string $path) use ($item, $conditionChange, &$sort) {
-            $photo = new self(['condition_change_id' => $conditionChange?->id, 'path' => $path, 'sort' => ++$sort]);
+            $photo = new self(['condition_change_id' => $conditionChange?->id, 'path' => $path, 'thumb_path' => PhotoThumbnail::create($path), 'sort' => ++$sort]);
             $photo->item()->associate($item)->save();
 
             return $photo;
@@ -92,19 +95,58 @@ class ItemPhoto extends Model
             return null;
         }
 
-        $photo = new self(['path' => $path, 'sort' => $this->sort]);
+        $photo = new self(['path' => $path, 'thumb_path' => PhotoThumbnail::create($path), 'sort' => $this->sort]);
         $photo->item()->associate($item)->save();
 
         return $photo;
     }
 
     /**
-     * Delete the photo and its file.
+     * Delete the photo and its files.
      */
     public function deleteWithFile(): void
     {
         $this->delete();
-        Storage::disk(self::DISK)->delete($this->path);
+        Storage::disk(self::DISK)->delete($this->files());
+    }
+
+    /**
+     * Files of the photo on S3: the photo and its preview.
+     *
+     * @return list<string>
+     */
+    public function files(): array
+    {
+        return array_values(array_filter([$this->path, $this->thumb_path]));
+    }
+
+    /**
+     * Files of several photos, e.g. before their rows are deleted.
+     *
+     * @param  iterable<self>  $photos
+     * @return list<string>
+     */
+    public static function filesOf(iterable $photos): array
+    {
+        $files = [];
+        foreach ($photos as $photo) {
+            $files = [...$files, ...$photo->files()];
+        }
+
+        return $files;
+    }
+
+    /**
+     * Path of the preview. A photo without preview (made before previews existed, or S3 was not
+     * reachable) gets it now; until that works, the photo itself is used.
+     */
+    public function thumbnailPath(): string
+    {
+        if ($this->thumb_path === null && ($thumb = PhotoThumbnail::create($this->path)) !== null) {
+            $this->forceFill(['thumb_path' => $thumb])->saveQuietly();
+        }
+
+        return $this->thumb_path ?? $this->path;
     }
 
     /**
@@ -121,5 +163,13 @@ class ItemPhoto extends Model
     public function url(): string
     {
         return route('inventory.photos.show', $this, absolute: false);
+    }
+
+    /**
+     * Url of the small preview, for lists.
+     */
+    public function thumbUrl(): string
+    {
+        return route('inventory.photos.show', [$this, 'thumb' => 1], absolute: false);
     }
 }

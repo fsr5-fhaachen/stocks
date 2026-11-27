@@ -70,7 +70,7 @@ class LoanDocuments
             'receiver' => $receiver->name,
             'unchecked' => $rows->contains(fn (LoanItem $row) => ! $row->isReturnHandled()),
             'rows' => $rows->map(fn (LoanItem $row) => [
-                'number' => $row->physicalItem()->number,
+                'number' => $row->item->number,
                 'name' => $row->item->name,
                 'depth' => $row->parent_id ? 1 : 0,
                 'quantity' => $row->isBulk() ? ($row->returned_quantity ?? $row->quantity) : null,
@@ -209,12 +209,12 @@ class LoanDocuments
      */
     public function positions(Loan $loan, ?EloquentCollection $positions = null): array
     {
-        $positions = $positions?->load(['item.condition', 'issuedItem', 'children.item.condition', 'boxChecks'])
-            ?? $loan->positions()->with(['item.condition', 'issuedItem', 'children.item.condition', 'boxChecks'])->get();
+        $positions = $positions?->load(['item.condition', 'children.item.condition', 'boxChecks'])
+            ?? $loan->positions()->with(['item.condition', 'children.item.condition', 'boxChecks'])->get();
 
         $rows = [];
         foreach ($positions as $position) {
-            $rows[] = $this->row($position->physicalItem(), $position->item, $position->quantity, 0, $position->condition_at_issue, $this->notes($this->boxNote($position), $position));
+            $rows[] = $this->row($position->item, $position->item, $position->quantity, 0, $position->condition_at_issue, $this->notes($this->boxNote($position), $position));
             // the rows of the contents exist from the start of the issue, and stay as they left
             $frozen = $position->issued_at !== null || $position->children->isNotEmpty();
             $rows = [...$rows, ...($frozen ? $this->frozenRows($position, 1) : $this->liveRows($position->item, 1))];

@@ -323,8 +323,7 @@
                 Kollision mit
                 <UiLink :href="`/loans/${conflict.id}`">{{
                   conflict.title
-                }}</UiLink
-                >, {{ formatDateTime(conflict.pickup_at) }} bis
+                }}</UiLink>, {{ formatDateTime(conflict.pickup_at) }} bis
                 {{
                   conflict.overdue
                     ? "zur Rückgabe (überfällig)"
@@ -547,6 +546,7 @@
             <div class="flex items-center justify-between gap-2">
               <a
                 :href="document.url"
+                data-file-viewer
                 class="font-medium text-accent hover:underline"
               >
                 <FontAwesomeIcon :icon="['fas', 'file-pdf']" class="mr-1" />{{

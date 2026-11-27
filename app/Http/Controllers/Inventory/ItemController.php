@@ -30,6 +30,7 @@ use App\Support\Table\ItemsTable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cookie;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -109,6 +110,8 @@ class ItemController extends Controller
         return Inertia::render('Inventory/Items/Show', [
             'item' => [
                 ...$item->only(['id', 'number', 'name', 'description', 'quantity', 'unit', 'is_container', 'public_contents', 'notes', 'retired_note', 'label_hint']),
+                // pieces of a bulk item that are there ("vorhanden"), without those lent or missing
+                'quantity_here' => $item->kind === ItemKind::Bulk ? $this->extensions->quantityHere($item) : null,
                 'label_printed_at' => $item->label_printed_at?->toIso8601String(),
                 'kind' => $item->kind->value,
                 'kind_label' => $item->kind->label(),
@@ -274,13 +277,14 @@ class ItemController extends Controller
             return response()->json([
                 'type' => 'item',
                 ...$found->only(['id', 'number', 'name', 'quantity', 'unit', 'is_container', 'split_from_id']),
+                'quantity_here' => $found->kind === ItemKind::Bulk ? $this->extensions->quantityHere($found) : null,
                 'kind' => $found->kind->value,
                 'retired' => $found->isRetired(),
                 'place' => Item::placeSummary($found->place()),
                 'condition_id' => $found->condition_id,
                 'condition' => $found->condition->name,
                 'condition_is_defect' => $found->condition->is_defect,
-                'photo_url' => ($photo = $found->photos->first()) ? Surface::route('inventory.photos.show', $photo) : null,
+                'photo_url' => ($photo = $found->photos->first()) ? Surface::route('inventory.photos.show', [$photo, 'thumb' => 1]) : null,
                 'contents_count' => $found->is_container ? $found->contents()->active()->count() : 0,
                 'consumable' => $found->kind === ItemKind::Bulk && ItemUnit::isConsumable($found->unit),
                 'can_merge' => ($target = $found->mergeTarget()) !== null && ! $target->isRetired() && ! $found->isRetired(),
@@ -366,6 +370,10 @@ class ItemController extends Controller
     private function list(Request $request, bool $onlyMisplaced): Response|JsonResponse
     {
         $table = new ItemsTable($request, $onlyMisplaced);
+        // keep the choice of grouping on this device, the next visit of the list starts with it
+        if ($request->has('grouped')) {
+            Cookie::queue($table->groupingCookie(), $table->wantsGrouping() ? '1' : '0', 60 * 24 * 365 * 5);
+        }
         if ($table->wantsChanges()) {
             return $table->changesResponse();
         }
@@ -375,7 +383,10 @@ class ItemController extends Controller
             'misplaced' => $onlyMisplaced,
             'categories' => Category::options(),
             'conditions' => ItemCondition::options(),
-            'filters' => $request->only(['category', 'condition', 'retired', 'unlabeled', 'grouped']),
+            'filters' => [
+                ...$request->only(['category', 'condition', 'retired', 'unlabeled']),
+                'grouped' => $table->wantsGrouping() ? '1' : '0',
+            ],
         ]);
     }
 
@@ -467,9 +478,10 @@ class ItemController extends Controller
             return [];
         }
 
-        return $box->contents()->get()->map(fn (Item $item) => [
+        return $box->contents()->with('photos')->get()->map(fn (Item $item) => [
             ...$item->only(['id', 'number', 'name', 'quantity', 'unit', 'is_container']),
             'kind' => $item->kind->value,
+            'photo_url' => $item->photos->first()?->thumbUrl(),
             'contents' => $item->is_container ? $this->contentsTree($item, $depth + 1) : [],
         ])->all();
     }

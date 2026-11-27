@@ -22,17 +22,39 @@ export const directConnections = (): Connection[] => [
 export const isConnected = () => client?.isConnected() ?? false;
 
 /**
- * Connect to a printer; the browser shows its own dialog to choose the device.
+ * Connect to a printer; the browser shows its own dialog to choose the device. model is the model
+ * of the printer in Stocks (e.g. "B1"): with bluetooth only printers whose name starts with it are
+ * offered.
  */
-export const connect = async (connection: Connection) => {
+export const connect = async (
+  connection: Connection,
+  model: string | null = null,
+) => {
   const lib = await import("@mmote/niimbluelib");
   await disconnect();
-  client =
-    connection === "bluetooth"
-      ? new lib.NiimbotBluetoothClient()
-      : new lib.NiimbotSerialClient();
-  const info = await client.connect();
-  return info.deviceName ?? null;
+
+  if (connection === "serial") {
+    client = new lib.NiimbotSerialClient();
+    return (await client.connect()).deviceName ?? null;
+  }
+
+  // Own device dialog instead of the one of NiimBlueLib: it mixes about 20 name filters with a service
+  // filter, and Bluefy on iPhone then offers no device at all. The printers do not announce their
+  // service before connecting (B1: name "B1-…" only), so the dialog filters by name; the service
+  // goes to optionalServices, without it the page may not use it after connecting.
+  const known =
+    model !== null && lib.modelsLibrary.some((entry) => entry.model === model);
+  const prefixes = known
+    ? [model]
+    : [...new Set(lib.modelsLibrary.map((entry) => entry.model[0]))];
+  const bluetooth = new lib.NiimbotBluetoothClient();
+  const device = await navigator.bluetooth.requestDevice({
+    filters: prefixes.map((namePrefix) => ({ namePrefix })),
+    optionalServices: bluetooth.getServiceUuidFilter(),
+  });
+  client = bluetooth;
+  const info = await bluetooth.connect({ authorizedDevice: device });
+  return info.deviceName ?? device.name ?? null;
 };
 
 export const disconnect = async () => {
