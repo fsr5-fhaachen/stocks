@@ -289,12 +289,16 @@ class LoansDemo implements DemoPart
         $this->checkBox->store($box, $today->refresh()->pack_pin, 'demo', 'Kim Packer', $box->contents()->pluck('number')->all(), $box->contents()->count());
         $this->demo->label($box->number, $box->name, 'Box, bestätigte Buchung: für die Ausgabe', "In {$today->number} (heute abholen); Pack-PIN {$today->pack_pin}, kontrolliert von Kim Packer.");
         $this->demo->label($single->number, $single->name, 'Position der Buchung zum Abhaken', "Hakt in der Ausgabe von {$today->number} ab.");
-        $this->demo->label($bulk->number, $bulk->name, 'Mengenartikel der Buchung', "In {$today->number}: nach dem Scan die Anzahl bestätigen; bei der Ausgabe wird abgeteilt.");
+        $this->demo->label($bulk->number, $bulk->name, 'Mengenartikel der Buchung', "In {$today->number}: nach dem Scan die Anzahl bestätigen; der Gegenstand bleibt an seinem Ort, die Buchung zählt die Anzahl.");
 
         $issuedBox = $this->demo->take('box');
         $issuedItem = $this->takeLendable();
         $issuedPickup = $this->demo->today->subDays(2)->setTime(14, 0);
-        $issued = $this->draft($issuedPickup, $this->demo->today->addDays(3)->setTime(12, 0), [$issuedBox, $issuedItem]);
+        // a share of another bulk item: it stays at its place, the loan counts the pieces
+        $issuedBulk = collect($this->demo->tagged('lendable_bulk'))->first(fn (Item $item) => $item->isNot($bulk));
+        $issuedPieces = $issuedBulk ? max(1, intdiv($issuedBulk->refresh()->quantity, 4)) : 0;
+        $issued = $this->draft($issuedPickup, $this->demo->today->addDays(3)->setTime(12, 0), [$issuedBox, $issuedItem, ...($issuedBulk ? [[$issuedBulk, $issuedPieces]] : [])]);
+        // no label of its own: the sheet holds exactly TestSheet::LABELS
         $this->issue($issued, $issuedPickup);
         $this->demo->label($issuedBox->number, $issuedBox->name, 'Box, ausgegeben: für die Rückgabe', "In {$issued->number}; im Scan-Tab „Rückgabe dieser Buchung“, gesperrt fürs Umlagern.");
         $this->demo->label($issuedItem->number, $issuedItem->name, 'Ausgegeben, zum Zurücknehmen', "Hakt in der Rückgabe von {$issued->number} ab.");
@@ -330,12 +334,12 @@ class LoansDemo implements DemoPart
             $this->demo->label($uncheckedBox->number, $uncheckedBox->name, 'Box, ungeprüft zurück', "Aus {$unchecked->number}; Prüfung offen, Inhalt einzeln abhaken.");
         }
 
-        $notStowed = StowItem::pending()->whereNull('issued_item_id')->whereHas('loan', fn ($query) => $query->where('status', 'closed'))->with('item')->first();
+        $notStowed = StowItem::pending()->whereHas('loan', fn ($query) => $query->where('status', 'closed'))->whereHas('item', fn ($query) => $query->where('kind', '!=', 'bulk'))->with('item')->first();
         if ($notStowed) {
             $this->demo->label($notStowed->item->number, $notStowed->item->name, 'Zurück, noch nicht eingeräumt', 'Im Scan-Tab „Einräumen“; danach das Regal des Stammplatzes scannen.');
         }
 
-        $missing = LoanItem::stillMissing()->whereNull('parent_id')->with('missingItem', 'loan')->first();
+        $missing = LoanItem::stillMissing()->whereNull('parent_id')->whereNotNull('missing_item_id')->with('missingItem', 'loan')->first();
         if ($missing) {
             $this->demo->label($missing->missingItem->number, $missing->missingItem->name, 'Vermisst nach einer Rückgabe', "Seit {$missing->loan->number}; gesperrt für Buchungen, auf der Buchung „Wieder da“.");
         }
@@ -502,14 +506,14 @@ class LoansDemo implements DemoPart
     }
 
     /**
-     * Put everything of a loan back at its home (split parts back to their origin).
+     * Put everything of a loan back at its home; a bulk item that kept its place is confirmed there.
      */
     private function stow(Loan $loan): void
     {
         foreach (StowItem::pending()->where('loan_id', $loan->id)->with('item')->get() as $row) {
-            $home = $row->item->home();
-            if ($row->issued_item_id !== null || $home !== null) {
-                $this->stowItem->handle($this->demo->actor, $row, $home ? Item::placeSummary($home)['code'] : null);
+            $target = $row->isBulk() && $row->item->place() !== null ? $row->item->place() : $row->item->home();
+            if ($target !== null) {
+                $this->stowItem->handle($this->demo->actor, $row, Item::placeSummary($target)['code']);
             }
         }
     }

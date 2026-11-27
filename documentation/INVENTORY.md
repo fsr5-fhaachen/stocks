@@ -64,7 +64,9 @@ Ort und Stammplatz zeigen jeweils auf einen Standort **oder** eine Box (`locatio
 - Nur Gegenstände mit „ist Behälter“ nehmen etwas auf; das Merkmal lässt sich nicht entfernen, solange etwas darin liegt.
 - „Inhalt öffentlich zeigen“ (Standard: an) nutzt erst die öffentliche Box-Ansicht per QR-Code.
 
-**Mengenartikel.** Wird nur ein Teil umgelagert, teilt Stocks den Gegenstand: Der Teil wird ein neuer Gegenstand mit eigener Nummer, gleichem Namen, gleicher Kategorie, Kopien der Fotos und Verweis auf den Ursprung (`split_from_id`). So kann jeder Teil sein eigenes Etikett tragen. Eine geänderte Menge beim Bearbeiten wird als Zählung protokolliert.
+**Mengenartikel.** Wird nur ein Teil umgelagert, teilt Stocks den Gegenstand: Der Teil wird ein neuer Gegenstand mit eigener Nummer, gleichem Namen, gleicher Kategorie, Kopien der Fotos und Verweis auf den Ursprung (`split_from_id`). So kann jeder Teil sein eigenes Etikett tragen; der Teil gilt als **noch nicht etikettiert** (`label_printed_at` leer, seit 27.11.2026; vorher wurde der Wert des Ursprungs mitkopiert). Eine geänderte Menge beim Bearbeiten wird als Zählung protokolliert.
+
+**Stücke, die nicht hier sind.** `quantity` ist der ganze Bestand. Ein Modul kann Stücke weg haben, ohne dass der Gegenstand seinen Ort verliert (der Verleih: ausgegeben oder vermisst, `ItemExtensions::awayQuantity()`). Hier ist dann nur der Rest (`quantityHere()`): Umlagern einer Teilmenge, Verbrauchen und Ausmustern gehen höchstens bis dahin („Hier sind nur 28 Stück …, 12 sind gerade weg“), der ganze Gegenstand darf umziehen. Beim Bearbeiten darf die Menge nicht unter die Stücke fallen, die weg sind, und die Art nicht wechseln. Angezeigt wird das als **„Vorhanden“** (`quantity_here`): auf der Seite eigenes Feld „Vorhanden: 38 Stück von 50, 12 unterwegs“, auf der Scan-Karte „50 Stück (38 vorhanden)“, in der Liste „38 / 50 Stück“, in den Dialogen Umlagern, Verbrauchen und Ausmustern als Hinweis (Ausmustern beginnt mit dem Vorhandenen).
 
 **Zurückbuchen.** Ein abgeteilter Teil lässt sich zu seinem Ursprung zurückbuchen (`MergeItem`), ganz oder teilweise: auf seiner Seite über „Zurückbuchen“ oder auf der Seite „Umlagern“, indem man als Ziel die Nummer des Ursprungs scannt. Die Menge kommt beim Ursprung dazu, beide bekommen eine Bewegung `merge`. Ein ganz zurückgebuchter Teil wird mit Grund „zurückgebucht“ ausgemustert und behält seine Nummer und seinen Verlauf. Ist der Ursprung selbst schon zurückgebucht (ein Teil von einem Teil, z. B. fehlende Stücke eines verliehenen Teils), geht es weiter zu dessen Ursprung (`Item::mergeTarget()`). Recht: `inventory.move`.
 
@@ -101,7 +103,7 @@ Jede Änderung des Orts schreibt eine Zeile in `item_movements`:
 | Ausgabe mit einer Buchung (Modul Verleih) | `MoveItem::takeAway` | `issue`, vom Ort nach nirgends, Notiz mit der Buchungsnummer; bei Mengenartikeln vorher `split` |
 | Rücknahme (Modul Verleih) | `ItemMovement::record` | `return`, ohne Ort; eingeräumt wird danach mit `move` oder `merge` |
 
-**Sperren durch Module.** Ein Modul kann einen Gegenstand sperren (`ItemExtensions::lockOf`, siehe [MODULES.md](MODULES.md#gegenstände)). Solange er ausgegeben ist, lehnen `MoveItem`, `RetireItem` und `MergeItem` ab und nennen den Grund; Seite und Scan-Karte zeigen „Umlagern“ und „Ausmustern“ dann nicht.
+**Sperren durch Module.** Ein Modul kann einen Gegenstand sperren (`ItemExtensions::lockOf`, siehe [MODULES.md](MODULES.md#gegenstände)). Solange er ausgegeben ist (Einzelstück, Box, Inhalt einer Box; nicht ausgegebene Stücke eines Mengenartikels), lehnen `MoveItem`, `RetireItem` und `MergeItem` ab und nennen den Grund; Seite und Scan-Karte zeigen „Umlagern“ und „Ausmustern“ dann nicht.
 
 Wird eine Box bewegt, bekommt nur die Box eine Zeile. Zeilen werden nie geändert; ein falscher Ort wird durch eine neue Bewegung korrigiert. Feldänderungen an Gegenständen, Standorten und Kategorien stehen zusätzlich im Änderungsprotokoll.
 

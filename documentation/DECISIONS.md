@@ -2,6 +2,12 @@
 
 Warum Stocks so gebaut ist, wie es gebaut ist. Neue Einträge oben; jeder Eintrag mit Datum, Entscheidung, Grund und verworfener Alternative.
 
+## 2026-11-27 · Mengenartikel im Verleih ohne Abteilen
+
+**Ein Mengenartikel wird für eine Buchung nicht mehr abgeteilt** (Entscheidung von Maurice). Die Zeile hält fest, wie viele draußen (`quantity`), zurück (`returned_quantity`) und vermisst (`missing_quantity`) sind; der Gegenstand behält Bestand, Ort und Nummer. Grund: Ein verliehener Teil liegt nirgends und braucht keine eigene Nummer; das Abteilen brauchte Sonderwege (Rückgabe-Scan über den Ursprung, Zurückbuchen beim Einräumen, Rückbuchen vor der Ausgabe, vermisste Teile) und erzeugte Nummern ohne Etikett. Der Kern erfährt über `ItemAwayProvider::awayQuantities()`, wie viele Stücke weg sind, und begrenzt Umlagern einer Teilmenge, Verbrauchen und Ausmustern darauf. Eine beschädigte Teilmenge bleibt eine Notiz am Mangel (Entscheidung von Maurice). Einräumen bestätigt den Ort per Scan, ein anderer Ort wird abgelehnt (Entscheidung von Maurice). Die Migration bucht bestehende abgeteilte Teile in ihren Ursprung zurück (ausgemustert als „zusammengeführt“, Nummer bleibt) und entfernt `issued_item_id`. Verworfen: Abteilen behalten und nur `label_printed_at` beim Teil leeren.
+
+**Abgeteilte Teile gelten als unetikettiert.** Beim Umlagern einer Teilmenge kopierte `replicate()` `label_printed_at` mit; der Teil fehlte im Filter „noch nicht etikettiert“.
+
 ## 2026-11-25 · Schnellere Tests
 
 **Die Tests nutzen eine SQLite-Datei statt `:memory:`** (`database/testing.sqlite`, angelegt von `tests/bootstrap.php`). Mit `:memory:` migriert `RefreshDatabase` vor jedem Test neu, bei über 450 Tests und allen Migrationen von Kern und Modulen der größte Grundaufwand; mit einer Datei migriert es einmal je Lauf und rollt jeden Test in einer Transaktion zurück. Verworfen: Schema-Dump (muss bei jeder Migration neu erzeugt werden).
@@ -76,7 +82,7 @@ Gehört zu Phase 5, keine neue Phase. Entscheidungen von Maurice vom 15.11. und 
 
 **Limits der Verleihseite je Adresse und Buchung.** Viele Entleiher teilen sich eine Adresse (Hochschul-WLAN); 60 Abfragen je Minute und Adresse reichten dann für etwa fünf offene Seiten. Gegen das Durchprobieren von Links gibt es zusätzlich 600 je Adresse.
 
-**Zurückgekommene Teilmengen bucht die Ausgabe selbst zurück** (Entscheidung von Maurice). Sie zählen schon vor dem Einräumen als frei; fehlt dem Ursprung Menge, holt die Ausgabe sie wie beim Einräumen zurück. Verworfen: erst nach dem Einräumen frei, oder nur ein Hinweis bei der Ausgabe.
+**Zurückgekommene Teilmengen bucht die Ausgabe selbst zurück** (Entscheidung von Maurice; abgelöst am 27.11.2026, Mengenartikel werden nicht mehr abgeteilt). Sie zählen schon vor dem Einräumen als frei; fehlt dem Ursprung Menge, holt die Ausgabe sie wie beim Einräumen zurück. Verworfen: erst nach dem Einräumen frei, oder nur ein Hinweis bei der Ausgabe.
 
 **Offene Verlängerungsanfragen erledigen sich** bei Rückgabe oder Storno (Status `done`, Chat-Eintrag, keine Mail; Entscheidung von Maurice). Verworfen: automatisch ablehnen mit Mail, stehen lassen.
 
@@ -184,7 +190,7 @@ Gehört zu Phase 5, keine neue Phase. Entscheidungen von Maurice vom 15.11. und 
 
 **„Verschmutzt“ als Verlaufseintrag ohne neuen Zustand.** Fotos hängen nach dem Detailplan an einer Zustandsänderung. Für „verschmutzt“ schreibt die Rückgabe einen Eintrag mit gleichem altem und neuem Zustand, damit Notiz und Fotos im Verlauf des Gegenstands stehen. Verworfen: eigene Tabelle für Fotos von Mängeln.
 
-**Ausgabe über `MoveItem::takeAway()`.** Der Kern bekommt eine Methode, die einen Gegenstand ohne neuen Ort wegnimmt und bei Mengen abteilt, mit der Bewegungsart des Aufrufers (`issue`). Grund: Teilen bleibt an einer Stelle. Verworfen: eigene Mengenlogik im Modul.
+**Ausgabe über `MoveItem::takeAway()`.** (Seit 27.11.2026 nur für Einzelstücke und Boxen; Mengenartikel behalten ihren Ort.) Der Kern bekommt eine Methode, die einen Gegenstand ohne neuen Ort wegnimmt und bei Mengen abteilt, mit der Bewegungsart des Aufrufers (`issue`). Grund: Teilen bleibt an einer Stelle. Verworfen: eigene Mengenlogik im Modul.
 
 **„Noch nicht eingeräumt“ wird abgeleitet.** Eine zurückgebuchte Position ohne `stowed_at`, deren Gegenstand keinen Ort hat (oder deren abgeteilter Teil noch besteht), wartet aufs Einräumen. Wer den Gegenstand auf anderem Weg an einen Ort bringt, hat ihn damit eingeräumt. Verworfen: ein Listener im Kern, der `stowed_at` setzt.
 

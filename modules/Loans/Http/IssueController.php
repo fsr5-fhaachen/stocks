@@ -45,7 +45,7 @@ class IssueController extends Controller
         $this->issueLoan->prepare($loan);
         $loan->load(['responsible.council', 'borrower', 'event']);
         // what left before (partial issue) is not part of the page
-        $rows = $loan->loanItems()->whereNull('issued_at')->with(['item', 'issuedItem', 'boxChecks'])->get();
+        $rows = $loan->loanItems()->whereNull('issued_at')->with(['item', 'boxChecks'])->get();
         $snapshot = $documents->issueSnapshot($loan, $request->user());
 
         return Inertia::render('Loans::Loans/Issue', [
@@ -105,7 +105,7 @@ class IssueController extends Controller
             ]);
         }
 
-        return back()->with('success', "{$result['row']->physicalItem()->number} abgehakt.");
+        return back()->with('success', "{$result['row']->item->number} abgehakt.");
     }
 
     /**

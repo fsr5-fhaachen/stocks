@@ -58,7 +58,15 @@
   </div>
 
   <span v-else-if="column === 'quantity' && row.kind === 'bulk'">
-    {{ row.quantity }} {{ row.unit }}
+    <!-- pieces away (lent, missing): vorhanden / gesamt -->
+    <template
+      v-if="row.quantity_here !== null && row.quantity_here < row.quantity"
+      ><span :title="`${row.quantity_here} vorhanden von ${row.quantity}`"
+        >{{ row.quantity_here }} / {{ row.quantity }}</span
+      >
+      {{ row.unit }}</template
+    >
+    <template v-else>{{ row.quantity }} {{ row.unit }}</template>
   </span>
 
   <template v-else-if="column === 'category'">{{ row.category }}</template>

@@ -40,6 +40,10 @@ class RetireItem
         if ($quantity < 1 || $quantity > $item->quantity) {
             throw ValidationException::withMessages(['quantity' => "Die Menge muss zwischen 1 und {$item->quantity} liegen."]);
         }
+        // pieces that a module has away (lent, missing) are not here to retire
+        if ($item->kind === ItemKind::Bulk && $quantity > ($here = $this->extensions->quantityHere($item))) {
+            throw ValidationException::withMessages(['quantity' => MoveItem::notHereMessage($item, $here)]);
+        }
         $isPart = $item->kind === ItemKind::Bulk && $quantity < $item->quantity;
 
         if (! $isPart && $item->contents()->exists()) {

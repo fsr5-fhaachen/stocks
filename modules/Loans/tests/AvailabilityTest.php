@@ -72,12 +72,12 @@ class AvailabilityTest extends LoansTestCase
         $this->assertFalse($this->check($benches, 15, 3, 5)['blocked']);
     }
 
-    public function test_an_issued_part_of_a_bulk_item_still_counts_to_the_stock(): void
+    public function test_issued_pieces_of_a_bulk_item_still_count_to_the_stock(): void
     {
         $benches = $this->item(['kind' => 'bulk', 'quantity' => 40, 'unit' => 'Stück']);
         $this->issued([[$benches, 25]], now()->subHour(), now()->addDay());
 
-        $this->assertSame(15, $benches->refresh()->quantity);
+        $this->assertSame(40, $benches->refresh()->quantity);
         // during the loan 15 are free, afterwards all 40
         $this->assertSame(15, $this->check($benches, 1, 0, 1)['free']);
         $this->assertSame(40, $this->check($benches, 1, 3, 4)['free']);

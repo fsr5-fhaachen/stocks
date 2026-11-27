@@ -90,7 +90,15 @@
             <p class="font-mono text-sm text-ink-muted">{{ card.number }}</p>
             <p class="text-sm">
               <template v-if="card.kind === 'bulk'"
-                >{{ card.quantity }} {{ card.unit }} ·
+                >{{ card.quantity }} {{ card.unit }}
+                <template
+                  v-if="
+                    card.quantity_here !== null &&
+                    card.quantity_here < card.quantity
+                  "
+                  >({{ card.quantity_here }} vorhanden)</template
+                >
+                ·
               </template>
               <template v-if="card.is_container"
                 >Box mit {{ card.contents_count }} Gegenständen ·
@@ -120,7 +128,7 @@
           label="Menge zum Umlagern"
           type="number"
           inputmode="numeric"
-          :hint="`Von ${card.quantity} ${card.unit ?? ''}. Eine Teilmenge wird ein eigener Gegenstand.`"
+          :hint="`Von ${card.quantity} ${card.unit ?? ''}${card.quantity_here !== null && card.quantity_here < card.quantity ? `, vorhanden ${card.quantity_here}` : ''}. Eine Teilmenge wird ein eigener Gegenstand.`"
         />
         <div
           class="mt-4 grid grid-cols-2 gap-2 [&>*]:min-h-[44px] lg:[&>*]:text-base"
@@ -301,6 +309,8 @@ type ScannedItem = {
   name: string;
   kind: "single" | "bulk";
   quantity: number;
+  // pieces there, without those lent or missing; null for single items
+  quantity_here: number | null;
   unit: string | null;
   is_container: boolean;
   retired: boolean;

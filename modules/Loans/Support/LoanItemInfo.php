@@ -32,21 +32,23 @@ class LoanItemInfo implements ItemInfoProvider
         $ids = $items->pluck('id')->all();
         $notices = [];
 
-        // issued: the part that left, the item itself or a row of a box
-        $issued = LoanAwayItems::issuedRows()
-            ->where(fn (Builder $query) => $query->whereIn('issued_item_id', $ids)->orWhere(fn (Builder $query) => $query->whereNull('issued_item_id')->whereIn('item_id', $ids)))
-            ->with('loan.responsible', 'loan.responsibleUser')->get();
+        // issued: the item itself or a row of a box; pieces of a bulk item do not lock it, the item
+        // stays at its place and only what is here can be moved or used up
+        $issued = LoanAwayItems::issuedRows()->whereIn('item_id', $ids)
+            ->with('loan.responsible', 'loan.responsibleUser', 'item')->get();
         foreach ($issued as $row) {
             $loan = $row->loan;
             $overdue = $loan->isOverdue();
-            $notices[$row->issued_item_id ?? $row->item_id][] = $this->notice(
+            $pieces = $row->parent_id === null && $row->isBulk();
+            $what = $pieces ? "{$row->quantity} {$row->item->unit} ausgegeben" : 'Ausgegeben';
+            $notices[$row->item_id][] = $this->notice(
                 $overdue
-                    ? "Ausgegeben an {$loan->responsibleName()}, seit {$loan->overdueDays()} Tagen überfällig ({$loan->number})."
-                    : "Ausgegeben an {$loan->responsibleName()} bis {$loan->return_at->format('d.m.Y, H:i')} Uhr ({$loan->number}).",
-                $overdue ? 'überfällig' : 'ausgegeben bis '.$loan->return_at->format('d.m.'),
+                    ? "{$what} an {$loan->responsibleName()}, seit {$loan->overdueDays()} Tagen überfällig ({$loan->number})."
+                    : "{$what} an {$loan->responsibleName()} bis {$loan->return_at->format('d.m.Y, H:i')} Uhr ({$loan->number}).",
+                $overdue ? 'überfällig' : ($pieces ? "{$row->quantity} ausgegeben" : 'ausgegeben bis '.$loan->return_at->format('d.m.')),
                 $overdue ? 'danger' : 'warning',
                 $loan,
-                lock: true,
+                lock: ! $pieces,
                 actions: $user?->can('loans.issue') ? $this->action('Rückgabe dieser Buchung', 'loans.return.show', [$loan, 'return'], 'rotate-left') : [],
             );
         }
@@ -60,9 +62,13 @@ class LoanItemInfo implements ItemInfoProvider
             $notices[$row->item_id][] = $this->notice("Ungeprüft zurück aus {$row->loan->number}; die Prüfung ist offen.", 'ungeprüft', 'warning', $row->loan);
         }
 
-        foreach (LoanItem::whereIn('missing_item_id', $ids)->stillMissing()->with('loan')->get() as $row) {
-            $notices[$row->missing_item_id][] = $this->notice(
-                "Vermisst seit der Rückgabe von {$row->loan->number} am {$row->returned_at->format('d.m.Y')}.",
+        $missing = LoanItem::stillMissing()->where(fn (Builder $query) => $query->whereIn('missing_item_id', $ids)->orWhere(fn (Builder $query) => $query->where('missing_quantity', '>', 0)->whereIn('item_id', $ids)))
+            ->with('loan', 'item')->get();
+        foreach ($missing as $row) {
+            $pieces = $row->missing_quantity > 0;
+            $notices[$pieces ? $row->item_id : $row->missing_item_id][] = $this->notice(
+                ($pieces ? "{$row->missing_quantity} {$row->item->unit} vermisst" : 'Vermisst').
+                    " seit der Rückgabe von {$row->loan->number} am {$row->returned_at->format('d.m.Y')}.",
                 'vermisst',
                 'danger',
                 $row->loan,
@@ -70,10 +76,14 @@ class LoanItemInfo implements ItemInfoProvider
             );
         }
 
-        foreach (StowItem::pending()->where(fn (Builder $query) => $query->whereIn('issued_item_id', $ids)->orWhere(fn (Builder $query) => $query->whereNull('issued_item_id')->whereIn('item_id', $ids)))->with('loan', 'item')->get() as $row) {
-            $home = $row->issued_item_id ? "zurück zu {$row->item->number}" : 'Stammplatz '.($row->item->home() ? Item::placeSummary($row->item->home())['code'] : 'keiner');
-            $notices[$row->issued_item_id ?? $row->item_id][] = $this->notice(
-                "Zurück aus {$row->loan->number}, noch nicht eingeräumt ({$home}).",
+        foreach (StowItem::pending()->whereIn('item_id', $ids)->with('loan', 'item')->get() as $row) {
+            $pieces = $row->isBulk() && $row->item->place() !== null;
+            $where = $pieces
+                ? 'gehören nach '.Item::placeSummary($row->item->place())['code']
+                : 'Stammplatz '.($row->item->home() ? Item::placeSummary($row->item->home())['code'] : 'keiner');
+            $notices[$row->item_id][] = $this->notice(
+                ($pieces ? ($row->returned_quantity ?? $row->quantity)." {$row->item->unit} zurück" : 'Zurück').
+                    " aus {$row->loan->number}, noch nicht eingeräumt ({$where}).",
                 'nicht eingeräumt',
                 'info',
                 $row->loan,

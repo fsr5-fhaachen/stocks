@@ -17,7 +17,7 @@ class DefectReported extends LoanEventNotification
     public function message(object $notifiable): NotificationMessage
     {
         $defects = $this->loan->loanItems()->whereNotNull('return_state')->where('return_state', '!=', 'ok')->with('item')->get()
-            ->map(fn ($row) => "{$row->item->name} ({$row->physicalItem()->number}): {$row->return_state->label()}".($row->return_note ? ", {$row->return_note}" : ''));
+            ->map(fn ($row) => "{$row->item->name} ({$row->item->number}): {$row->return_state->label()}".($row->return_note ? ", {$row->return_note}" : ''));
 
         return $this->forContact('Mangel gemeldet', [
             "bei der Rückgabe deiner Ausleihe {$this->name()} haben wir Folgendes festgestellt:",

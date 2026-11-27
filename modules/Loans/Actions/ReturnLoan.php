@@ -65,7 +65,7 @@ class ReturnLoan
      */
     public function rows(Loan $loan, bool $inspect): Collection
     {
-        $query = $loan->loanItems()->with(['item.condition', 'issuedItem', 'parent']);
+        $query = $loan->loanItems()->with(['item.condition', 'parent']);
 
         return $inspect
             ? $query->whereNotNull('returned_at')->whereNull('inspected_at')->get()
@@ -144,7 +144,7 @@ class ReturnLoan
         if ($row->isBulk() && $returned < $row->quantity && $state !== ReturnState::Missing && ! ItemUnit::isConsumable($row->item->unit)) {
             $note .= ' '.($row->quantity - $returned)." {$row->item->unit} fehlen.";
         }
-        $item = $row->physicalItem();
+        $item = $row->item;
 
         DB::transaction(function () use ($actor, $loan, $row, $state, $note, $condition, $photos, $item, $returned) {
             $this->recordDefect->handle($actor, $loan, $item, $state, $note, $condition, $photos, 'zurück aus');
@@ -254,7 +254,7 @@ class ReturnLoan
             $rows = $this->rows($loan, true);
             $open = $rows->reject(fn (LoanItem $row) => $row->isReturnHandled());
             if ($open->isNotEmpty()) {
-                throw ValidationException::withMessages(['loan' => 'Noch nicht geprüft: '.$open->map(fn (LoanItem $row) => $row->physicalItem()->number)->implode(', ').'.']);
+                throw ValidationException::withMessages(['loan' => 'Noch nicht geprüft: '.$open->map(fn (LoanItem $row) => $row->item->number)->implode(', ').'.']);
             }
 
             foreach ($rows as $row) {
@@ -280,10 +280,13 @@ class ReturnLoan
                 throw ValidationException::withMessages(['loan' => 'Die Buchung hat keine offenen Mängel.']);
             }
 
-            // what is still missing is written off as lost
-            foreach ($loan->loanItems()->stillMissing()->with('missingItem')->get() as $row) {
-                $this->retireItem->handle($actor, $row->missingItem, RetireReason::Lost, "Verloren nach {$loan->number}. {$note}");
+            // what is still missing is written off as lost; the row first, so the missing pieces of
+            // a bulk item no longer count as away and can be taken off its stock
+            foreach ($loan->loanItems()->stillMissing()->with('missingItem', 'item')->get() as $row) {
                 $row->forceFill(['missing_resolution' => 'lost', 'missing_resolved_at' => now()])->save();
+                $row->missing_quantity > 0
+                    ? $this->retireItem->handle($actor, $row->item->refresh(), RetireReason::Lost, "Verloren nach {$loan->number}. {$note}", min($row->missing_quantity, $row->item->quantity))
+                    : $this->retireItem->handle($actor, $row->missingItem, RetireReason::Lost, "Verloren nach {$loan->number}. {$note}");
             }
             $loan->forceFill(['defects_closed_at' => now(), 'defects_note' => $note])->save();
         });
@@ -338,7 +341,7 @@ class ReturnLoan
 
                 // a bulk row with pieces missing still brings the rest back
                 if ($row->parent_id === null && ($row->return_state !== ReturnState::Missing || ($row->isBulk() && $row->returned_quantity > 0))) {
-                    ItemMovement::record($row->physicalItem(), MovementType::Return, null, null, $actor, $row->returned_quantity ?? $row->quantity, "Zurückgenommen von {$loan->number}.");
+                    ItemMovement::record($row->item, MovementType::Return, null, null, $actor, $row->returned_quantity ?? $row->quantity, "Zurückgenommen von {$loan->number}.");
                 }
                 if ($checked) {
                     $this->bookItem($actor, $loan, $row, true);
@@ -384,37 +387,33 @@ class ReturnLoan
     }
 
     /**
-     * What a checked row means for its item: used up consumables are booked out, missing contents
-     * of a box leave the box, and missing pieces of a bulk item are split off without a place, like
-     * a missing single item.
+     * What a checked row means for its item: used up consumables are taken off the stock, missing
+     * pieces of a bulk item stay on the row (missing_quantity, the item keeps its place), and a
+     * missing single item loses its place (a missing row of a box leaves the box). Both are
+     * "vermisst" until they turn up (ResolveMissing::found) or are written off with the defects.
      */
     private function bookItem(User $actor, Loan $loan, LoanItem $row, bool $atReturn): void
     {
-        $item = $row->physicalItem()->refresh();
-        $short = $row->isBulk() ? $row->quantity - ($row->returned_quantity ?? $row->quantity) : 0;
+        $item = $row->item->refresh();
 
-        $missing = null;
-        if ($short > 0 && $short <= $item->quantity) {
-            if (ItemUnit::isConsumable($row->item->unit)) {
-                $this->retireItem->handle($actor, $item, RetireReason::Consumed, "Verbraucht mit {$loan->number}.", $short);
-            } elseif ($short < $item->quantity || $item->place() !== null) {
-                $missing = $this->moveItem->takeAway($actor, $item, MovementType::Move, $short, "Fehlt nach der Rückgabe von {$loan->number}.");
-            } else {
-                $missing = $item;
+        if ($row->isBulk()) {
+            $short = $row->quantity - ($row->returned_quantity ?? $row->quantity);
+            if ($short <= 0) {
+                return;
             }
+            // the row is back already, so these pieces no longer count as away
+            ItemUnit::isConsumable($item->unit)
+                ? $this->retireItem->handle($actor, $item, RetireReason::Consumed, "Verbraucht mit {$loan->number}.", min($short, $item->quantity))
+                : $row->forceFill(['missing_quantity' => $short])->save();
+
+            return;
         }
 
-        // a missing item has no place any more; a missing row of a box leaves the box
-        if ($row->return_state === ReturnState::Missing && ! $row->isBulk()) {
+        if ($row->return_state === ReturnState::Missing) {
             if ($item->place() !== null) {
                 $this->moveItem->takeAway($actor, $item, MovementType::Move, note: "Fehlt nach der Rückgabe von {$loan->number}.");
             }
-            $missing = $item;
-        }
-
-        // "vermisst" until it turns up (ResolveMissing::found) or is written off with the defects
-        if ($missing !== null) {
-            $row->forceFill(['missing_item_id' => $missing->id])->save();
+            $row->forceFill(['missing_item_id' => $item->id])->save();
         }
     }
 
@@ -439,7 +438,7 @@ class ReturnLoan
     }
 
     /**
-     * Row with the number of a code (the part that left, or the item).
+     * Row with the number of a code.
      *
      * @param  Collection<int, LoanItem>  $rows
      */
@@ -451,9 +450,7 @@ class ReturnLoan
             return null;
         }
 
-        // the part that left has a number of its own, but often carries the label of its origin
-        return $rows->first(fn (LoanItem $row) => $row->physicalItem()->is($item))
-            ?? $rows->first(fn (LoanItem $row) => $row->issued_item_id !== null && $row->item->is($item));
+        return $rows->first(fn (LoanItem $row) => $row->item->is($item));
     }
 
     /**

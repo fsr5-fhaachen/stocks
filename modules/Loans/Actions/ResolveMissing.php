@@ -2,8 +2,6 @@
 
 namespace Modules\Loans\Actions;
 
-use App\Actions\Inventory\MergeItem;
-use App\Enums\ItemKind;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -13,15 +11,13 @@ use Modules\Loans\Models\LoanItem;
 
 /**
  * Something that went missing at a return turns up again ("Wieder da"). Missing pieces of a bulk
- * item go straight back to the stock (MergeItem); a single item waits under Rückgaben to be put
- * back like after a return (StowItem). When nothing is missing any more and there are no other
+ * item count as stock again at once (the item kept its place); a single item waits under
+ * Rückgaben to be put back like after a return (StowItem). When nothing is missing any more and there are no other
  * defects, the defects of the loan close by themselves. Writing off as lost is part of
  * ReturnLoan::closeDefects().
  */
 class ResolveMissing
 {
-    public function __construct(private readonly MergeItem $mergeItem) {}
-
     /**
      * @return string what happened, for the message
      *
@@ -29,26 +25,20 @@ class ResolveMissing
      */
     public function found(User $actor, LoanItem $row): string
     {
-        return DB::transaction(function () use ($actor, $row) {
+        return DB::transaction(function () use ($row) {
             // locked and checked again, so a second tap does not book it twice
             LoanItem::whereKey($row->id)->lockForUpdate()->first();
             if (! LoanItem::whereKey($row->id)->stillMissing()->exists()) {
                 throw ValidationException::withMessages(['row' => 'Das wird nicht mehr vermisst.']);
             }
-            $row->refresh()->load(['missingItem', 'issuedItem', 'loan']);
-            $item = $row->missingItem;
+            $row->refresh()->load(['missingItem', 'item', 'loan']);
 
             $row->forceFill(['missing_resolution' => 'found', 'missing_resolved_at' => now()])->save();
 
-            $message = "{$item->number} ist wieder da. Unter Rückgaben einräumen.";
-            if ($item->kind === ItemKind::Bulk && $item->mergeTarget() !== null) {
-                $origin = $this->mergeItem->handle($actor, $item, note: "Wieder da nach {$row->loan->number}.");
-                // went back to the lent part that still waits to be put back: it now brings these along
-                if ($origin->id === $row->issued_item_id) {
-                    $row->forceFill(['returned_quantity' => ($row->returned_quantity ?? 0) + $item->quantity])->save();
-                }
-                $message = "{$item->quantity} {$item->unit} wieder da, zurück zu {$origin->number}.";
-            }
+            // pieces of a bulk item count as stock again at once; the item kept its place
+            $message = $row->missing_quantity > 0
+                ? "{$row->missing_quantity} {$row->item->unit} von {$row->item->number} wieder da."
+                : "{$row->missingItem->number} ist wieder da. Unter Rückgaben einräumen.";
 
             $this->closeWhenSettled($row);
 
