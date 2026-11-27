@@ -214,11 +214,10 @@ class LoanGuardsTest extends LoansTestCase
         $this->assertTrue($loan->positions()->exists());
     }
 
-    public function test_the_label_of_the_origin_finds_the_part_that_left(): void
+    public function test_the_label_of_a_bulk_item_finds_its_row_at_the_return(): void
     {
         $item = $this->item(Item::factory()->bulk(10)->raw(['location_id' => $this->shelf->id]));
         $loan = $this->issued([[$item, 4]]);
-        $this->assertNotNull($loan->positions()->first()->issued_item_id);
 
         $this->actingAs($this->admin())->post("/loans/{$loan->id}/return/check", ['code' => $item->number, 'quantity' => 4])->assertSessionHasNoErrors();
         $this->assertNotNull($loan->positions()->first()->return_checked_at);

@@ -34,17 +34,17 @@ class ReturnsController extends Controller
         return Inertia::render('Loans::Returns', [
             'unchecked' => $loans(LoanStatus::ReturnedUnchecked),
             'defects' => $loans(LoanStatus::ClosedWithDefects, true),
-            'pending' => StowItem::pending()->with(['item.homeLocation', 'item.homeContainer', 'issuedItem', 'loan'])->orderBy('returned_at')->limit(200)->get()->map(fn (LoanItem $row) => [
+            'pending' => StowItem::pending()->with(['item.homeLocation', 'item.homeContainer', 'item.location', 'item.container', 'loan'])->orderBy('returned_at')->limit(200)->get()->map(fn (LoanItem $row) => [
                 'id' => $row->id,
-                'item_id' => $row->physicalItem()->id,
-                'number' => $row->physicalItem()->number,
+                'item_id' => $row->item->id,
+                'number' => $row->item->number,
                 'name' => $row->item->name,
                 'quantity' => $row->isBulk() ? ($row->returned_quantity ?? $row->quantity) : null,
                 'unit' => $row->item->unit,
                 'loan' => $row->loan->only(['id', 'number']),
                 'returned_at' => $row->returned_at->toIso8601String(),
-                // a split off part goes back to its origin, everything else to its home
-                'merge_to' => $row->issued_item_id ? $row->item->number : null,
+                // a bulk item kept its place: the scan confirms that place, everything else goes home
+                'place' => $row->isBulk() ? Item::placeSummary($row->item->place()) : null,
                 'home' => Item::placeSummary($row->item->home()),
             ]),
             'selected' => $request->integer('row') ?: null,
@@ -52,7 +52,7 @@ class ReturnsController extends Controller
     }
 
     /**
-     * Put an item back: scanned place, or its origin for a split off part.
+     * Put an item back at the scanned place; for a bulk item that kept its place the scan confirms it.
      */
     public function stow(Request $request, StowItem $stowItem): RedirectResponse
     {

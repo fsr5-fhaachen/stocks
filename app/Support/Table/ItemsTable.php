@@ -2,6 +2,7 @@
 
 namespace App\Support\Table;
 
+use App\Enums\ItemKind;
 use App\Models\Category;
 use App\Models\Item;
 use App\Models\ItemCondition;
@@ -38,6 +39,13 @@ class ItemsTable extends Table
     private array $notices = [];
 
     /**
+     * Pieces of bulk items of the current page that a module has away (lent, missing), by item id.
+     *
+     * @var array<int, int>
+     */
+    private array $away = [];
+
+    /**
      * @param  bool  $onlyMisplaced  only items without place or away from their home (page "Ohne Platz")
      */
     public function __construct(Request $request, private readonly bool $onlyMisplaced = false)
@@ -51,6 +59,7 @@ class ItemsTable extends Table
     protected function prepareRows(Collection $models): void
     {
         $this->notices = app(ItemExtensions::class)->notices($models, $this->request->user());
+        $this->away = app(ItemExtensions::class)->awayQuantities($models->modelKeys());
     }
 
     /**
@@ -116,9 +125,10 @@ class ItemsTable extends Table
         $total = (clone $query)->count();
         $items = $query->reorder('name')->orderBy('id')->limit(self::CONTENTS_LIMIT)->get();
         $notices = app(ItemExtensions::class)->notices($items, $user);
+        $away = app(ItemExtensions::class)->awayQuantities($items->modelKeys());
 
         return [
-            'rows' => $items->map(fn (Item $item) => self::rowFor($item, $notices[$item->id] ?? []))->values()->all(),
+            'rows' => $items->map(fn (Item $item) => self::rowFor($item, $notices[$item->id] ?? [], $away[$item->id] ?? 0))->values()->all(),
             'more' => max(0, $total - self::CONTENTS_LIMIT),
         ];
     }
@@ -161,16 +171,17 @@ class ItemsTable extends Table
      */
     protected function row(Model $model): array
     {
-        return self::rowFor($model, $this->notices[$model->id] ?? []);
+        return self::rowFor($model, $this->notices[$model->id] ?? [], $this->away[$model->id] ?? 0);
     }
 
     /**
      * Row of an item, also for the contents of a box.
      *
      * @param  list<array<string, mixed>>  $notices  notices of the modules for this item
+     * @param  int  $away  pieces of a bulk item a module has away (lent, missing)
      * @return array<string, mixed>
      */
-    public static function rowFor(Item $model, array $notices): array
+    public static function rowFor(Item $model, array $notices, int $away = 0): array
     {
         return [
             'id' => $model->id,
@@ -178,6 +189,8 @@ class ItemsTable extends Table
             'name' => $model->name,
             'category' => $model->category?->fullName(),
             'quantity' => $model->quantity,
+            // pieces of a bulk item that are there ("vorhanden"), without those away
+            'quantity_here' => $model->kind === ItemKind::Bulk ? max(0, $model->quantity - $away) : null,
             'unit' => $model->unit,
             'kind' => $model->kind->value,
             'is_container' => $model->is_container,

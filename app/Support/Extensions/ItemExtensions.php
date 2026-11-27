@@ -106,6 +106,44 @@ class ItemExtensions
     }
 
     /**
+     * Pieces of a bulk item that an active module has away (e.g. lent) while the item keeps its
+     * place; 0 for single items.
+     */
+    public function awayQuantity(Item $item): int
+    {
+        return $this->awayQuantities([$item->id])[$item->id] ?? 0;
+    }
+
+    /**
+     * Pieces away by item id, see awayQuantity(). Items with nothing away are left out.
+     *
+     * @param  list<int>  $itemIds
+     * @return array<int, int>
+     */
+    public function awayQuantities(array $itemIds): array
+    {
+        $away = [];
+        foreach ($this->awayProviders as $provider) {
+            if ($this->isOn($provider['module'])) {
+                foreach (app($provider['class'])->awayQuantities($itemIds) as $id => $quantity) {
+                    $away[$id] = ($away[$id] ?? 0) + $quantity;
+                }
+            }
+        }
+
+        return $away;
+    }
+
+    /**
+     * Pieces of a bulk item that are here: the stock without what is away. Moving, using up and
+     * retiring a part stop at this.
+     */
+    public function quantityHere(Item $item): int
+    {
+        return max(0, $item->quantity - $this->awayQuantity($item));
+    }
+
+    /**
      * Items of "Ohne Platz": active, without place or away from their home, and not away on purpose.
      *
      * @return Builder<Item>

@@ -117,20 +117,20 @@ class ReturnTest extends LoansTestCase
         $this->assertNull($rows[$tape->id]->refresh()->return_state);
         $this->actingAs($admin)->post("/loans/{$loan->id}/return/complete", $this->signatures())->assertSessionHasNoErrors();
 
-        // 4 rolls used up, the part keeps the 2 that came back
-        $this->assertSame(2, $rows[$tape->id]->issuedItem->refresh()->quantity);
-        $this->assertSame(MovementType::Consume, $rows[$tape->id]->issuedItem->movements()->first()->type);
+        // 4 rolls used up: off the stock of the item itself
+        $this->assertSame(6, $tape->refresh()->quantity);
+        $this->assertSame(4, $tape->movements()->where('type', MovementType::Consume)->sole()->quantity);
         $this->assertSame(LoanStatus::ClosedWithDefects, $loan->refresh()->status);
         $receipt = $loan->documents()->where('type', DocumentType::ReturnReceipt)->firstOrFail();
         $this->assertTrue($receipt->snapshot['rows'][0]['manual']);
 
-        // 1 cable is missing: it is split off without a place, the 5 that came back are logged
-        $part = $rows[$cables->id]->issuedItem->refresh();
-        $this->assertSame(5, $part->quantity);
-        $this->assertSame(5, $part->movements()->where('type', MovementType::Return)->value('quantity'));
-        $missing = Item::where('split_from_id', $part->id)->firstOrFail();
-        $this->assertSame(1, $missing->quantity);
-        $this->assertNull($missing->place());
+        // 1 cable is missing: counted on the row, the item keeps stock and place; the 5 that came
+        // back are logged
+        $this->assertSame(1, $rows[$cables->id]->refresh()->missing_quantity);
+        $this->assertSame(10, $cables->refresh()->quantity);
+        $this->assertSame($this->shelf->id, $cables->location_id);
+        $this->assertSame(5, $cables->movements()->where('type', MovementType::Return)->value('quantity'));
+        $this->assertFalse(Item::whereNotNull('split_from_id')->exists());
     }
 
     public function test_a_defect_on_a_bulk_row_keeps_the_count(): void

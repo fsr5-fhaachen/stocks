@@ -114,7 +114,7 @@ class KioskLoanController extends Controller
         }
 
         $out = LoanItem::whereNotNull('issued_at')->whereNull('returned_at')
-            ->where(fn (Builder $query) => $query->where('item_id', $item->id)->orWhere('issued_item_id', $item->id))
+            ->where('item_id', $item->id)
             ->whereHas('loan', fn (Builder $query) => $query->where('status', LoanStatus::Issued))
             ->first();
 

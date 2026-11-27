@@ -100,7 +100,7 @@ class LoanPageData
      */
     public function rows(Loan $loan): array
     {
-        $left = $loan->loanItems()->whereNotNull('issued_at')->with(['item', 'issuedItem'])->get();
+        $left = $loan->loanItems()->whereNotNull('issued_at')->with(['item'])->get();
         if ($left->isEmpty()) {
             return array_map(fn (array $row) => [
                 'id' => null,
@@ -248,10 +248,10 @@ class LoanPageData
      */
     private function defects(Loan $loan): array
     {
-        return $loan->loanItems()->whereNotNull('inspected_at')->whereNotNull('return_state')->where('return_state', '!=', ReturnState::Ok->value)->with(['item', 'issuedItem'])->get()
+        return $loan->loanItems()->whereNotNull('inspected_at')->whereNotNull('return_state')->where('return_state', '!=', ReturnState::Ok->value)->with(['item'])->get()
             ->map(fn (LoanItem $row) => [
                 'name' => $row->item->name,
-                'number' => $row->physicalItem()->number,
+                'number' => $row->item->number,
                 'state' => $row->return_state->label(),
                 'note' => $row->return_note,
             ])->values()->all();

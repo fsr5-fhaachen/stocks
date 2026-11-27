@@ -18,7 +18,9 @@ use Illuminate\Validation\ValidationException;
  * Move an item to a location or into a box. The contents of a box move with it.
  *
  * Moving a part of a bulk item splits it: the part becomes a new item with its own number and a
- * copy of the photos at the new place, the rest stays. Both get a row in the movement log.
+ * copy of the photos at the new place, the rest stays. Both get a row in the movement log. The
+ * part has no label for its number yet. Pieces a module has away (lent, missing) are part of the
+ * stock but not here: a part can be at most what is here, the whole item moves with them.
  */
 class MoveItem
 {
@@ -47,6 +49,9 @@ class MoveItem
         if ($quantity < 1 || $quantity > $item->quantity) {
             throw ValidationException::withMessages(['quantity' => "Die Menge muss zwischen 1 und {$item->quantity} liegen."]);
         }
+        if ($item->kind === ItemKind::Bulk && $quantity < $item->quantity && $quantity > ($here = $this->extensions->quantityHere($item))) {
+            throw ValidationException::withMessages(['quantity' => self::notHereMessage($item, $here)]);
+        }
 
         return DB::transaction(function () use ($actor, $item, $target, $quantity, $note) {
             $from = $item->place();
@@ -64,34 +69,31 @@ class MoveItem
     }
 
     /**
-     * Take an item away from its place without a new place, e.g. when a module lends it out. Of a
-     * bulk item a part can be taken: it is split off like when moving. The movement log gets a row
-     * of the given type. Locks are not checked, the caller owns the reason for taking it away.
-     *
-     * @param  int|null  $quantity  part of a bulk item, null for everything
-     * @return Item the item that left: the item itself or the new part
+     * Message when more pieces of a bulk item are asked for than are here.
+     */
+    public static function notHereMessage(Item $item, int $here): string
+    {
+        $away = $item->quantity - $here;
+
+        return "Hier sind nur {$here} {$item->unit} von {$item->number}, {$away} sind gerade weg (verliehen oder vermisst).";
+    }
+
+    /**
+     * Take an item away from its place without a new place, e.g. when a module lends it out or it
+     * goes missing. The movement log gets a row of the given type. Locks are not checked, the
+     * caller owns the reason for taking it away. Pieces of a bulk item are never taken away: the
+     * module keeps count of them (see ItemAwayProvider::awayQuantities()).
      *
      * @throws ValidationException
      */
-    public function takeAway(User $actor, Item $item, MovementType $type, ?int $quantity = null, ?string $note = null): Item
+    public function takeAway(User $actor, Item $item, MovementType $type, ?string $note = null): Item
     {
         if ($item->isRetired()) {
             throw ValidationException::withMessages(['item' => "{$item->number} ist ausgemustert."]);
         }
-        $quantity ??= $item->quantity;
-        if ($quantity < 1 || $quantity > $item->quantity) {
-            throw ValidationException::withMessages(['quantity' => "Die Menge muss zwischen 1 und {$item->quantity} liegen."]);
-        }
 
-        return DB::transaction(function () use ($actor, $item, $type, $quantity, $note) {
+        return DB::transaction(function () use ($actor, $item, $type, $note) {
             $from = $item->place();
-
-            if ($item->kind === ItemKind::Bulk && $quantity < $item->quantity) {
-                $part = $this->split($actor, $item, $from, null, $quantity, $note);
-                ItemMovement::record($part, $type, $from, null, $actor, $quantity, $note);
-
-                return $part;
-            }
 
             $item->setPlace(null);
             $item->save();
@@ -102,11 +104,11 @@ class MoveItem
     }
 
     /**
-     * Split a part off a bulk item and put it at the target (or nowhere, see takeAway()).
+     * Split a part off a bulk item and put it at the target. Its number has no label yet.
      */
-    private function split(User $actor, Item $item, Location|Item|null $from, Location|Item|null $target, int $quantity, ?string $note): Item
+    private function split(User $actor, Item $item, Location|Item|null $from, Location|Item $target, int $quantity, ?string $note): Item
     {
-        $part = $item->replicate(['number', 'location_id', 'container_id', 'home_location_id', 'home_container_id']);
+        $part = $item->replicate(['number', 'location_id', 'container_id', 'home_location_id', 'home_container_id', 'label_printed_at']);
         $part->number = $this->numbers->next();
         $part->quantity = $quantity;
         $part->split_from_id = $item->id;

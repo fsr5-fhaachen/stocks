@@ -2,7 +2,6 @@
 
 namespace Modules\Loans\Http;
 
-use App\Enums\ItemKind;
 use App\Http\Controllers\Controller;
 use App\Models\Item;
 use App\Models\User;
@@ -147,9 +146,9 @@ class LoanController extends Controller
             // still missing after the return, with box contents
             'missing' => $loan->loanItems()->stillMissing()->with('missingItem', 'item')->get()->map(fn (LoanItem $row) => [
                 'id' => $row->id,
-                'number' => $row->missingItem->number,
+                'number' => ($row->missingItem ?? $row->item)->number,
                 'name' => $row->item->name,
-                'quantity' => $row->missingItem->kind === ItemKind::Bulk ? $row->missingItem->quantity : null,
+                'quantity' => $row->missing_quantity,
                 'unit' => $row->item->unit,
             ]),
             'contents' => $documents->positions($loan),
@@ -239,7 +238,7 @@ class LoanController extends Controller
                 'defects_note' => $loan->defects_note,
                 'open_defects' => $openDefects,
             ],
-            'rows' => RowTree::flatten($loan->loanItems()->with(['item', 'issuedItem'])->get(), fn (LoanItem $row) => [
+            'rows' => RowTree::flatten($loan->loanItems()->with(['item'])->get(), fn (LoanItem $row) => [
                 'state' => $row->return_state?->value,
                 'state_label' => $row->return_state?->label(),
                 'note' => $row->return_note,
@@ -249,8 +248,8 @@ class LoanController extends Controller
             ]),
             'missing' => $loan->loanItems()->stillMissing()->with('missingItem', 'item')->get()->map(fn (LoanItem $row) => [
                 'id' => $row->id,
-                'number' => $row->missingItem->number,
-                'name' => $row->item->name,
+                'number' => ($row->missingItem ?? $row->item)->number,
+                'name' => $row->missing_quantity > 0 ? "{$row->missing_quantity} {$row->item->unit} {$row->item->name}" : $row->item->name,
             ]),
             'can_found' => $user->can('loans.issue') && Surface::has('loans.missing.found'),
             'can_close_defects' => $openDefects && $user->can('loans.cancel') && Surface::has('loans.close-defects'),
@@ -510,9 +509,9 @@ class LoanController extends Controller
      */
     private function positions(Loan $loan, array $checks): array
     {
-        return $loan->positions()->with(['item.condition', 'issuedItem', 'boxChecks'])->get()->map(fn (LoanItem $position) => [
+        return $loan->positions()->with(['item.condition', 'boxChecks'])->get()->map(fn (LoanItem $position) => [
             'id' => $position->id,
-            'item' => [...$position->physicalItem()->only(['id', 'number']), 'name' => $position->item->name, 'unit' => $position->item->unit, 'kind' => $position->item->kind->value, 'is_container' => $position->item->is_container, 'stock' => $position->item->quantity],
+            'item' => [...$position->item->only(['id', 'number']), 'name' => $position->item->name, 'unit' => $position->item->unit, 'kind' => $position->item->kind->value, 'is_container' => $position->item->is_container, 'stock' => $position->item->quantity],
             'quantity' => $position->quantity,
             'condition' => $position->condition_at_issue ?? $position->item->condition->name,
             'check' => $checks[$position->id] ?? null,
