@@ -46,6 +46,7 @@ use OwenIt\Auditing\Contracts\Auditable;
  * @property string|null $retired_note
  * @property string|null $label_hint short text for the label, e.g. "Achtung, zerbrechlich"
  * @property Carbon|null $label_printed_at time of the last printed label
+ * @property bool $no_label marked as "Kein Etikett nötig": left out of "Etikett fehlt", see App\Support\Labels\LabelStatus
  */
 class Item extends Model implements Auditable, AuditSubject
 {
@@ -71,6 +72,7 @@ class Item extends Model implements Auditable, AuditSubject
         'notes',
         'label_hint',
         'ean',
+        'no_label',
     ];
 
     /**
@@ -96,6 +98,7 @@ class Item extends Model implements Auditable, AuditSubject
             'retired_reason' => RetireReason::class,
             'is_container' => 'boolean',
             'public_contents' => 'boolean',
+            'no_label' => 'boolean',
             'quantity' => 'integer',
             'retired_at' => 'datetime',
             'label_printed_at' => 'datetime',
@@ -378,6 +381,7 @@ class Item extends Model implements Auditable, AuditSubject
             'retired_note' => 'Notiz zum Ausmustern',
             'label_hint' => 'Hinweis fürs Etikett',
             'ean' => 'EAN',
+            'no_label' => 'Kein Etikett nötig',
             'history' => 'Verlaufseintrag',
         ];
     }

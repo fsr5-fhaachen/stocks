@@ -7,6 +7,7 @@ use App\Models\Item;
 use App\Models\ItemPhoto;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -61,11 +62,18 @@ class ItemPhotoController extends Controller
     }
 
     /**
-     * Make a photo the first one of the gallery (preview in lists).
+     * Make a photo the first one of the gallery (preview in lists). The gallery is numbered again
+     * from 1, the chosen photo first: the sort column takes no negative values.
      */
     public function cover(Item $item, ItemPhoto $photo): RedirectResponse
     {
-        $photo->update(['sort' => (int) $item->photos()->min('sort') - 1]);
+        DB::transaction(function () use ($item, $photo) {
+            $others = $item->photos()->whereKeyNot($photo->id)->get();
+            $photo->update(['sort' => 1]);
+            foreach ($others as $position => $other) {
+                $other->update(['sort' => $position + 2]);
+            }
+        });
 
         return back();
     }

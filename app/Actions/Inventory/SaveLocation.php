@@ -18,7 +18,7 @@ use Illuminate\Validation\ValidationException;
 class SaveLocation
 {
     /**
-     * @param  array{parent_id: int|null, code: string, name?: string|null, description?: string|null, type?: string|null, show_in_code?: bool|null}  $data
+     * @param  array{parent_id: int|null, code: string, name?: string|null, description?: string|null, type?: string|null, show_in_code?: bool|null, no_label?: bool|null}  $data
      *
      * @throws ValidationException
      */
@@ -42,6 +42,7 @@ class SaveLocation
                 'description' => $data['description'] ?? null,
                 // only a building can leave its code out of the codes below it
                 'show_in_code' => $type === LocationType::Building && (bool) ($data['show_in_code'] ?? $location->show_in_code),
+                'no_label' => (bool) ($data['no_label'] ?? $location->no_label),
             ]);
             $location->setRelation('parent', $parent);
 

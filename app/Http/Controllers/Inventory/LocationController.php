@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Inventory;
 
+use App\Actions\Inventory\CreateLocations;
 use App\Actions\Inventory\DeleteLocation;
 use App\Actions\Inventory\SaveLocation;
 use App\Enums\LocationType;
 use App\Http\Controllers\Controller;
 use App\Models\Item;
 use App\Models\Location;
+use App\Support\Inventory\CodeSequence;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -32,6 +34,7 @@ class LocationController extends Controller
                     'description' => $location->description,
                     'items_count' => $location->items_count,
                     'label_printed_at' => $location->label_printed_at?->toIso8601String(),
+                    'no_label' => $location->no_label,
                 ]),
         ]);
     }
@@ -47,7 +50,7 @@ class LocationController extends Controller
         }
 
         return Inertia::render('Inventory/Locations/Show', [
-            'location' => [...$location->summary(), 'parent_id' => $location->parent_id, 'description' => $location->description, 'label_printed_at' => $location->label_printed_at?->toIso8601String()],
+            'location' => [...$location->summary(), 'parent_id' => $location->parent_id, 'description' => $location->description, 'label_printed_at' => $location->label_printed_at?->toIso8601String(), 'no_label' => $location->no_label],
             'path' => $path,
             'children' => $location->children()->withCount(['items' => fn ($query) => $query->active()])->get()
                 ->map(fn (Location $child) => [...$child->summary(), 'items_count' => $child->items_count]),
@@ -64,11 +67,21 @@ class LocationController extends Controller
     }
 
     /**
-     * Create a location.
+     * Create a location, or with "count" several shelves or compartments in a row ("Mehrere
+     * anlegen", see App\Actions\Inventory\CreateLocations).
      */
-    public function store(Request $request, SaveLocation $saveLocation): RedirectResponse
+    public function store(Request $request, SaveLocation $saveLocation, CreateLocations $createLocations): RedirectResponse
     {
-        $location = $saveLocation->handle(null, $this->validated($request));
+        $data = $this->validated($request);
+        $count = max(1, (int) ($request->validate(['count' => ['nullable', 'integer', 'min:1', 'max:'.CodeSequence::MAX_COUNT]])['count'] ?? 1));
+
+        if ($count > 1) {
+            $locations = $createLocations->handle($data, $count);
+
+            return back()->with('success', count($locations).' Standorte angelegt: '.$locations[0]->full_code.' bis '.end($locations)->full_code.'.');
+        }
+
+        $location = $saveLocation->handle(null, $data);
 
         return back()->with('success', "{$location->full_code} wurde angelegt.");
     }
@@ -94,7 +107,7 @@ class LocationController extends Controller
     }
 
     /**
-     * @return array{parent_id: int|null, code: string, name: string|null, description: string|null, type: string|null, show_in_code: bool|null}
+     * @return array{parent_id: int|null, code: string, name: string|null, description: string|null, type: string|null, show_in_code: bool|null, no_label: bool|null}
      */
     private function validated(Request $request): array
     {
@@ -103,10 +116,12 @@ class LocationController extends Controller
             // only where the parent allows two levels (address: room or building)
             'type' => ['nullable', Rule::enum(LocationType::class)],
             'show_in_code' => ['nullable', 'boolean'],
+            // "Kein Etikett nötig", see App\Enums\LabelStatus
+            'no_label' => ['nullable', 'boolean'],
             // letters and digits only, "-" and "." join the codes of the path
             'code' => ['required', 'string', 'max:20', 'regex:/^[A-Za-z0-9]+$/'],
             'name' => ['nullable', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:2000'],
-        ], ['code.regex' => 'Das Kürzel besteht nur aus Buchstaben und Ziffern.']) + ['parent_id' => null, 'name' => null, 'description' => null, 'type' => null, 'show_in_code' => null];
+        ], ['code.regex' => 'Das Kürzel besteht nur aus Buchstaben und Ziffern.']) + ['parent_id' => null, 'name' => null, 'description' => null, 'type' => null, 'show_in_code' => null, 'no_label' => null];
     }
 }

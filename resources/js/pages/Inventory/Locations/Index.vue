@@ -17,9 +17,16 @@
       v-if="locations.length"
       class="flex flex-wrap items-center gap-4 border-b border-line p-4 sm:px-6"
     >
-      <UiCheckbox v-model="onlyUnlabeled" label="Noch ohne Etikett" />
+      <UiSelect
+        v-model="labelFilter"
+        label="Etikett"
+        :options="labelOptions"
+        class="w-full sm:w-56"
+      />
       <UiButton
-        v-if="can('labels.print') && onlyUnlabeled && unlabeled.length"
+        v-if="
+          can('labels.print') && labelFilter === 'missing' && unlabeled.length
+        "
         variant="secondary"
         size="sm"
         icon="tag"
@@ -78,6 +85,9 @@
           <UiBadge v-if="location.items_count">{{
             location.items_count
           }}</UiBadge>
+          <span v-if="location.no_label" class="text-xs text-ink-muted"
+            >· kein Etikett nötig</span
+          >
         </div>
         <div v-if="can('locations.manage')" class="flex gap-2">
           <UiButton
@@ -128,6 +138,7 @@ type LocationRow = {
   description: string | null;
   items_count: number;
   label_printed_at: string | null;
+  no_label: boolean;
 };
 
 /**
@@ -200,16 +211,32 @@ const isHidden = (location: LocationRow): boolean => {
     : undefined;
   return !!parent && (collapsed.value.has(parent.id) || isHidden(parent));
 };
-// filter "noch ohne Etikett": addresses get no label, so they are left out
-const onlyUnlabeled = ref(false);
+// filter "Etikett" (App\Enums\LabelStatus): addresses get no label, so they are left out
+const labelOptions: Option[] = [
+  { value: "missing", label: "Etikett fehlt" },
+  { value: "printed", label: "Etikett gedruckt" },
+  { value: "none", label: "Bewusst ohne Etikett" },
+];
+const labelFilter = ref<string | null>(null);
+const labelStatus = (location: LocationRow) =>
+  location.no_label
+    ? "none"
+    : location.label_printed_at
+      ? "printed"
+      : "missing";
 const unlabeled = computed(() =>
   props.locations.filter(
-    (location) => !location.label_printed_at && location.type !== "address",
+    (location) =>
+      location.type !== "address" && labelStatus(location) === "missing",
   ),
 );
 const visible = computed(() =>
-  onlyUnlabeled.value
-    ? unlabeled.value
+  labelFilter.value
+    ? props.locations.filter(
+        (location) =>
+          location.type !== "address" &&
+          labelStatus(location) === labelFilter.value,
+      )
     : tree.value
         .map((row) => row.location)
         .filter((location) => !isHidden(location)),

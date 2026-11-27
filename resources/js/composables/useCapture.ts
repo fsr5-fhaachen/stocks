@@ -13,6 +13,8 @@ export type CaptureForm = ItemFieldsForm & {
   is_container: boolean;
   public_contents: boolean;
   label_hint: string;
+  // "Kein Etikett nötig": nothing is printed, the item does not count as "Etikett fehlt"
+  no_label: boolean;
   place_code: string;
   home_code: string;
   // home = place ("Auch als Stammplatz")
@@ -31,6 +33,7 @@ export type CapturedItem = {
   place: Place | null;
   href: string;
   printed: boolean;
+  no_label: boolean;
 };
 
 type Stored = {
@@ -202,6 +205,7 @@ export default function (
       condition_id: form.condition_id,
       notes: form.notes,
       label_hint: form.label_hint,
+      no_label: form.no_label,
       is_container: form.is_container,
       public_contents: form.public_contents,
       place_code: form.place_code,
@@ -289,7 +293,11 @@ export default function (
       if (!data) {
         return false;
       }
-      const items = data.items.map((item) => ({ ...item, printed: false }));
+      const items = data.items.map((item) => ({
+        ...item,
+        no_label: !!item.no_label,
+        printed: false,
+      }));
       round.value = [
         ...items,
         ...round.value.filter(
@@ -347,6 +355,7 @@ export default function (
       description: keep.description,
       notes: keep.notes,
       label_hint: keep.label_hint,
+      no_label: keep.no_label,
       count: keep.count,
       ean: keep.ean,
     });

@@ -135,7 +135,9 @@ Gedruckt wird immer über die Vorschau `GET /labels/print` (`labels.print`) mit 
 
 Höchstens 500 Etiketten je Druck. Bei mehreren Etiketten wählt man „Alle drucken“ oder „Einzeln“: Dann zeigt eine Liste alle Etiketten zum Ankreuzen, gedruckt (und als gedruckt vermerkt) werden nur die angekreuzten; ein Tipp auf eine Zeile zeigt das Etikett in der Vorschau. Jede Art druckt mit ihrer Vorlage (vorausgewählt die Standardvorlage), Anpassungen gelten für den ganzen Stapel; „Als Vorlage speichern“ übernimmt sie (`labels.manage`). Durch einen Stapel blättert man mit den Pfeilen. Der zuletzt benutzte Drucker liegt im Browser (`localStorage.labelPrinter`), weil ein Bluetooth-Drucker zu einem Gerät gehört.
 
-Nach dem Druck setzt `POST /labels/printed` `items.label_printed_at` bzw. `locations.label_printed_at` (als Abfrage, ohne Audit und ohne `updated_at`). Ein heruntergeladenes Bild zählt auf der Druckseite als Druck. Beim [Erfassen](INVENTORY.md#erfassen) nicht: Dort zählen nur der Direktdruck (bei Abbruch nur die gedruckten Etiketten) und das Häkchen „Etikett wurde aufgeklebt“; `useLabelPrinting` gibt dafür nach dem Direktdruck die Zahl der gedruckten Etiketten an `afterPrint` weiter. Die Gegenstandsliste und die Standortliste haben den Filter „Noch ohne Etikett“; die Seite eines Gegenstands zeigt das Datum und bietet „Etikett drucken“ an, solange nie gedruckt wurde. Nach dem Teilen eines Mengenartikels bietet die Erfolgsmeldung „Etikett drucken“ für den neuen Teil an (Flash `label`).
+Nach dem Druck setzt `POST /labels/printed` `items.label_printed_at` bzw. `locations.label_printed_at` (als Abfrage, ohne Audit und ohne `updated_at`). Ein heruntergeladenes Bild zählt auf der Druckseite als Druck. Beim [Erfassen](INVENTORY.md#erfassen) nicht: Dort zählen nur der Direktdruck (bei Abbruch nur die gedruckten Etiketten) und das Häkchen „Etikett wurde aufgeklebt“; `useLabelPrinting` gibt dafür nach dem Direktdruck die Zahl der gedruckten Etiketten an `afterPrint` weiter. Die Gegenstandsliste und die Standortliste haben den Filter „Etikett“ (fehlt, gedruckt, bewusst ohne); die Seite eines Gegenstands zeigt das Datum und bietet „Etikett drucken“ und „Kein Etikett nötig“ an, solange nie gedruckt wurde.
+
+**Kein Etikett nötig** (seit 27.11.2026): Gegenstände, Boxen und Standorte lassen sich als bewusst ohne Etikett markieren (Spalte `no_label`, Häkchen im Formular, im Standort-Dialog und im Erfassen; am Gegenstand auch im Hinweis, Recht `inventory.edit`). Der Stand eines Etiketts ist `App\Enums\LabelStatus`: `missing` (fehlt), `printed`, `none` (bewusst ohne; gewinnt gegen „gedruckt“). Sammeldrucke über `box=` und `below=` lassen markierte weg, über `items=`/`locations=` ausdrücklich gewählte werden gedruckt. `POST /labels/printed` nimmt die Markierung wieder weg, wer druckt, hat ja ein Etikett. Gedacht für Kabel, Kleinkram, Fächer ohne Platz für ein Etikett. Nach dem Teilen eines Mengenartikels bietet die Erfolgsmeldung „Etikett drucken“ für den neuen Teil an (Flash `label`).
 
 ## Drucker und Treiber
 
@@ -170,9 +172,9 @@ Wer eine reservierte Nummer scannt und `inventory.edit` hat, landet in „Gegens
 
 | Gescannt | Aktionen (je nach Recht) |
 |---|---|
-| Gegenstand | Umlagern (der nächste Scan ist das Ziel), Verbraucht, Zustand, Zurückbuchen bei Teilen, Etikett, Öffnen |
+| Gegenstand | Umlagern (der nächste Scan ist das Ziel; Umschalter „Ort / Stammplatz / Beides“ mit `inventory.edit`), Verbraucht, Zustand, Zurückbuchen bei Teilen, Etikett, Öffnen |
 | Box | dasselbe, „Inhalt“ öffnet die Seite der Box |
-| Standort | Hierher umlagern (jeder folgende Gegenstand wird dorthin gebucht, bis man beendet), Etikett, Öffnen |
+| Standort | Hierher umlagern (jeder folgende Gegenstand wird dorthin gebucht, bis man beendet; mit dem Umschalter auch als Stammplatz oder nur als Stammplatz), Etikett, Öffnen |
 | reservierte Nummer | Gegenstand anlegen |
 
 Die Dialoge für Verbraucht und Zustand sind dieselben Komponenten wie auf der Seite des Gegenstands (`InventoryConsumeModal`, `InventoryConditionModal`). Zurückbuchen läuft als Umlagern auf den Ursprung (`MoveController`), damit die Seite offen bleibt. Die Kamera startet beim nächsten Besuch von selbst, wenn sie zuletzt an war (`localStorage.scanCamera`).

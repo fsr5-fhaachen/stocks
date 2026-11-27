@@ -102,6 +102,22 @@ class PhotoTest extends TestCase
         $this->actingAs($actor)->post("/inventory/items/{$item->id}/photos", ['photos' => $photos])->assertSessionHasErrors('photos');
     }
 
+    public function test_the_preview_can_be_changed_again_and_again(): void
+    {
+        $actor = $this->userWithPermissions('inventory.view', 'inventory.edit');
+        $item = Item::factory()->create();
+        [$first, $second, $third] = ItemPhoto::uploadAll($item, array_map(fn ($i) => UploadedFile::fake()->image("foto{$i}.jpg"), range(1, 3)));
+
+        // the second change used to set a negative sort, which the column does not take
+        foreach ([$second, $third, $first, $third] as $photo) {
+            $this->actingAs($actor)->post("/inventory/items/{$item->id}/photos/{$photo->id}/cover")->assertSessionHasNoErrors()->assertRedirect();
+            $this->assertTrue($item->photos()->first()->is($photo));
+        }
+
+        $this->assertSame([$third->id, $first->id, $second->id], $item->photos()->pluck('id')->all());
+        $this->assertSame([1, 2, 3], $item->photos()->pluck('sort')->all());
+    }
+
     public function test_deleting_a_photo_deletes_the_file(): void
     {
         $actor = $this->userWithPermissions('inventory.view', 'inventory.edit');

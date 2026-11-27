@@ -38,6 +38,8 @@ class ItemInput
             'public_contents' => ['boolean'],
             'notes' => ['nullable', 'string', 'max:5000'],
             'label_hint' => ['nullable', 'string', 'max:100'],
+            // "Kein Etikett nötig", see App\Enums\LabelStatus
+            'no_label' => ['boolean'],
             'home_code' => ['nullable', 'string', 'max:50'],
             // barcode of the packaging; stored in one form, see Gtin::normalize()
             'ean' => ['nullable', 'string', 'max:20', function (string $attribute, mixed $value, Closure $fail): void {
@@ -77,6 +79,7 @@ class ItemInput
             'quantity' => $validated['quantity'] ?? 1,
             'is_container' => $validated['is_container'] ?? false,
             'public_contents' => $validated['public_contents'] ?? true,
+            'no_label' => $validated['no_label'] ?? false,
             'ean' => isset($validated['ean']) ? Gtin::normalize($validated['ean']) : null,
         ];
     }

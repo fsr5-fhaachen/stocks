@@ -25,6 +25,7 @@ class SurfacePathsTest extends TestCase
         'resources/js/components/inventory/ConditionModal.vue' => 0,
         'resources/js/components/inventory/ConsumeModal.vue' => 0,
         'resources/js/components/inventory/PlaceInput.vue' => 0,
+        'resources/js/components/inventory/MoveTargetSwitch.vue' => 0,
         'resources/js/components/inventory/PlaceLink.vue' => 2, // plain text on the kiosk
         'resources/js/components/inventory/ContentsTree.vue' => 1, // plain text on the kiosk
         'resources/js/labels/render.ts' => 0,

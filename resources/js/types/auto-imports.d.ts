@@ -19,6 +19,7 @@ declare global {
   const useLabelPrinting: typeof import('../composables/useLabelPrinting').default
   const useModuleComponent: typeof import('../composables/useModuleComponent').default
   const usePermissions: typeof import('../composables/usePermissions').default
+  const usePlatform: typeof import('../composables/usePlatform').default
   const usePolling: typeof import('../composables/usePolling').default
   const usePush: typeof import('../composables/usePush').default
   const useScannerInput: typeof import('../composables/useScannerInput').default

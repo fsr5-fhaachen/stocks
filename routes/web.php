@@ -115,6 +115,7 @@ Route::middleware('auth')->group(function () {
             Route::post('/items', [ItemController::class, 'store'])->name('items.store');
             Route::get('/items/{item}/edit', [ItemController::class, 'edit'])->name('items.edit');
             Route::put('/items/{item}', [ItemController::class, 'update'])->name('items.update');
+            Route::post('/items/{item}/no-label', [ItemController::class, 'noLabel'])->name('items.no-label');
             Route::post('/items/{item}/photos', [ItemPhotoController::class, 'store'])->name('items.photos.store');
             Route::post('/items/{item}/photos/{photo}/cover', [ItemPhotoController::class, 'cover'])->scopeBindings()->name('items.photos.cover');
             Route::delete('/items/{item}/photos/{photo}', [ItemPhotoController::class, 'destroy'])->scopeBindings()->name('items.photos.destroy');
