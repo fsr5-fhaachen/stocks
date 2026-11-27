@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use OwenIt\Auditing\Contracts\Auditable;
 
 /**
@@ -82,6 +83,18 @@ class Location extends Model implements Auditable, AuditSubject
     public function parent(): BelongsTo
     {
         return $this->belongsTo(Location::class, 'parent_id');
+    }
+
+    /**
+     * Sort locations by full code as people count: R01.2 before R01.10, R9 before R10. The database
+     * sorts codes as text, so lists sort again here (Locations/Index.vue does the same).
+     *
+     * @param  Collection<int, Location>  $locations
+     * @return Collection<int, Location>
+     */
+    public static function naturally(Collection $locations, string $key = 'full_code'): Collection
+    {
+        return $locations->sortBy($key, SORT_NATURAL)->values();
     }
 
     /**

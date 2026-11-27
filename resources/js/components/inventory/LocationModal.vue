@@ -242,6 +242,10 @@ const parentTypes = parentLevels[type];
 const parentOptions = computed(() =>
   props.locations
     .filter((location) => parentTypes.includes(location.type))
+    // R01.2 before R01.10 (App\Models\Location::naturally)
+    .sort((a, b) =>
+      a.full_code.localeCompare(b.full_code, "de", { numeric: true }),
+    )
     .map((location) => ({
       value: location.id,
       label: [

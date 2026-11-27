@@ -115,14 +115,14 @@ class PrintController extends Controller
             $items = $items->concat($this->contentsOf($box));
         }
 
-        $locations = Location::whereIn('id', $ids('locations'))->orderBy('full_code')->get();
+        $locations = Location::naturally(Location::whereIn('id', $ids('locations'))->get());
         if ($parent = Location::find($request->integer('below'))) {
-            $locations = $locations->concat(
+            $locations = $locations->concat(Location::naturally(
                 Location::whereIn('id', $parent->subtreeIds())
                     ->whereIn('type', [LocationType::Shelf, LocationType::Compartment])
                     ->where('no_label', false)
-                    ->orderBy('full_code')->get(),
-            );
+                    ->get(),
+            ));
         }
 
         return $items->unique('id')->map(fn (Item $item) => $labels->forItem($item))

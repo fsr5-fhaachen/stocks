@@ -64,4 +64,22 @@ class LocationBatchTest extends TestCase
 
         $this->assertSame(1, Location::count());
     }
+
+    public function test_locations_are_listed_as_people_count(): void
+    {
+        $actor = $this->userWithPermissions('inventory.view', 'locations.manage', 'labels.print');
+        $room = Location::factory()->create(['code' => '014']);
+        $shelf = Location::factory()->in($room)->create(['code' => 'R01']);
+        foreach (['10', '2', '1', '11', '9'] as $code) {
+            Location::factory()->in($shelf)->create(['code' => $code]);
+        }
+        $expected = ['014-R01.1', '014-R01.2', '014-R01.9', '014-R01.10', '014-R01.11'];
+
+        $this->actingAs($actor)->get("/inventory/locations/{$shelf->id}")
+            ->assertInertia(fn ($page) => $page->where('children', fn ($children) => collect($children)->pluck('full_code')->all() === $expected));
+        $this->actingAs($actor)->get('/inventory/locations')
+            ->assertInertia(fn ($page) => $page->where('locations', fn ($locations) => collect($locations)->pluck('full_code')->all() === ['014', '014-R01', ...$expected]));
+        $this->actingAs($actor)->get("/labels/print?below={$shelf->id}")
+            ->assertInertia(fn ($page) => $page->where('labels', fn ($labels) => collect($labels)->pluck('code')->reject(fn ($code) => $code === '014-R01')->values()->all() === $expected));
+    }
 }
