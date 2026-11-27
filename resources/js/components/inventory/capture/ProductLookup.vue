@@ -34,7 +34,7 @@
       v-if="cameraOpen"
       autostart
       :formats="['ean_13', 'ean_8', 'upc_a', 'upc_e']"
-      class="aspect-video w-full"
+      class="aspect-[4/3] w-full sm:aspect-video"
       @scan="scanned"
       @stopped="cameraOpen = false"
     />

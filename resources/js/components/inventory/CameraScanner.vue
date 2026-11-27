@@ -11,12 +11,26 @@
         @click="auto || scanOnce()"
       />
 
-      <!-- viewfinder -->
+      <!-- viewfinder: a square for qr codes; for barcodes of packaging a line like a laser
+           scanner (the invisible frame around it is the part that is read) -->
       <div
         v-if="running"
         class="pointer-events-none absolute inset-0 flex items-center justify-center"
       >
         <div
+          v-if="lines"
+          ref="frame"
+          class="flex aspect-[5/2] w-11/12 max-w-xl items-center"
+        >
+          <div
+            :class="[
+              'h-0.5 w-full rounded-full shadow-[0_0_8px_2px_rgba(239,68,68,0.6)] transition-colors',
+              searching ? 'bg-accent' : 'bg-red-500',
+            ]"
+          />
+        </div>
+        <div
+          v-else
           ref="frame"
           :class="[
             'aspect-square h-3/5 max-h-80 rounded-xl border-4 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)] transition-colors',
@@ -132,6 +146,10 @@ const props = withDefaults(
   }>(),
   { autostart: false, formats: () => ["qr_code", "data_matrix"] },
 );
+// only line barcodes (EAN, UPC): wide frame and a higher resolution
+const lines = !props.formats.some((format) =>
+  ["qr_code", "data_matrix", "aztec", "pdf417"].includes(format),
+);
 // format: the format that was read, e.g. "upc_e" (decides between EAN-8 and UPC-E)
 const emit = defineEmits<{
   scan: [code: string, format: string];
@@ -214,10 +232,14 @@ const start = async (deviceId?: string) => {
   starting.value = true;
   try {
     detector ??= await createDetector();
+    // the thin bars of a barcode need more pixels than a qr code
+    const resolution = lines
+      ? { width: { ideal: 1920 }, height: { ideal: 1080 } }
+      : {};
     stream = await navigator.mediaDevices.getUserMedia({
       video: deviceId
-        ? { deviceId: { exact: deviceId } }
-        : { facingMode: { ideal: "environment" } },
+        ? { deviceId: { exact: deviceId }, ...resolution }
+        : { facingMode: { ideal: "environment" }, ...resolution },
       audio: false,
     });
     video.value!.srcObject = stream;
@@ -263,14 +285,18 @@ const insideFrame = (): HTMLCanvasElement | null => {
   const scale = Math.max(box.width / width, box.height / height);
   const left = (box.width - width * scale) / 2;
   const top = (box.height - height * scale) / 2;
-  const size = square.width / scale;
-  canvas.width = canvas.height = Math.min(Math.round(size), 800);
+  // the part of the video inside the frame, at most 1600 (barcodes) or 800 (qr) pixels wide
+  const sourceWidth = square.width / scale;
+  const sourceHeight = square.height / scale;
+  const shrink = Math.min(1, (lines ? 1600 : 800) / sourceWidth);
+  canvas.width = Math.round(sourceWidth * shrink);
+  canvas.height = Math.round(sourceHeight * shrink);
   context.drawImage(
     element,
     (square.left - box.left - left) / scale,
     (square.top - box.top - top) / scale,
-    size,
-    size,
+    sourceWidth,
+    sourceHeight,
     0,
     0,
     canvas.width,
