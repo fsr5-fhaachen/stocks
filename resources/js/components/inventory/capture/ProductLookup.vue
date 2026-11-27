@@ -205,15 +205,17 @@ const scanned = (scannedCode: string, scannedFormat: string) => {
   code.value = scannedCode;
   format = scannedFormat;
   cameraOpen.value = false;
-  lookup();
+  // the scanned code itself: code.value still holds the old one until the page renders again
+  lookup(scannedCode);
 };
 
-const lookup = async () => {
-  if (!props.enabled || !code.value.trim()) {
+const lookup = async (value: string = code.value) => {
+  const searched = value.trim();
+  if (!props.enabled || !searched) {
     return;
   }
   // a label of Stocks is no packaging
-  if (/[a-z]/i.test(code.value)) {
+  if (/[a-z]/i.test(searched)) {
     error.value =
       "Das ist ein Etikett von Stocks, kein Barcode einer Verpackung.";
     return;
@@ -221,7 +223,7 @@ const lookup = async () => {
   loading.value = true;
   error.value = null;
   result.value = null;
-  const query = new URLSearchParams({ code: code.value.trim(), format });
+  const query = new URLSearchParams({ code: searched, format });
   format = "";
   try {
     const response = await fetch(url(`/inventory/capture/product?${query}`), {

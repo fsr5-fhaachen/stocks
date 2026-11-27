@@ -35,6 +35,7 @@ Where to look first; details in `documentation/` (German). Search there before r
 - Lists show the preview of a photo (`ItemPhoto::thumbUrl()`), never the photo itself.
 - Open images with GD only through `App\Support\ImageDecoding::process()`: running out of memory on a big image is a fatal error no try/catch stops.
 - The accent colour is only defined in `resources/views/app.blade.php`, never in css.
+- A `defineModel` ref bound by the parent (`v-model:x`) keeps its old value right after `x.value = …` until the parent renders again: pass the new value on as a variable instead of reading it back (bug of the capture: scanned place and EAN were lost).
 
 **Checks before handing over**: `php vendor/bin/phpunit`, `vendor/bin/pint --test`, `npm run lint`, `npm run build`.
 
