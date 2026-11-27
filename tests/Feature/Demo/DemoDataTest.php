@@ -4,6 +4,7 @@ namespace Tests\Feature\Demo;
 
 use App\Enums\ItemKind;
 use App\Models\Item;
+use App\Models\ItemStock;
 use App\Models\Location;
 use App\Models\ReservedNumber;
 use App\Models\User;
@@ -53,10 +54,12 @@ class DemoDataTest extends TestCase
         $this->assertSame(InventoryDemo::BOXES, Item::where('is_container', true)->count());
         $this->assertTrue(Item::whereNotNull('container_id')->where('is_container', true)->exists(), 'box in box');
         $this->assertTrue(Item::where('kind', ItemKind::Bulk)->whereIn('unit', ['Rollen', 'Packungen'])->exists(), 'consumable');
-        $this->assertTrue(Item::whereNotNull('split_from_id')->exists(), 'split off part');
+        $this->assertTrue(ItemStock::where('quantity', '>', 0)->groupBy('item_id')->havingRaw('count(*) > 1')->exists(), 'bulk item at several places');
+        $this->assertTrue(ItemStock::where('place_key', ItemStock::INCOMING)->where('quantity', '>', 0)->exists(), 'pieces in Eingang');
+        $this->assertFalse(Item::where('kind', ItemKind::Bulk)->where(fn ($query) => $query->whereNotNull('location_id')->orWhereNotNull('container_id'))->exists(), 'bulk items have no place of their own');
         $this->assertTrue(Item::whereNotNull('retired_at')->exists(), 'retired');
         $this->assertTrue(Item::whereHas('condition', fn ($query) => $query->where('is_defect', true))->exists(), 'defective');
-        $this->assertTrue(Item::active()->whereNull('location_id')->whereNull('container_id')->exists(), 'without place');
+        $this->assertTrue(Item::active()->where('kind', '!=', ItemKind::Bulk)->whereNull('location_id')->whereNull('container_id')->exists(), 'without place');
         $this->assertTrue(Item::whereNull('label_printed_at')->where('no_label', false)->exists(), 'without label');
         $this->assertTrue(Item::where('no_label', true)->exists(), 'item needs no label');
         $this->assertTrue(Location::where('no_label', true)->exists(), 'location needs no label');

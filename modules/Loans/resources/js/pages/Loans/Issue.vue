@@ -151,6 +151,33 @@
                   />
                   {{ row.unit }}
                 </label>
+                <!-- bulk items at several places: where the pieces are taken from -->
+                <label
+                  v-if="
+                    row.kind === 'bulk' &&
+                    row.depth === 0 &&
+                    row.sources.length > 1
+                  "
+                  class="flex items-center gap-2 text-sm"
+                >
+                  von
+                  <select
+                    v-model="sources[row.id]"
+                    aria-label="Von"
+                    class="rounded-md border-0 bg-surface py-1.5 text-ink ring-1 ring-inset ring-line"
+                    @change="row.checked_at && toggleCount(row)"
+                  >
+                    <option
+                      v-for="source in row.sources"
+                      :key="source.key"
+                      :value="source.key"
+                    >
+                      {{ source.place?.code ?? "Eingang" }} ({{
+                        source.quantity
+                      }})
+                    </option>
+                  </select>
+                </label>
                 <UiButton
                   variant="secondary"
                   size="sm"
@@ -462,6 +489,9 @@ type Row = {
   is_container: boolean;
   quantity: number;
   stock: number;
+  // bulk position: places with pieces, and the chosen one
+  sources: StockEntry[];
+  source_key: string | null;
   checked_at: string | null;
   checked_by_scan: boolean;
   box_checks: string[];
@@ -507,7 +537,15 @@ const props = defineProps<{
 const page = usePage<SharedProps>();
 const { can } = usePermissions();
 const errorMessages = computed(() =>
-  ["loan", "code", "quantity", "item", "responsible_contact_id", "state"]
+  [
+    "loan",
+    "code",
+    "quantity",
+    "from",
+    "item",
+    "responsible_contact_id",
+    "state",
+  ]
     .map((key) => page.props.errors?.[key])
     .filter(Boolean),
 );
@@ -569,11 +607,24 @@ watch(reachable, (value) => {
 const quantities = reactive<Record<number, number>>(
   Object.fromEntries(props.rows.map((row) => [row.id, row.quantity])),
 );
+// bulk positions: chosen place, else the first with pieces
+const sourceOf = (row: Row) => row.source_key ?? row.sources?.[0]?.key ?? null;
+const sources = reactive<Record<number, string | null>>(
+  Object.fromEntries(props.rows.map((row) => [row.id, sourceOf(row)])),
+);
 // after every answer the fields show what was stored
 watch(
   () => props.rows,
-  (rows) => rows.forEach((row) => (quantities[row.id] = row.quantity)),
+  (rows) =>
+    rows.forEach((row) => {
+      quantities[row.id] = row.quantity;
+      sources[row.id] = sourceOf(row);
+    }),
 );
+const fromOf = (row: Row | undefined) =>
+  row?.kind === "bulk" && row.depth === 0 && row.sources.length
+    ? sources[row.id]
+    : null;
 const options = { preserveScroll: true, preserveState: true };
 
 const scan = (code: string) => {
@@ -584,7 +635,11 @@ const scan = (code: string) => {
   );
   router.post(
     url(`/loans/${props.loan.id}/issue/check`),
-    { code, quantity: row?.kind === "bulk" ? quantities[row.id] : null },
+    {
+      code,
+      quantity: row?.kind === "bulk" ? quantities[row.id] : null,
+      from: fromOf(row),
+    },
     options,
   );
 };
@@ -601,6 +656,7 @@ const toggle = (row: Row) =>
           row_id: row.id,
           quantity:
             row.kind === "bulk" && row.depth === 0 ? quantities[row.id] : null,
+          from: fromOf(row),
         },
         options,
       );
@@ -608,7 +664,7 @@ const toggle = (row: Row) =>
 const toggleCount = (row: Row) =>
   router.post(
     url(`/loans/${props.loan.id}/issue/check`),
-    { row_id: row.id, quantity: quantities[row.id] },
+    { row_id: row.id, quantity: quantities[row.id], from: fromOf(row) },
     options,
   );
 // rest: dropped from the loan for good

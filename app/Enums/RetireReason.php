@@ -15,7 +15,7 @@ enum RetireReason: string
     case Sold = 'sold';
     case Disposed = 'disposed';
     case Other = 'other';
-    // set by App\Actions\Inventory\MergeItem, not offered for selection
+    // set for split off parts that went back into their origin, not offered for selection
     case Merged = 'merged';
 
     public function label(): string

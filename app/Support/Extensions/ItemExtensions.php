@@ -106,8 +106,8 @@ class ItemExtensions
     }
 
     /**
-     * Pieces of a bulk item that an active module has away (e.g. lent) while the item keeps its
-     * place; 0 for single items.
+     * Pieces of a bulk item that an active module has away (lent, missing, back but not put away
+     * yet): they are at no place; 0 for single items.
      */
     public function awayQuantity(Item $item): int
     {
@@ -135,12 +135,12 @@ class ItemExtensions
     }
 
     /**
-     * Pieces of a bulk item that are here: the stock without what is away. Moving, using up and
-     * retiring a part stop at this.
+     * Pieces of a bulk item that are here ("vorhanden"): the sum of its places (item_stocks). The
+     * rest of its quantity is away (lent, missing, back but not put away yet).
      */
     public function quantityHere(Item $item): int
     {
-        return max(0, $item->quantity - $this->awayQuantity($item));
+        return (int) $item->stocks()->sum('quantity');
     }
 
     /**

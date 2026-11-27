@@ -46,7 +46,8 @@ use Modules\Loans\Enums\ReturnState;
  * @property int|null $inspected_by
  * @property Carbon|null $stowed_at
  * @property int|null $missing_item_id single item that went missing (it has no place then)
- * @property int|null $missing_quantity missing pieces of a bulk row; the bulk item keeps its place
+ * @property int|null $missing_quantity missing pieces of a bulk row
+ * @property string|null $source_key bulk row: place the pieces leave from at the issue (item_stocks.place_key)
  * @property string|null $missing_resolution "found" or "lost"
  * @property Carbon|null $missing_resolved_at
  */
@@ -55,7 +56,7 @@ class LoanItem extends Model
     /**
      * @var list<string>
      */
-    protected $fillable = ['loan_id', 'item_id', 'quantity', 'parent_id'];
+    protected $fillable = ['loan_id', 'item_id', 'quantity', 'parent_id', 'source_key'];
 
     /**
      * @return array<string, string>

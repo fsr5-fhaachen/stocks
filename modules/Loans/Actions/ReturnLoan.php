@@ -4,6 +4,7 @@ namespace Modules\Loans\Actions;
 
 use App\Actions\Inventory\MoveItem;
 use App\Actions\Inventory\RetireItem;
+use App\Actions\Inventory\StockBook;
 use App\Enums\MovementType;
 use App\Enums\RetireReason;
 use App\Models\Item;
@@ -52,6 +53,7 @@ class ReturnLoan
         private readonly CodeLookup $codes,
         private readonly MoveItem $moveItem,
         private readonly RetireItem $retireItem,
+        private readonly StockBook $stock,
         private readonly RecordDefect $recordDefect,
         private readonly LoanDocuments $documents,
         private readonly LoanNotifier $notifier,
@@ -284,8 +286,9 @@ class ReturnLoan
             // a bulk item no longer count as away and can be taken off its stock
             foreach ($loan->loanItems()->stillMissing()->with('missingItem', 'item')->get() as $row) {
                 $row->forceFill(['missing_resolution' => 'lost', 'missing_resolved_at' => now()])->save();
+                // missing pieces of a bulk item lie at no place: they leave the stock directly
                 $row->missing_quantity > 0
-                    ? $this->retireItem->handle($actor, $row->item->refresh(), RetireReason::Lost, "Verloren nach {$loan->number}. {$note}", min($row->missing_quantity, $row->item->quantity))
+                    ? $this->stock->remove($actor, $row->item->refresh(), false, min($row->missing_quantity, $row->item->quantity), RetireReason::Lost, "Verloren nach {$loan->number}. {$note}")
                     : $this->retireItem->handle($actor, $row->missingItem, RetireReason::Lost, "Verloren nach {$loan->number}. {$note}");
             }
             $loan->forceFill(['defects_closed_at' => now(), 'defects_note' => $note])->save();
@@ -339,8 +342,9 @@ class ReturnLoan
                     'inspected_by' => $checked ? $actor->id : null,
                 ])->save();
 
-                // a bulk row with pieces missing still brings the rest back
-                if ($row->parent_id === null && ($row->return_state !== ReturnState::Missing || ($row->isBulk() && $row->returned_quantity > 0))) {
+                // single items and boxes; the pieces of a bulk item get their row when they lie at a
+                // place again (StockBook::putBack at the stowing or in their box)
+                if ($row->parent_id === null && ! $row->isBulk() && $row->return_state !== ReturnState::Missing) {
                     ItemMovement::record($row->item, MovementType::Return, null, null, $actor, $row->returned_quantity ?? $row->quantity, "Zurückgenommen von {$loan->number}.");
                 }
                 if ($checked) {
@@ -388,23 +392,28 @@ class ReturnLoan
 
     /**
      * What a checked row means for its item: used up consumables are taken off the stock, missing
-     * pieces of a bulk item stay on the row (missing_quantity, the item keeps its place), and a
-     * missing single item loses its place (a missing row of a box leaves the box). Both are
-     * "vermisst" until they turn up (ResolveMissing::found) or are written off with the defects.
+     * pieces of a bulk item stay on the row (missing_quantity), and a missing single item loses its
+     * place (a missing row of a box leaves the box). Both are "vermisst" until they turn up
+     * (ResolveMissing::found) or are written off with the defects.
+     *
+     * Pieces of a bulk item in a box go back into the box at once; pieces of a position of their
+     * own wait to be put away (StowItem).
      */
     private function bookItem(User $actor, Loan $loan, LoanItem $row, bool $atReturn): void
     {
         $item = $row->item->refresh();
 
         if ($row->isBulk()) {
-            $short = $row->quantity - ($row->returned_quantity ?? $row->quantity);
-            if ($short <= 0) {
-                return;
+            $returned = $row->return_state === ReturnState::Missing ? (int) $row->returned_quantity : ($row->returned_quantity ?? $row->quantity);
+            $short = $row->quantity - $returned;
+            if ($short > 0) {
+                ItemUnit::isConsumable($item->unit)
+                    ? $this->stock->remove($actor, $item, false, min($short, $item->quantity), RetireReason::Consumed, "Verbraucht mit {$loan->number}.")
+                    : $row->forceFill(['missing_quantity' => $short])->save();
             }
-            // the row is back already, so these pieces no longer count as away
-            ItemUnit::isConsumable($item->unit)
-                ? $this->retireItem->handle($actor, $item, RetireReason::Consumed, "Verbraucht mit {$loan->number}.", min($short, $item->quantity))
-                : $row->forceFill(['missing_quantity' => $short])->save();
+            if ($row->parent_id !== null && $row->stowed_at === null) {
+                $this->backIntoBox($actor, $loan, $row, $returned);
+            }
 
             return;
         }
@@ -471,5 +480,23 @@ class ReturnLoan
         if (! $this->rows($loan, $inspect)->contains('id', $row->id)) {
             throw ValidationException::withMessages(['loan' => 'Die Position ist hier nicht offen.']);
         }
+    }
+
+    /**
+     * Pieces of a bulk item in a box that came back: into the box again. With a box that is
+     * missing itself they are missing with it.
+     */
+    private function backIntoBox(User $actor, Loan $loan, LoanItem $row, int $returned): void
+    {
+        $parent = $row->parent;
+        if ($parent->return_state === ReturnState::Missing) {
+            $row->forceFill(['missing_quantity' => (int) $row->missing_quantity + $returned, 'stowed_at' => now()])->save();
+
+            return;
+        }
+        if ($returned > 0) {
+            $this->stock->putBack($actor, $row->item, $parent->item, $returned, "Mit {$parent->item->number} zurück von {$loan->number}.");
+        }
+        $row->forceFill(['stowed_at' => now()])->save();
     }
 }

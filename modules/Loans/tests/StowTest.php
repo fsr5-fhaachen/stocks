@@ -4,6 +4,7 @@ namespace Modules\Loans\Tests;
 
 use App\Actions\Inventory\RetireItem;
 use App\Enums\RetireReason;
+use App\Models\ItemStock;
 use App\Models\Location;
 use App\Support\Extensions\ItemExtensions;
 use Modules\Loans\Actions\StowItem;
@@ -63,31 +64,32 @@ class StowTest extends LoansTestCase
             ->assertSessionHas('success', "{$item->number} liegt jetzt in R9, nicht am Stammplatz.");
     }
 
-    public function test_a_bulk_item_is_confirmed_at_its_place(): void
+    public function test_a_bulk_item_is_put_back_at_its_suggested_place(): void
     {
         $benches = $this->item(['kind' => 'bulk', 'quantity' => 40, 'unit' => 'Stück']);
         $row = $this->returned([[$benches, 20]])->positions()->first();
         $this->actingAs($this->admin())->get('/loans/returns')->assertInertia(fn ($page) => $page->where('pending.0.place.code', 'R1'));
 
         $this->actingAs($this->admin())->post('/loans/returns/stow', ['row_id' => $row->id, 'code' => 'R1'])
-            ->assertSessionHas('success', "20 Stück von {$benches->number} liegen wieder in R1.");
+            ->assertSessionHas('success', "20 Stück von {$benches->number} liegen jetzt in R1.");
 
         $this->assertNotNull($row->refresh()->stowed_at);
         $this->assertSame(40, $benches->refresh()->quantity);
-        $this->assertSame($this->shelf->id, $benches->location_id);
+        $this->assertSame(40, ItemStock::for($benches, $this->shelf)->quantity);
         $this->assertSame(0, StowItem::pending()->count());
     }
 
-    public function test_a_bulk_item_is_not_confirmed_at_another_place(): void
+    public function test_the_scan_of_another_place_puts_the_pieces_there(): void
     {
         $benches = $this->item(['kind' => 'bulk', 'quantity' => 40, 'unit' => 'Stück']);
         $row = $this->returned([[$benches, 20]])->positions()->first();
-        Location::forceCreate(['type' => 'room', 'code' => 'R9', 'full_code' => 'R9']);
+        $other = Location::forceCreate(['type' => 'room', 'code' => 'R9', 'full_code' => 'R9']);
 
-        $this->actingAs($this->admin())->post('/loans/returns/stow', ['row_id' => $row->id, 'code' => 'R9'])->assertSessionHasErrors('code');
+        $this->actingAs($this->admin())->post('/loans/returns/stow', ['row_id' => $row->id, 'code' => 'R9'])->assertSessionHasNoErrors();
 
-        $this->assertNull($row->refresh()->stowed_at);
-        $this->assertSame($this->shelf->id, $benches->refresh()->location_id);
+        $this->assertNotNull($row->refresh()->stowed_at);
+        $this->assertSame(20, ItemStock::for($benches, $this->shelf)->quantity);
+        $this->assertSame(20, ItemStock::for($benches, $other)->quantity);
     }
 
     public function test_missing_pieces_that_turn_up_later_go_back_to_the_stock(): void

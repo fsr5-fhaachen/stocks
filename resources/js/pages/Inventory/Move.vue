@@ -42,20 +42,36 @@
           <p class="font-medium">{{ item.name }}</p>
           <p class="font-mono text-ink-muted">{{ item.number }}</p>
           <p class="text-ink-muted">
-            liegt in
-            <InventoryPlaceLink :place="item.place" empty="keinem Ort" />
+            <template v-if="item.kind === 'bulk'">
+              Mengenartikel, {{ item.quantity }} {{ item.unit }}
+            </template>
+            <template v-else>
+              liegt in
+              <InventoryPlaceLink :place="item.place" empty="keinem Ort" />
+            </template>
           </p>
         </div>
 
-        <UiInput
-          v-if="item && item.kind === 'bulk' && mode !== 'home'"
-          v-model="quantity"
-          label="Menge"
-          type="number"
-          inputmode="numeric"
-          :hint="`Von ${item.quantity} ${item.unit ?? ''}. Eine Teilmenge wird ein eigener Gegenstand.`"
-          :error="form.errors.quantity"
-        />
+        <!-- bulk items: from which place and how many -->
+        <template v-if="item && item.kind === 'bulk' && mode !== 'home'">
+          <UiSelect
+            v-if="sourceOptions.length > 1"
+            v-model="from"
+            label="Von"
+            :options="sourceOptions"
+            :placeholder="null"
+            :error="form.errors.from"
+            @update:model-value="quantity = stockAt(from)"
+          />
+          <UiInput
+            v-model="quantity"
+            label="Menge"
+            type="number"
+            inputmode="numeric"
+            :hint="`Dort liegen ${stockAt(from)} ${item.unit ?? ''}.`"
+            :error="form.errors.quantity"
+          />
+        </template>
 
         <div>
           <label for="scan-code" class="block text-sm font-medium">
@@ -132,7 +148,7 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, ref } from "vue";
 import { useForm, usePage } from "@inertiajs/vue3";
 import type { MoveMode } from "../../components/inventory/MoveTargetSwitch.vue";
 
@@ -145,6 +161,8 @@ type ScannedItem = {
   unit: string | null;
   retired: boolean;
   place: Place | null;
+  // bulk item: pieces per place
+  stocks: StockEntry[];
 };
 
 /**
@@ -159,6 +177,18 @@ const error = ref<string | null>(null);
 const busy = ref(false);
 const item = ref<ScannedItem | null>(null);
 const quantity = ref<number | null>(null);
+// bulk item: the place the pieces come from
+const from = ref<string | null>(null);
+const stockAt = (key: string | null) =>
+  item.value?.stocks?.find((stock) => stock.key === key)?.quantity ?? 0;
+const sourceOptions = computed<Option[]>(() =>
+  (item.value?.stocks ?? [])
+    .filter((stock) => stock.quantity > 0)
+    .map((stock) => ({
+      value: stock.key,
+      label: `${stock.place ? stock.place.code : "Eingang"} (${stock.quantity})`,
+    })),
+);
 const log = ref<string[]>([]);
 const cameraOpen = ref(false);
 // "Ort / Stammplatz / beides", starts with "Ort"
@@ -168,6 +198,7 @@ const form = useForm({
   item_id: 0,
   target_code: "",
   quantity: null as number | null,
+  from: null as string | null,
 });
 
 // with the camera on, a focused field would open the keyboard of phones
@@ -217,7 +248,10 @@ const next = async () => {
     error.value = `${data.number} ist ausgemustert.`;
   } else {
     item.value = data;
-    quantity.value = data.quantity;
+    from.value =
+      (data.stocks ?? []).find((stock: StockEntry) => stock.quantity > 0)
+        ?.key ?? null;
+    quantity.value = data.kind === "bulk" ? stockAt(from.value) : data.quantity;
   }
 
   code.value = "";
@@ -230,7 +264,7 @@ const scanWithCamera = (scanned: string) => {
 };
 
 // step 2: move the item to the target
-// a split of a booked item asks first ("Ja, trotzdem" sends it again confirmed)
+// a booked item asks first ("Ja, trotzdem" sends it again confirmed)
 const reserved = ref<{ message: string; retry: () => void } | null>(null);
 const moveTo = (targetCode: string, confirmed = false) => {
   reserved.value = null;
@@ -240,6 +274,7 @@ const moveTo = (targetCode: string, confirmed = false) => {
     item.value!.kind === "bulk" && mode.value !== "home"
       ? quantity.value
       : null;
+  form.from = item.value!.kind === "bulk" ? from.value : null;
   form
     .transform((data) => ({ ...data, confirmed, mode: mode.value }))
     .post("/inventory/move", {
@@ -262,6 +297,7 @@ const moveTo = (targetCode: string, confirmed = false) => {
           errors.target_code ??
           errors.target ??
           errors.item ??
+          errors.from ??
           errors.mode ??
           null;
         code.value = "";

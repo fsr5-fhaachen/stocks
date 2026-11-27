@@ -5,6 +5,7 @@ namespace Modules\Loans\Support;
 use App\Models\Item;
 use App\Models\User;
 use App\Support\Branding;
+use App\Support\Inventory\BoxContents;
 use App\Support\Settings;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -261,9 +262,13 @@ class LoanDocuments
         }
 
         $rows = [];
-        foreach ($box->contents()->active()->with('condition')->get() as $item) {
-            $rows[] = $this->row($item, $item, $item->quantity, $depth, null, null);
-            $rows = [...$rows, ...$this->liveRows($item, $depth + 1)];
+        // items and the pieces of bulk items in the box (with the quantity in this box)
+        foreach (BoxContents::of($box, ['condition']) as $entry) {
+            $item = $entry['item'];
+            $rows[] = $this->row($item, $item, $entry['quantity'], $depth, null, null);
+            if ($entry['stock'] === null) {
+                $rows = [...$rows, ...$this->liveRows($item, $depth + 1)];
+            }
         }
 
         return $rows;

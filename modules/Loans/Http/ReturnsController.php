@@ -14,6 +14,7 @@ use Modules\Loans\Actions\StowItem;
 use Modules\Loans\Enums\LoanStatus;
 use Modules\Loans\Models\Loan;
 use Modules\Loans\Models\LoanItem;
+use Modules\Loans\Support\LoanItemInfo;
 
 /**
  * "Rückgaben": loans waiting for the inspection, open defects, and the items that came back but
@@ -43,8 +44,9 @@ class ReturnsController extends Controller
                 'unit' => $row->item->unit,
                 'loan' => $row->loan->only(['id', 'number']),
                 'returned_at' => $row->returned_at->toIso8601String(),
-                // a bulk item kept its place: the scan confirms that place, everything else goes home
-                'place' => $row->isBulk() ? Item::placeSummary($row->item->place()) : null,
+                // pieces of a bulk item: suggested place (where they left from, else the home); any
+                // scanned place takes them
+                'place' => $row->isBulk() ? Item::placeSummary(LoanItemInfo::stowPlaceOf($row)) : null,
                 'home' => Item::placeSummary($row->item->home()),
             ]),
             'selected' => $request->integer('row') ?: null,

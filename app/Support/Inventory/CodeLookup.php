@@ -27,8 +27,14 @@ class CodeLookup
             return null;
         }
 
-        return $this->numbers->find($code)
-            ?? Location::where('full_code', mb_strtoupper($code))->first();
+        $item = $this->numbers->find($code);
+        // a split off part that went into a bulk item when the stock moved to places: its old
+        // label leads to that item
+        if ($item?->merged_into_id !== null && $item->isRetired()) {
+            $item = Item::find($item->merged_into_id) ?? $item;
+        }
+
+        return $item ?? Location::where('full_code', mb_strtoupper($code))->first();
     }
 
     /**

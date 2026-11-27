@@ -3,11 +3,12 @@
 namespace Tests\Feature\Inventory;
 
 use App\Models\Item;
+use App\Models\ItemStock;
 use App\Models\Location;
 use Tests\TestCase;
 
 /**
- * Moving: movement log, boxes, splitting bulk items, home.
+ * Moving: movement log, boxes, pieces of bulk items between places, home.
  */
 class MoveTest extends TestCase
 {
@@ -106,36 +107,63 @@ class MoveTest extends TestCase
         $this->actingAs($actor)->post('/inventory/move', ['item_id' => $item->id, 'target_code' => 'TEST-1'])->assertSessionHasErrors('target_code');
     }
 
-    public function test_moving_a_part_of_a_bulk_item_splits_it(): void
+    public function test_moving_pieces_of_a_bulk_item_changes_the_stock_of_the_places(): void
     {
         $actor = $this->userWithPermissions('inventory.view', 'inventory.move');
         $from = Location::factory()->create(['code' => 'EU']);
         $to = Location::factory()->create(['code' => 'GO']);
-        $cables = Item::factory()->bulk(20)->at($from)->create(['name' => 'XLR-Kabel', 'label_printed_at' => now()]);
+        $cables = Item::factory()->bulk(20)->stockedAt($from)->create(['name' => 'XLR-Kabel', 'label_printed_at' => now()]);
 
-        $this->actingAs($actor)->post('/inventory/move', ['item_id' => $cables->id, 'target_code' => 'GO', 'quantity' => 5])->assertSessionHasNoErrors();
+        $this->actingAs($actor)->post('/inventory/move', ['item_id' => $cables->id, 'target_code' => 'GO', 'quantity' => 5])
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('success', "5 Stück von {$cables->number} liegen jetzt in GO.");
 
-        $part = Item::where('split_from_id', $cables->id)->sole();
-        // the new number has no label yet, the origin keeps its label
-        $this->assertNull($part->label_printed_at);
+        // one item, no new number: its pieces lie at two places now
+        $this->assertSame(1, Item::count());
+        $this->assertSame(20, $cables->fresh()->quantity);
         $this->assertNotNull($cables->fresh()->label_printed_at);
-        $this->assertSame(15, $cables->fresh()->quantity);
-        $this->assertSame(5, $part->quantity);
-        $this->assertSame('XLR-Kabel', $part->name);
-        $this->assertNotSame($cables->number, $part->number);
-        $this->assertTrue($part->location->is($to));
-        $this->assertTrue($cables->fresh()->location->is($from));
-        $this->assertDatabaseHas('item_movements', ['item_id' => $cables->id, 'type' => 'split', 'quantity' => 5, 'to_location_id' => $to->id]);
-        $this->assertDatabaseHas('item_movements', ['item_id' => $part->id, 'type' => 'split', 'quantity' => 5, 'from_location_id' => $from->id]);
+        $this->assertSame(15, ItemStock::for($cables, $from)->quantity);
+        $this->assertSame(5, ItemStock::for($cables, $to)->quantity);
+        $this->assertDatabaseHas('item_movements', ['item_id' => $cables->id, 'type' => 'move', 'quantity' => 5, 'from_location_id' => $from->id, 'to_location_id' => $to->id]);
     }
 
-    public function test_the_quantity_can_not_exceed_the_stock(): void
+    public function test_a_bulk_item_is_never_away_from_its_home(): void
+    {
+        $actor = $this->userWithPermissions('inventory.view');
+        $home = Location::factory()->create(['code' => 'EU']);
+        $cables = Item::factory()->bulk(10)->stockedAt($home)->create(['home_location_id' => $home->id]);
+
+        // no place of its own: the home is only a suggestion
+        $this->assertFalse($cables->isAwayFromHome());
+        $this->actingAs($actor)->get("/inventory/items/{$cables->id}")->assertInertia(fn ($page) => $page->where('item.away_from_home', false));
+        $this->actingAs($actor)->get('/inventory/items')->assertInertia(fn ($page) => $page->where('items.data.0.away_from_home', false));
+    }
+
+    public function test_pieces_at_several_places_need_the_place_they_come_from(): void
+    {
+        $actor = $this->userWithPermissions('inventory.view', 'inventory.move');
+        $first = Location::factory()->create(['code' => 'EU']);
+        $second = Location::factory()->create(['code' => 'GO']);
+        Location::factory()->create(['code' => 'KE']);
+        $cables = Item::factory()->bulk(10)->stockedAt($first)->create();
+        $this->actingAs($actor)->post('/inventory/move', ['item_id' => $cables->id, 'target_code' => 'GO', 'quantity' => 4])->assertSessionHasNoErrors();
+
+        $this->actingAs($actor)->post('/inventory/move', ['item_id' => $cables->id, 'target_code' => 'KE', 'quantity' => 2])->assertSessionHasErrors('from');
+        $this->actingAs($actor)->post('/inventory/move', ['item_id' => $cables->id, 'target_code' => 'KE', 'quantity' => 2, 'from' => ItemStock::keyOf($second)])->assertSessionHasNoErrors();
+
+        $this->assertSame(6, ItemStock::for($cables, $first)->quantity);
+        $this->assertSame(2, ItemStock::for($cables, $second)->quantity);
+        $this->actingAs($actor)->getJson("/inventory/lookup?code={$cables->number}")->assertJsonCount(3, 'stocks');
+    }
+
+    public function test_the_quantity_can_not_exceed_the_stock_of_the_place(): void
     {
         $actor = $this->userWithPermissions('inventory.view', 'inventory.move');
         Location::factory()->create(['code' => 'GO']);
-        $cables = Item::factory()->bulk(3)->create();
+        $cables = Item::factory()->bulk(3)->stockedAt()->create();
 
-        $this->actingAs($actor)->post('/inventory/move', ['item_id' => $cables->id, 'target_code' => 'GO', 'quantity' => 4])->assertSessionHasErrors('quantity');
+        $this->actingAs($actor)->post('/inventory/move', ['item_id' => $cables->id, 'target_code' => 'GO', 'quantity' => 4])
+            ->assertSessionHasErrors(['quantity' => 'Im Eingang liegen nur 3 Stück.']);
     }
 
     public function test_the_misplaced_list_shows_items_without_place_or_away_from_home(): void

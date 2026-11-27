@@ -120,7 +120,7 @@ Ein Gegenstand, den ein Modul bewusst wegnimmt, hat keinen Platz, ist aber nicht
 
 Von Mengenartikeln kann ein Modul Stücke weg haben, während der Gegenstand seinen Ort behält: `awayQuantities(array $itemIds)` liefert je Gegenstand die Anzahl (der Verleih: ausgegebene und vermisste Stücke). Der Kern zieht sie ab, was „hier“ ist (`ItemExtensions::awayQuantity()`, `quantityHere()`), und lässt Umlagern einer Teilmenge, Verbrauchen und Ausmustern nur bis dahin zu.
 
-`reservations(Item $item)` nennt Buchungen, die später mit dem Gegenstand rechnen, als Sätze (z. B. „B-2026-0042, ab 14.11., 16:00 Uhr.“). Ausmustern, Verbrauchen, Abteilen und ein Zustand, der als Schaden gilt, fragen dann vorher nach: Die Controller rufen `ItemExtensions::ensureConfirmed()`, das ohne `confirmed` mit dem Fehler `confirm` abbricht; die Seite zeigt ihn mit „Ja, trotzdem“ (`InventoryReservedConfirm`) und schickt den Vorgang bestätigt noch einmal. Die Actions selbst prüfen das nicht, damit Module wie der Verleih ihre eigenen Buchungen ohne Rückfrage bearbeiten.
+`reservations(Item $item)` nennt Buchungen, die später mit dem Gegenstand rechnen, als Sätze (z. B. „B-2026-0042, ab 14.11., 16:00 Uhr.“). Ausmustern, Verbrauchen und ein Zustand, der als Schaden gilt, fragen dann vorher nach: Die Controller rufen `ItemExtensions::ensureConfirmed()`, das ohne `confirmed` mit dem Fehler `confirm` abbricht; die Seite zeigt ihn mit „Ja, trotzdem“ (`InventoryReservedConfirm`) und schickt den Vorgang bestätigt noch einmal. Die Actions selbst prüfen das nicht, damit Module wie der Verleih ihre eigenen Buchungen ohne Rückfrage bearbeiten.
 
 ### Öffentliche Box-Seite
 

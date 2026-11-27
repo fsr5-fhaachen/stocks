@@ -289,12 +289,12 @@ class LoansDemo implements DemoPart
         $this->checkBox->store($box, $today->refresh()->pack_pin, 'demo', 'Kim Packer', $box->contents()->pluck('number')->all(), $box->contents()->count());
         $this->demo->label($box->number, $box->name, 'Box, bestätigte Buchung: für die Ausgabe', "In {$today->number} (heute abholen); Pack-PIN {$today->pack_pin}, kontrolliert von Kim Packer.");
         $this->demo->label($single->number, $single->name, 'Position der Buchung zum Abhaken', "Hakt in der Ausgabe von {$today->number} ab.");
-        $this->demo->label($bulk->number, $bulk->name, 'Mengenartikel der Buchung', "In {$today->number}: nach dem Scan die Anzahl bestätigen; der Gegenstand bleibt an seinem Ort, die Buchung zählt die Anzahl.");
+        $this->demo->label($bulk->number, $bulk->name, 'Mengenartikel der Buchung', "In {$today->number}: nach dem Scan die Anzahl bestätigen; die Stücke verlassen bei der Ausgabe ihre Stelle.");
 
         $issuedBox = $this->demo->take('box');
         $issuedItem = $this->takeLendable();
         $issuedPickup = $this->demo->today->subDays(2)->setTime(14, 0);
-        // a share of another bulk item: it stays at its place, the loan counts the pieces
+        // a share of another bulk item: the pieces leave its place, the rest stays
         $issuedBulk = collect($this->demo->tagged('lendable_bulk'))->first(fn (Item $item) => $item->isNot($bulk));
         $issuedPieces = $issuedBulk ? max(1, intdiv($issuedBulk->refresh()->quantity, 4)) : 0;
         $issued = $this->draft($issuedPickup, $this->demo->today->addDays(3)->setTime(12, 0), [$issuedBox, $issuedItem, ...($issuedBulk ? [[$issuedBulk, $issuedPieces]] : [])]);
@@ -506,12 +506,13 @@ class LoansDemo implements DemoPart
     }
 
     /**
-     * Put everything of a loan back at its home; a bulk item that kept its place is confirmed there.
+     * Put everything of a loan back at its home; the pieces of a bulk position go back where they
+     * came from (LoanItemInfo::stowPlaceOf).
      */
     private function stow(Loan $loan): void
     {
         foreach (StowItem::pending()->where('loan_id', $loan->id)->with('item')->get() as $row) {
-            $target = $row->isBulk() && $row->item->place() !== null ? $row->item->place() : $row->item->home();
+            $target = $row->isBulk() ? LoanItemInfo::stowPlaceOf($row) : $row->item->home();
             if ($target !== null) {
                 $this->stowItem->handle($this->demo->actor, $row, Item::placeSummary($target)['code']);
             }

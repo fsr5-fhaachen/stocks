@@ -3,6 +3,8 @@
 namespace Modules\Loans\Support;
 
 use App\Models\Item;
+use App\Models\ItemStock;
+use App\Models\Location;
 use App\Models\User;
 use App\Support\Extensions\ItemInfoProvider;
 use App\Support\Surface;
@@ -32,14 +34,14 @@ class LoanItemInfo implements ItemInfoProvider
         $ids = $items->pluck('id')->all();
         $notices = [];
 
-        // issued: the item itself or a row of a box; pieces of a bulk item do not lock it, the item
-        // stays at its place and only what is here can be moved or used up
+        // issued: the item itself or a row of a box; pieces of a bulk item do not lock it: they left
+        // a place, the rest stays where it is
         $issued = LoanAwayItems::issuedRows()->whereIn('item_id', $ids)
             ->with('loan.responsible', 'loan.responsibleUser', 'item')->get();
         foreach ($issued as $row) {
             $loan = $row->loan;
             $overdue = $loan->isOverdue();
-            $pieces = $row->parent_id === null && $row->isBulk();
+            $pieces = $row->isBulk();
             $what = $pieces ? "{$row->quantity} {$row->item->unit} ausgegeben" : 'Ausgegeben';
             $notices[$row->item_id][] = $this->notice(
                 $overdue
@@ -77,9 +79,10 @@ class LoanItemInfo implements ItemInfoProvider
         }
 
         foreach (StowItem::pending()->whereIn('item_id', $ids)->with('loan', 'item')->get() as $row) {
-            $pieces = $row->isBulk() && $row->item->place() !== null;
+            $pieces = $row->isBulk();
+            $suggestion = $pieces ? self::stowPlaceOf($row) : $row->item->home();
             $where = $pieces
-                ? 'gehören nach '.Item::placeSummary($row->item->place())['code']
+                ? 'Vorschlag '.($suggestion ? Item::placeSummary($suggestion)['code'] : 'Eingang')
                 : 'Stammplatz '.($row->item->home() ? Item::placeSummary($row->item->home())['code'] : 'keiner');
             $notices[$row->item_id][] = $this->notice(
                 ($pieces ? ($row->returned_quantity ?? $row->quantity)." {$row->item->unit} zurück" : 'Zurück').
@@ -176,5 +179,16 @@ class LoanItemInfo implements ItemInfoProvider
             'lock' => $lock,
             'actions' => $actions,
         ];
+    }
+
+    /**
+     * Where the pieces of a bulk position go when they are put away: the place they left from, else
+     * the home of the item; null for "Eingang".
+     */
+    public static function stowPlaceOf(LoanItem $row): Location|Item|null
+    {
+        $source = $row->source_key !== null ? ItemStock::placeOf($row->source_key) : null;
+
+        return $source ?? $row->item->home();
     }
 }

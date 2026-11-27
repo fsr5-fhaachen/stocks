@@ -8,6 +8,7 @@ use App\Actions\Inventory\SaveLocation;
 use App\Enums\LocationType;
 use App\Http\Controllers\Controller;
 use App\Models\Item;
+use App\Models\ItemStock;
 use App\Models\Location;
 use App\Support\Inventory\CodeSequence;
 use Illuminate\Http\RedirectResponse;
@@ -58,6 +59,15 @@ class LocationController extends Controller
                 ->map(fn (Item $item) => [
                     ...$item->only(['id', 'number', 'name', 'quantity', 'unit', 'is_container', 'contents_count']),
                     'kind' => $item->kind->value,
+                ]),
+            // pieces of bulk items lying here ("4 × AA-Batterie"), with their target quantity
+            'stocks' => ItemStock::query()->where('location_id', $location->id)
+                ->whereHas('item', fn ($query) => $query->whereNull('retired_at'))
+                ->with('item')->get()->sortBy(fn (ItemStock $stock) => $stock->item->name)->values()
+                ->map(fn (ItemStock $stock) => [
+                    ...$stock->item->only(['id', 'number', 'name', 'unit']),
+                    'quantity' => $stock->quantity,
+                    'stock' => ['key' => $stock->place_key, 'target_quantity' => $stock->target_quantity, 'short' => $stock->isShort()],
                 ]),
             // for moving the location to another parent
             'locations' => fn () => request()->user()->can('locations.manage')

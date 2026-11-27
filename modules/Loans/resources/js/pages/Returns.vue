@@ -17,8 +17,8 @@
         <UiAlert v-if="current" type="info">
           <strong>{{ current.number }} {{ current.name }}</strong>
           <template v-if="current.place">
-            : liegt in <strong>{{ current.place.code }}</strong>. Scanne dieses
-            Regal zum Bestätigen.
+            : kam aus <strong>{{ current.place.code }}</strong>. Scanne dieses
+            Regal oder ein anderes, die Stücke kommen dorthin.
           </template>
           <template v-else>
             : Stammplatz <strong>{{ current.home?.code ?? "keiner" }}</strong>.
@@ -62,7 +62,7 @@
                 · aus {{ row.loan.number }} ·
                 {{
                   row.place
-                    ? `liegt in ${row.place.code}`
+                    ? `Vorschlag ${row.place.code}`
                     : `Stammplatz ${row.home?.code ?? "–"}`
                 }}
               </span>
@@ -182,7 +182,7 @@ type PendingRow = {
   quantity: number | null;
   unit: string | null;
   loan: { id: number; number: string };
-  // bulk item that kept its place: the scan of that place confirms it
+  // bulk item: suggested place (where the pieces came from, else the home)
   place: Place | null;
   home: Place | null;
 };

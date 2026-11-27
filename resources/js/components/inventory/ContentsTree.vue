@@ -2,7 +2,11 @@
   <ul
     :class="nested ? 'ml-5 border-l border-line pl-3' : 'divide-y divide-line'"
   >
-    <li v-for="item in items" :key="item.id" :class="nested ? 'pt-2' : 'py-2'">
+    <li
+      v-for="item in items"
+      :key="item.key ?? item.id"
+      :class="nested ? 'pt-2' : 'py-2'"
+    >
       <div class="flex items-center gap-2">
         <button
           v-if="item.contents.length"
@@ -40,8 +44,15 @@
           item.name
         }}</UiLink>
         <span class="font-mono text-xs text-ink-muted">{{ item.number }}</span>
-        <UiBadge v-if="item.kind === 'bulk'"
-          >{{ item.quantity }} {{ item.unit }}</UiBadge
+        <!-- bulk pieces: the quantity in this box, with its target ("Sollmenge") -->
+        <UiBadge
+          v-if="item.kind === 'bulk'"
+          :variant="item.stock?.short ? 'danger' : 'neutral'"
+          >{{ item.quantity
+          }}<template v-if="item.stock?.target_quantity">
+            / {{ item.stock.target_quantity }}</template
+          >
+          {{ item.unit }}</UiBadge
         >
       </div>
       <InventoryContentsTree

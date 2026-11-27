@@ -29,7 +29,7 @@ use App\Support\Inventory\ItemNumbers;
 class InventoryDemo implements DemoPart
 {
     /**
-     * Items in total, boxes and split off parts included.
+     * Items in total, boxes included.
      */
     public const ITEMS = 400;
 
@@ -252,18 +252,19 @@ class InventoryDemo implements DemoPart
             $demo->photo($hint, $hint->name);
             $demo->photo($hint, 'Zubehör');
             $this->createSingle($demo, 'Werkzeug', null);
-            // a part of a bulk item, split off by moving it into a box
-            $origin = $this->createBulk($demo, 'Möbel', $second, 20);
-            $part = $this->moveItem->handle($demo->actor, $origin, $this->boxes[0], 5, 'Für die Partybox abgeteilt.');
-            $this->created++;
+            // a bulk item at two places: some of its pieces moved into a box
+            $spread = $this->createBulk($demo, 'Möbel', $second, 20);
+            $this->moveItem->handle($demo->actor, $spread, $this->boxes[0], 5, 'Für die Partybox.');
+            // captured without place: the pieces wait in "Eingang", the home is a suggestion
+            $this->createBulk($demo, 'Kabel', null, null, 'neu', $first);
 
             if ($round === 0) {
                 $demo->label($single->number, $single->name, 'Einzelstück', 'Karte mit Umlagern, Zustand, Etikett.');
-                $demo->label($bulk->number, $bulk->name, 'Mengenartikel', 'Karte mit Menge; Umlagern einer Teilmenge teilt ab.');
+                $demo->label($bulk->number, $bulk->name, 'Mengenartikel', 'Karte mit Menge und der Stelle, an der sie liegt.');
                 $demo->label($consumable->number, $consumable->name, 'Verbrauchsmaterial', 'Karte mit Knopf „Verbraucht“.');
                 $demo->label($defect->number, $defect->name, 'Defekter Gegenstand', 'Zustand rot; nicht verleihbar.');
                 $demo->label($retired->number, $retired->name, 'Ausgemustert', 'Karte „ausgemustert“, keine Aktionen.');
-                $demo->label($part->number, $part->name, 'Abgeteilter Teil', 'Karte mit „Zurückbuchen“ zum Ursprung.');
+                $demo->label($spread->number, $spread->name, 'Mengenartikel an zwei Stellen', "15 in {$second->full_code}, 5 in {$this->boxes[0]->number}; Umlagern fragt „Von“.");
                 $demo->label($hint->number, $hint->name, 'Mit Hinweis und Fotos', 'Karte mit Foto; Etikett trägt „Achtung, zerbrechlich“.');
             }
         }

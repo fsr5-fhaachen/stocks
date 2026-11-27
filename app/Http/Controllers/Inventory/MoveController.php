@@ -2,12 +2,9 @@
 
 namespace App\Http\Controllers\Inventory;
 
-use App\Actions\Inventory\MergeItem;
 use App\Actions\Inventory\MoveItem;
-use App\Enums\ItemKind;
 use App\Http\Controllers\Controller;
 use App\Models\Item;
-use App\Support\Extensions\ItemExtensions;
 use App\Support\Inventory\CodeLookup;
 use App\Support\Inventory\Placement;
 use Illuminate\Http\RedirectResponse;
@@ -21,6 +18,8 @@ use Inertia\Response;
 /**
  * Moving items: first the item, then the target, both by code. A hand scanner types the code like
  * a keyboard, so a whole box of material can be put away one scan after the other.
+ *
+ * Pieces of a bulk item move between its places (StockBook::transfer), no part is split off.
  *
  * The switch "Ort / Stammplatz / beides" (mode place, home, both) makes the target the new home
  * instead of or as well as the new place. A new home needs inventory.edit, as in the item form.
@@ -37,15 +36,16 @@ class MoveController extends Controller
 
     /**
      * Move an item to the place of a code, or make it its home (mode). Also used by the dialog on
-     * the item page. If the code is the item a part was split off from, the part is booked back
-     * (MergeItem, only when moving).
+     * the item page. Of a bulk item pieces move from one of its places ("from", a place key) to the
+     * target; without "from" from its only place or "Eingang".
      */
-    public function store(Request $request, CodeLookup $codes, MoveItem $moveItem, MergeItem $mergeItem, ItemExtensions $extensions): RedirectResponse
+    public function store(Request $request, CodeLookup $codes, MoveItem $moveItem): RedirectResponse
     {
         $validated = $request->validate([
             'item_id' => ['required', 'integer'],
             'target_code' => ['required', 'string', 'max:50'],
             'quantity' => ['nullable', 'integer', 'min:1'],
+            'from' => ['nullable', 'string', 'max:20'],
             'note' => ['nullable', 'string', 'max:2000'],
             'confirmed' => ['boolean'],
             'mode' => ['nullable', Rule::in(['place', 'home', 'both'])],
@@ -61,49 +61,33 @@ class MoveController extends Controller
             return $this->changeHome($codes, $item, $validated['target_code']);
         }
 
-        // scanning the item a part was split off from books the part back
-        $found = $codes->find($validated['target_code']);
-        if ($found instanceof Item && $item->mergeTarget()?->id === $found->id) {
-            $origin = $mergeItem->handle($request->user(), $item, $validated['quantity'] ?? null, $validated['note'] ?? null);
-
-            return back()->with('success', "{$item->number} zurück zu {$origin->number} gebucht, dort sind jetzt {$origin->quantity} {$origin->unit}.");
-        }
-
         $target = $codes->findPlace($validated['target_code'])
             ?? throw ValidationException::withMessages(['target_code' => "Zu {$validated['target_code']} gibt es keinen Standort und keine Box."]);
 
-        // a part split off leaves the stock the bookings count on: ask first
-        if ($item->kind === ItemKind::Bulk && ($validated['quantity'] ?? $item->quantity) < $item->quantity) {
-            $extensions->ensureConfirmed($item, $request->boolean('confirmed'), 'abteilen');
-        }
-
         // "beides" for an item that lies there already: only the home is new
-        if ($mode === 'both' && $item->place()?->is($target)) {
+        if ($mode === 'both' && ! $item->isBulk() && $item->place()?->is($target)) {
             return $this->changeHome($codes, $item, $validated['target_code']);
         }
 
         // "beides": the home follows the same rules as the place, MoveItem has checked them
-        $moved = DB::transaction(function () use ($request, $moveItem, $item, $target, $validated, $mode) {
-            $moved = $moveItem->handle($request->user(), $item, $target, $validated['quantity'] ?? null, $validated['note'] ?? null);
+        DB::transaction(function () use ($request, $moveItem, $item, $target, $validated, $mode) {
+            $moveItem->handle($request->user(), $item, $target, $validated['quantity'] ?? null, $validated['note'] ?? null, $validated['from'] ?? null);
             if ($mode === 'both') {
-                $moved->setHome($target);
-                $moved->save();
+                $item->setHome($target);
+                $item->save();
             }
-
-            return $moved;
         });
 
         $targetCode = Item::placeSummary($target)['code'];
         $alsoHome = $mode === 'both' ? ', das ist auch sein Stammplatz' : '';
 
-        if ($moved->is($item)) {
-            return back()->with('success', "{$item->number} liegt jetzt in {$targetCode}{$alsoHome}.");
+        if ($item->isBulk()) {
+            $moved = $validated['quantity'] ?? null;
+
+            return back()->with('success', ($moved ? "{$moved} {$item->unit}" : 'Die Stücke').' von '.$item->number." liegen jetzt in {$targetCode}{$alsoHome}.");
         }
 
-        // the split off part has a new number and needs a label
-        return back()
-            ->with('success', "{$moved->quantity} {$moved->unit} von {$item->number} liegen jetzt als {$moved->number} in {$targetCode}.")
-            ->with('label', ['id' => $moved->id, 'number' => $moved->number]);
+        return back()->with('success', "{$item->number} liegt jetzt in {$targetCode}{$alsoHome}.");
     }
 
     /**

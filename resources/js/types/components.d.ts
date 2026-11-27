@@ -30,6 +30,7 @@ declare module 'vue' {
     InventoryPlaceInput: typeof import('./../components/inventory/PlaceInput.vue')['default']
     InventoryPlaceLink: typeof import('./../components/inventory/PlaceLink.vue')['default']
     InventoryReservedConfirm: typeof import('./../components/inventory/ReservedConfirm.vue')['default']
+    InventoryStockCard: typeof import('./../components/inventory/StockCard.vue')['default']
     LabelsDirectPrintHint: typeof import('./../components/labels/DirectPrintHint.vue')['default']
     LabelsEditor: typeof import('./../components/labels/Editor.vue')['default']
     LabelsPreview: typeof import('./../components/labels/Preview.vue')['default']

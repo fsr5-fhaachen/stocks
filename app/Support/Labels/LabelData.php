@@ -7,6 +7,7 @@ use App\Enums\LabelTarget;
 use App\Models\Item;
 use App\Models\Location;
 use App\Models\ReservedNumber;
+use App\Support\Inventory\BoxContents;
 use App\Support\Inventory\ItemNumbers;
 use App\Support\Settings;
 use App\Support\Surface;
@@ -66,11 +67,11 @@ class LabelData
             'category' => $item->category?->fullName() ?? '',
             'quantity' => $item->kind === ItemKind::Bulk ? trim("{$item->quantity} {$item->unit}") : '1',
             'home' => Item::placeSummary($item->home())['code'] ?? '',
-            'location' => Item::placeSummary($item->place())['code'] ?? '',
+            'location' => Item::placeSummary($this->placeOf($item))['code'] ?? '',
             'description' => (string) $item->description,
             'condition' => $item->condition->name,
             'hint' => (string) $item->label_hint,
-            'count' => $item->is_container ? ($item->exists ? (string) $item->contents()->active()->count() : '0') : '',
+            'count' => $item->is_container ? ($item->exists ? (string) BoxContents::count($item) : '0') : '',
         ], $extra);
     }
 
@@ -131,5 +132,19 @@ class LabelData
                 'url' => $url,
             ],
         ];
+    }
+
+    /**
+     * Place on the label: a bulk item has no place of its own, it shows the place where all its
+     * pieces lie, else its home.
+     */
+    private function placeOf(Item $item): Location|Item|null
+    {
+        if ($item->kind !== ItemKind::Bulk || ! $item->exists) {
+            return $item->place();
+        }
+        $stocks = $item->stocks()->where('quantity', '>', 0)->get();
+
+        return $stocks->count() === 1 ? $stocks->first()->place() : $item->home();
     }
 }

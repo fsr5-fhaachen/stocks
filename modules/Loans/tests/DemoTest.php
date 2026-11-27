@@ -51,7 +51,7 @@ class DemoTest extends LoansTestCase
         $this->assertGreaterThan(1, LoanBoxCheck::count());
         $this->assertGreaterThan(1, StowItem::pending()->count());
         $this->assertTrue(LoanItem::stillMissing()->exists(), 'vermisst');
-        $this->assertTrue(LoanAwayItems::bulkPositions(LoanAwayItems::issuedRows())->exists(), 'Mengenartikel teils ausgegeben');
+        $this->assertTrue(LoanAwayItems::bulkRows(LoanAwayItems::issuedRows())->exists(), 'Mengenartikel teils ausgegeben');
         $this->assertTrue(Contact::whereNull('phone')->exists());
         $this->assertTrue(Contact::whereNull('council_id')->exists() && Contact::whereNotNull('council_id')->exists());
         $this->assertTrue(Loan::where('status', LoanStatus::ClosedWithDefects)->whereNotNull('defects_closed_at')->exists());

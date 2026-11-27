@@ -129,7 +129,6 @@ Route::middleware('auth')->group(function () {
             Route::post('/items/{item}/return-home', [ItemController::class, 'returnHome'])->name('items.return-home');
             Route::post('/items/{item}/condition', [ItemController::class, 'changeCondition'])->name('items.condition');
             Route::post('/items/{item}/consume', [ItemController::class, 'consume'])->name('items.consume');
-            Route::post('/items/{item}/merge', [ItemController::class, 'merge'])->name('items.merge');
         });
 
         Route::middleware('can:inventory.retire')->group(function () {

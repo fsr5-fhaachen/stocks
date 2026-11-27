@@ -17,7 +17,7 @@ class PrintTest extends TestCase
         app(Settings::class)->set(['organization.name' => 'FSR Informatik', 'legal.contact_email' => 'fsr@example.org']);
         config(['app.url' => 'https://stocks.example']);
         $shelf = Location::factory()->in(Location::factory()->create(['code' => 'EU', 'full_code' => 'EU']))->create(['code' => 'R03']);
-        $item = Item::factory()->bulk(5, 'Rollen')->at($shelf)->create(['name' => 'Gaffa', 'label_hint' => 'Nicht für Teppich']);
+        $item = Item::factory()->bulk(5, 'Rollen')->stockedAt($shelf)->create(['name' => 'Gaffa', 'label_hint' => 'Nicht für Teppich']);
 
         $this->actingAs($this->userWithRoles('FSR-Mitglied'))->get("/labels/print?items={$item->id}&locations={$shelf->id}")
             ->assertOk()
@@ -85,16 +85,5 @@ class PrintTest extends TestCase
         ])->assertSessionHasNoErrors();
 
         $this->assertSame('Achtung, zerbrechlich', $item->fresh()->label_hint);
-    }
-
-    public function test_a_split_off_part_offers_to_print_its_label(): void
-    {
-        $from = Location::factory()->create();
-        $to = Location::factory()->create();
-        $item = Item::factory()->bulk(10, 'Rollen')->at($from)->create();
-
-        $this->actingAs($this->userWithRoles('FSR-Mitglied'))
-            ->post('/inventory/move', ['item_id' => $item->id, 'target_code' => $to->full_code, 'quantity' => 3])
-            ->assertSessionHas('label', fn (array $label) => $label['number'] !== $item->number);
     }
 }

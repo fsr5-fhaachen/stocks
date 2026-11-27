@@ -3,6 +3,7 @@
 namespace Modules\Loans\Actions;
 
 use App\Actions\Inventory\MoveItem;
+use App\Actions\Inventory\StockBook;
 use App\Enums\ItemKind;
 use App\Models\Item;
 use App\Models\Location;
@@ -17,8 +18,8 @@ use Modules\Loans\Models\LoanItem;
 
 /**
  * Put an item back after the return ("Einräumen"). Stocks shows the home; the scan of the shelf
- * confirms it and moves the item there. A bulk item keeps its place during the loan: the scan
- * must name that place and only confirms it. Until then the item is "angenommen, noch nicht
+ * confirms it and moves the item there. The pieces of a bulk position go to the scanned place
+ * (StockBook::putBack), whatever place that is. Until then they are "angenommen, noch nicht
  * eingeräumt".
  */
 class StowItem
@@ -26,6 +27,7 @@ class StowItem
     public function __construct(
         private readonly CodeLookup $codes,
         private readonly MoveItem $moveItem,
+        private readonly StockBook $stock,
     ) {}
 
     /**
@@ -44,18 +46,17 @@ class StowItem
                 ->where(fn (Builder $query) => $query->whereNull('parent_id')->where(fn (Builder $query) => $query->whereNull('return_state')->orWhere('return_state', '!=', ReturnState::Missing)->orWhere('returned_quantity', '>', 0)))
                 ->orWhere('missing_resolution', 'found'))
             ->whereHas('loan', fn (Builder $query) => $query->where('status', '!=', LoanStatus::Cancelled))
-            // a bulk item keeps its place and waits until someone confirms it; a single item waits
-            // as long as it has no place (one that got a place some other way counts as put back)
+            // pieces of a bulk position wait until they lie at a place again, once their count is
+            // known (inspected); a single item waits as long as it has no place (one that got a
+            // place some other way counts as put back)
             ->where(fn (Builder $query) => $query
-                ->where(fn (Builder $query) => $query->whereNull('parent_id')->whereHas('item', fn (Builder $query) => $query->whereNull('retired_at')->where('kind', ItemKind::Bulk)))
-                ->orWhereHas('item', fn (Builder $query) => $query->whereNull('retired_at')->whereNull('location_id')->whereNull('container_id')));
+                ->where(fn (Builder $query) => $query->whereNull('parent_id')->whereNotNull('inspected_at')->whereHas('item', fn (Builder $query) => $query->whereNull('retired_at')->where('kind', ItemKind::Bulk)))
+                ->orWhereHas('item', fn (Builder $query) => $query->whereNull('retired_at')->where('kind', '!=', ItemKind::Bulk)->whereNull('location_id')->whereNull('container_id')));
     }
 
     /**
-     * Put the item of a position at the scanned place. A bulk item that has a place is not moved:
-     * the scanned place must be its place, which confirms that the pieces are back there; another
-     * place is refused with a hint. A bulk item without place (issued as a whole before bulk items
-     * stopped being split) is put at the scanned place like a single item.
+     * Put the item of a position at the scanned place; the pieces of a bulk position become stock
+     * there.
      *
      * @throws ValidationException
      */
@@ -73,15 +74,15 @@ class StowItem
                 ?? throw ValidationException::withMessages(['code' => $this->codes->notFoundMessage((string) $code, place: true)]);
             $item = $row->item;
 
-            if ($row->isBulk() && ($current = $item->place()) !== null) {
-                if (! $current->is($place)) {
-                    throw ValidationException::withMessages(['code' => "{$item->number} gehört nach {$this->codeOf($current)}, nicht nach {$this->codeOf($place)}. Dort einräumen oder {$item->number} vorher umlagern."]);
+            // pieces of a bulk item go to the scanned place, wherever that is (1c)
+            if ($row->isBulk()) {
+                $returned = (int) ($row->returned_quantity ?? $row->quantity);
+                if ($returned > 0) {
+                    $this->stock->putBack($actor, $item, $place, $returned, "Eingeräumt nach {$row->loan->number}.");
                 }
                 $row->forceFill(['stowed_at' => now()])->save();
-                // what came back, plus missing pieces that turned up again
-                $returned = ($row->returned_quantity ?? $row->quantity) + ($row->missing_resolution === 'found' ? (int) $row->missing_quantity : 0);
 
-                return "{$returned} {$item->unit} von {$item->number} liegen wieder in {$this->codeOf($place)}.";
+                return "{$returned} {$item->unit} von {$item->number} liegen jetzt in {$this->codeOf($place)}.";
             }
 
             $this->moveItem->handle($actor, $item, $place, note: "Eingeräumt nach {$row->loan->number}.");

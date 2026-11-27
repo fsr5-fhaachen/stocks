@@ -5,6 +5,7 @@ namespace Tests\Feature\Inventory;
 use App\Http\Controllers\Inventory\ContentsPdfController;
 use App\Models\Item;
 use App\Models\ItemPhoto;
+use App\Support\Inventory\BoxContents;
 use App\Support\Settings;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\UploadedFile;
@@ -19,7 +20,7 @@ class ContentsPdfTest extends TestCase
     public function test_the_contents_of_a_box_download_as_pdf(): void
     {
         $box = Item::factory()->container()->create(['name' => 'Bar']);
-        Item::factory()->bulk(20, 'Stück')->at($box)->create(['name' => 'Becher']);
+        Item::factory()->bulk(20, 'Stück')->stockedAt($box)->create(['name' => 'Becher']);
 
         $response = $this->actingAs($this->userWithRoles('Freies Mitglied'))->get("/inventory/items/{$box->id}/contents.pdf")
             ->assertOk()
@@ -41,7 +42,7 @@ class ContentsPdfTest extends TestCase
         Storage::fake(ItemPhoto::DISK);
         app(Settings::class)->set(['organization.address' => "Eupener Straße 70\n52066 Aachen"]);
         $box = Item::factory()->container()->create();
-        $tape = Item::factory()->bulk(3, 'Rollen')->at($box)->create(['description' => 'Schwarz, 50 mm', 'notes' => 'Nicht auf Lack']);
+        $tape = Item::factory()->bulk(3, 'Rollen')->stockedAt($box)->create(['description' => 'Schwarz, 50 mm', 'notes' => 'Nicht auf Lack']);
         ItemPhoto::uploadAll($tape, [UploadedFile::fake()->image('tape.jpg')]);
         $member = $this->userWithRoles('Freies Mitglied');
 
@@ -63,7 +64,7 @@ class ContentsPdfTest extends TestCase
     {
         return [
             'box' => $box,
-            'rows' => $box->contents()->get()->map(fn (Item $item) => ['item' => $item, 'depth' => 0, 'photo' => null])->all(),
+            'rows' => BoxContents::of($box)->map(fn (array $entry) => ['item' => $entry['item'], 'quantity' => $entry['quantity'], 'target' => $entry['stock']?->target_quantity, 'depth' => 0, 'photo' => null])->all(),
             'withPhotos' => $withPhotos,
             'boxPhoto' => null,
             'letter' => true,

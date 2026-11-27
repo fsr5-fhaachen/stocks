@@ -4,6 +4,7 @@ namespace Tests\Feature\Inventory;
 
 use App\Enums\MovementType;
 use App\Models\Item;
+use App\Models\ItemStock;
 use App\Models\Location;
 use App\Support\Inventory\ItemNumbers;
 use App\Support\Settings;
@@ -71,15 +72,16 @@ class ItemTest extends TestCase
             ->assertJsonPath('1.name', 'R03-Kiste');
     }
 
-    public function test_changing_the_quantity_is_logged(): void
+    public function test_the_form_does_not_change_the_quantity_of_a_bulk_item(): void
     {
         $actor = $this->userWithPermissions('inventory.view', 'inventory.edit');
-        $item = Item::factory()->bulk(10)->create();
+        $item = Item::factory()->bulk(10)->stockedAt()->create();
 
+        // the quantity follows the places (Wareneingang, Zählen, Verbraucht), not the form
         $this->actingAs($actor)->put("/inventory/items/{$item->id}", ['name' => $item->name, 'kind' => 'bulk', 'quantity' => 7, 'unit' => 'Stück'])->assertSessionHasNoErrors();
 
-        $this->assertSame(7, $item->fresh()->quantity);
-        $this->assertDatabaseHas('item_movements', ['item_id' => $item->id, 'type' => 'count', 'note' => 'Menge 10 → 7']);
+        $this->assertSame(10, $item->fresh()->quantity);
+        $this->assertSame(10, ItemStock::for($item, null)->quantity);
     }
 
     public function test_a_box_with_contents_stays_a_box(): void
@@ -131,7 +133,7 @@ class ItemTest extends TestCase
     {
         $actor = $this->userWithPermissions('inventory.view', 'inventory.retire');
         $room = Location::factory()->create();
-        $ties = Item::factory()->bulk(100)->at($room)->create();
+        $ties = Item::factory()->bulk(100)->stockedAt($room)->create();
 
         $this->actingAs($actor)->post("/inventory/items/{$ties->id}/retire", ['reason' => 'consumed', 'quantity' => 30, 'note' => 'Party'])
             ->assertSessionHasNoErrors()
@@ -140,20 +142,23 @@ class ItemTest extends TestCase
         $ties->refresh();
         $this->assertSame(70, $ties->quantity);
         $this->assertFalse($ties->isRetired());
-        $this->assertTrue($ties->location->is($room));
+        $this->assertSame(70, ItemStock::for($ties, $room)->quantity);
         $this->assertDatabaseHas('item_movements', ['item_id' => $ties->id, 'type' => 'consume', 'quantity' => 30, 'from_location_id' => $room->id, 'note' => 'Party']);
     }
 
-    public function test_retiring_the_whole_quantity_retires_the_item(): void
+    public function test_a_bulk_item_used_up_stays_to_be_filled_up_again(): void
     {
         $actor = $this->userWithPermissions('inventory.view', 'inventory.retire');
-        $ties = Item::factory()->bulk(10)->create();
+        $ties = Item::factory()->bulk(10)->stockedAt()->create();
 
+        $this->actingAs($actor)->post("/inventory/items/{$ties->id}/retire", ['reason' => 'consumed', 'quantity' => 11])->assertSessionHasErrors('quantity');
         $this->actingAs($actor)->post("/inventory/items/{$ties->id}/retire", ['reason' => 'consumed', 'quantity' => 10])->assertSessionHasNoErrors();
-        $this->assertTrue($ties->fresh()->isRetired());
+        $this->assertFalse($ties->fresh()->isRetired());
+        $this->assertSame(0, $ties->fresh()->quantity);
 
-        $other = Item::factory()->bulk(10)->create();
-        $this->actingAs($actor)->post("/inventory/items/{$other->id}/retire", ['reason' => 'consumed', 'quantity' => 11])->assertSessionHasErrors('quantity');
+        // retired as a whole without quantity
+        $this->actingAs($actor)->post("/inventory/items/{$ties->id}/retire", ['reason' => 'defective'])->assertSessionHasNoErrors();
+        $this->assertTrue($ties->fresh()->isRetired());
     }
 
     public function test_a_box_is_only_retired_when_it_is_empty(): void

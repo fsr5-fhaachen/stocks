@@ -3,13 +3,16 @@
 namespace Modules\Loans\Actions;
 
 use App\Actions\Inventory\MoveItem;
+use App\Actions\Inventory\StockBook;
 use App\Enums\ItemKind;
 use App\Enums\MovementType;
 use App\Models\Item;
 use App\Models\ItemCondition;
-use App\Models\ItemMovement;
 use App\Models\ItemPhoto;
+use App\Models\ItemStock;
+use App\Models\Location;
 use App\Models\User;
+use App\Support\Inventory\BoxContents;
 use App\Support\Inventory\CodeLookup;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
@@ -26,6 +29,7 @@ use Modules\Loans\Models\LoanItem;
 use Modules\Loans\Notifications\LoanIssued;
 use Modules\Loans\Support\Availability;
 use Modules\Loans\Support\LoanDocuments;
+use Modules\Loans\Support\LoanItemInfo;
 use Modules\Loans\Support\LoanNotifier;
 use Modules\Loans\Support\SignatureInput;
 use Modules\Loans\Support\Snapshot;
@@ -58,6 +62,7 @@ class IssueLoan
         private readonly RecordDefect $recordDefect,
         private readonly ReturnLoan $returnLoan,
         private readonly LoanNotifier $notifier,
+        private readonly StockBook $stock,
     ) {}
 
     /**
@@ -86,7 +91,7 @@ class IssueLoan
      *
      * @throws ValidationException
      */
-    public function check(User $actor, Loan $loan, ?string $code, ?int $rowId, ?int $quantity = null): array
+    public function check(User $actor, Loan $loan, ?string $code, ?int $rowId, ?int $quantity = null, ?string $from = null): array
     {
         $this->ensureIssuable($loan);
 
@@ -103,6 +108,16 @@ class IssueLoan
         // a box that came back unchecked counts only when its contents are ticked one by one
         if ($row->isUncheckedBox() && $row->children()->exists()) {
             throw ValidationException::withMessages(['code' => "{$row->item->number} kam ungeprüft zurück. Hake den Inhalt einzeln ab, dann ist die Box mit abgehakt."]);
+        }
+
+        // a bulk position: the place its pieces leave from (chosen, or the only one); it must hold
+        // them, checked before anything changes
+        if ($row->isBulk() && $row->parent_id === null) {
+            $source = $this->sourceOf($row->item, $from ?? $row->source_key, 'from');
+            $there = ItemStock::for($row->item, $source)->quantity + $this->waitingPieces($row->item);
+            if (($quantity ?? $row->quantity) > $there) {
+                throw ValidationException::withMessages(['from' => StockBook::notThereMessage($row->item, $source, $there)]);
+            }
         }
 
         if ($quantity !== null && $row->isBulk() && $row->parent_id === null) {
@@ -123,6 +138,9 @@ class IssueLoan
                 $row->quantity = $quantity;
                 $row->save();
             }));
+        }
+        if ($from !== null && $row->isBulk() && $row->parent_id === null) {
+            $row->forceFill(['source_key' => $from])->save();
         }
         $this->tick($row, ['checked_at' => now(), 'checked_by' => $actor->id, 'checked_by_scan' => $rowId === null]);
 
@@ -337,13 +355,24 @@ class IssueLoan
                 $this->storeScan($issuer, $loan, $scan);
             }
 
-            // the items leave their place; the contents of a box stay in it and travel along. A bulk
-            // item keeps its place and stock: the row says how many are out
+            // the items leave their place; the contents of a box stay in it and travel along. Pieces
+            // of a bulk item leave the place they are taken from (the chosen source of a position,
+            // the box of a row of its contents)
+            $note = "Ausgegeben mit {$loan->number}.";
             foreach ($leaving as $position) {
-                $note = "Ausgegeben mit {$loan->number}.";
-                $position->item->kind === ItemKind::Bulk
-                    ? ItemMovement::record($position->item, MovementType::Issue, $position->item->place(), null, $issuer, $position->quantity, $note)
-                    : $this->moveItem->takeAway($issuer, $position->item, MovementType::Issue, note: $note);
+                if ($position->item->kind !== ItemKind::Bulk) {
+                    $this->moveItem->takeAway($issuer, $position->item, MovementType::Issue, note: $note);
+
+                    continue;
+                }
+                $source = $this->sourceOf($position->item, $position->source_key, 'loan');
+                $this->stowWaiting($issuer, $loan, $position->item, $source, $position->quantity);
+                $this->stock->takeOut($issuer, $position->item, $source, $position->quantity, $note);
+            }
+            $inBoxes = LoanItem::whereIn('id', $rowIds)->whereNotNull('parent_id')->with(['item', 'parent.item'])->get()
+                ->filter(fn (LoanItem $row) => $row->isBulk());
+            foreach ($inBoxes as $row) {
+                $this->stock->takeOut($issuer, $row->item, $row->parent->item, $row->quantity, $note);
             }
             LoanItem::whereIn('id', $rowIds)->update(['issued_at' => now(), 'issue_document_id' => $list->id]);
 
@@ -372,6 +401,64 @@ class IssueLoan
      *
      * @throws ValidationException
      */
+    /**
+     * Place a bulk position takes its pieces from (StockBook::sourceOf). Without a choice and with
+     * no pieces at any place, the place pieces that came back but wait to be put away go to.
+     *
+     * @throws ValidationException
+     */
+    private function sourceOf(Item $item, ?string $key, string $field): Location|Item|null
+    {
+        try {
+            return StockBook::sourceOf($item, $key, $field);
+        } catch (ValidationException $exception) {
+            $waiting = $key === null || $key === '' ? $this->waitingRows($item)->first() : null;
+            if ($waiting === null) {
+                throw $exception;
+            }
+
+            return LoanItemInfo::stowPlaceOf($waiting);
+        }
+    }
+
+    /**
+     * Positions of other loans whose pieces came back and wait to be put away ("Einräumen").
+     *
+     * @return Collection<int, LoanItem>
+     */
+    private function waitingRows(Item $item): Collection
+    {
+        return StowItem::pending()->where('item_id', $item->id)->whereNull('parent_id')->oldest('id')->get();
+    }
+
+    /**
+     * Pieces that came back and wait to be put away: they can leave again at once.
+     */
+    private function waitingPieces(Item $item): int
+    {
+        return (int) $this->waitingRows($item)->sum(fn (LoanItem $row) => $row->returned_quantity ?? $row->quantity);
+    }
+
+    /**
+     * Pieces that wait to be put away and leave again at once are first put at the source (as if
+     * stowed there), as far as the source has too few.
+     */
+    private function stowWaiting(User $issuer, Loan $loan, Item $item, Location|Item|null $source, int $needed): void
+    {
+        $there = ItemStock::for($item, $source)->quantity;
+        foreach ($this->waitingRows($item) as $row) {
+            if ($there >= $needed) {
+                return;
+            }
+            $returned = (int) ($row->returned_quantity ?? $row->quantity);
+            if ($returned > 0) {
+                $this->stock->putBack($issuer, $item, $source, $returned, "Gleich wieder ausgegeben mit {$loan->number}.");
+            }
+            $row->forceFill(['stowed_at' => now()])->save();
+            $there += $returned;
+        }
+    }
+
     private function leaveBehind(User $actor, Loan $loan, Collection $leaving): void
     {
         foreach ($leaving as $position) {
@@ -381,9 +468,12 @@ class IssueLoan
                 $box = $row->parent->item;
                 $target = $box->place();
                 $note = "Bleibt bei der Ausgabe von {$loan->number} hier, aus {$box->number} genommen.";
-                $target !== null
-                    ? $this->moveItem->handle($actor, $row->item, $target, note: $note)
-                    : $this->moveItem->takeAway($actor, $row->item, MovementType::Move, note: $note);
+                // pieces of a bulk item go where the box stands, without place into "Eingang"
+                match (true) {
+                    $row->isBulk() => $this->stock->transfer($actor, $row->item, $box, $target, $row->quantity, $note),
+                    $target !== null => $this->moveItem->handle($actor, $row->item, $target, note: $note),
+                    default => $this->moveItem->takeAway($actor, $row->item, MovementType::Move, note: $note),
+                };
                 LoanItem::whereIn('id', [$row->id, ...$row->descendantIds()])->delete();
             }
         }
@@ -424,12 +514,16 @@ class IssueLoan
             return;
         }
 
-        $contents = $box->contents()->active()->get();
-        $parent->children()->whereNotIn('item_id', $contents->modelKeys())->delete();
-        foreach ($contents as $item) {
-            $row = $parent->children()->firstOrCreate(['item_id' => $item->id], ['loan_id' => $loan->id, 'quantity' => $item->quantity]);
-            $row->update(['quantity' => $item->quantity]);
-            $this->syncContents($loan, $row, $item, $depth + 1);
+        // items of the box and the pieces of bulk items in it (with the quantity in this box)
+        $contents = BoxContents::of($box)->filter(fn (array $entry) => $entry['quantity'] > 0);
+        $parent->children()->whereNotIn('item_id', $contents->map(fn (array $entry) => $entry['item']->id)->all())->delete();
+        foreach ($contents as $entry) {
+            $item = $entry['item'];
+            $row = $parent->children()->firstOrCreate(['item_id' => $item->id], ['loan_id' => $loan->id, 'quantity' => $entry['quantity']]);
+            $row->update(['quantity' => $entry['quantity'], 'source_key' => $entry['stock']?->place_key]);
+            if ($entry['stock'] === null) {
+                $this->syncContents($loan, $row, $item, $depth + 1);
+            }
         }
     }
 
