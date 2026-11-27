@@ -115,6 +115,7 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue";
+import type { BarcodeFormat } from "barcode-detector/ponyfill";
 
 /**
  * Camera scan of qr codes and data matrix codes with barcode-detector (ZXing). The WebAssembly
@@ -123,10 +124,20 @@ import { onBeforeUnmount, onMounted, ref } from "vue";
  * time ("Automatisch") or once per tap on the picture or the button. The controls sit in a bar below
  * the picture; pages add their own through the slot "actions".
  */
-const props = withDefaults(defineProps<{ autostart?: boolean }>(), {
-  autostart: false,
-});
-const emit = defineEmits<{ scan: [code: string]; started: []; stopped: [] }>();
+const props = withDefaults(
+  defineProps<{
+    autostart?: boolean;
+    // barcode formats of barcode-detector, e.g. ["ean_13", "upc_a"] for packaging
+    formats?: BarcodeFormat[];
+  }>(),
+  { autostart: false, formats: () => ["qr_code", "data_matrix"] },
+);
+// format: the format that was read, e.g. "upc_e" (decides between EAN-8 and UPC-E)
+const emit = defineEmits<{
+  scan: [code: string, format: string];
+  started: [];
+  stopped: [];
+}>();
 
 const video = ref<HTMLVideoElement | null>(null);
 const frame = ref<HTMLDivElement | null>(null);
@@ -166,10 +177,13 @@ const setAuto = (on: boolean) => {
 
 let stream: MediaStream | null = null;
 let detector: {
-  detect: (source: HTMLCanvasElement) => Promise<{ rawValue: string }[]>;
+  detect: (
+    source: HTMLCanvasElement,
+  ) => Promise<{ rawValue: string; format: string }[]>;
 } | null = null;
 let timer = 0;
 let lastCode = "";
+let lastFormat = "";
 let lastAt = 0;
 
 // the same code fires again only after this pause
@@ -187,7 +201,7 @@ const createDetector = async () => {
         path.endsWith(".wasm") ? wasmUrl : prefix + path,
     },
   });
-  return new BarcodeDetector({ formats: ["qr_code", "data_matrix"] });
+  return new BarcodeDetector({ formats: props.formats });
 };
 
 const start = async (deviceId?: string) => {
@@ -284,6 +298,7 @@ const read = async (): Promise<string | null> => {
   try {
     const image = insideFrame();
     const [result] = image ? await detector!.detect(image) : [];
+    lastFormat = result?.format ?? "";
     return result?.rawValue || null;
   } catch {
     // a frame that can not be read
@@ -327,7 +342,7 @@ const hit = (code: string, asked = false) => {
   lastAt = now;
   beep();
   navigator.vibrate?.(80);
-  emit("scan", code);
+  emit("scan", code, lastFormat);
 };
 
 // short beep without an audio file

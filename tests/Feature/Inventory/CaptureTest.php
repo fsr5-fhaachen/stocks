@@ -166,13 +166,13 @@ class CaptureTest extends TestCase
         {
             private int $calls = 0;
 
-            public function handle(User $actor, array $data, ItemCondition $condition, Location|Item|null $place, Location|Item|null $home, array $photos = [], ?ReservedNumber $reserved = null): Item
+            public function handle(User $actor, array $data, ItemCondition $condition, Location|Item|null $place, Location|Item|null $home, array $photos = [], ?ReservedNumber $reserved = null, array $photoSources = []): Item
             {
                 if (++$this->calls === 3) {
                     throw ValidationException::withMessages(['name' => 'kaputt']);
                 }
 
-                return parent::handle($actor, $data, $condition, $place, $home, $photos, $reserved);
+                return parent::handle($actor, $data, $condition, $place, $home, $photos, $reserved, $photoSources);
             }
         });
 

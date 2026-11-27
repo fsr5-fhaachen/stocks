@@ -15,6 +15,7 @@ declare module 'vue' {
     AuthLayout: typeof import('./../layouts/AuthLayout.vue')['default']
     InventoryCameraScanner: typeof import('./../components/inventory/CameraScanner.vue')['default']
     InventoryCapturePlaceStep: typeof import('./../components/inventory/capture/PlaceStep.vue')['default']
+    InventoryCaptureProductLookup: typeof import('./../components/inventory/capture/ProductLookup.vue')['default']
     InventoryConditionModal: typeof import('./../components/inventory/ConditionModal.vue')['default']
     InventoryConsumeModal: typeof import('./../components/inventory/ConsumeModal.vue')['default']
     InventoryContentsTree: typeof import('./../components/inventory/ContentsTree.vue')['default']

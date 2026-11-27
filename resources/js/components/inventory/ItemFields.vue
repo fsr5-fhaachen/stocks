@@ -86,7 +86,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, watch } from "vue";
 
 /**
  * Fields of an item shared by the item form and the guided capture: name, category, kind with
@@ -125,5 +125,14 @@ const form = defineModel<ItemFieldsForm>("form", { required: true });
 const moreOpen = ref(
   !!(form.value.description || form.value.notes) ||
     !!(props.errors.description || props.errors.notes),
+);
+// e.g. a description taken from a product database is shown, not hidden
+watch(
+  () => form.value.description,
+  (value) => {
+    if (value) {
+      moreOpen.value = true;
+    }
+  },
 );
 </script>

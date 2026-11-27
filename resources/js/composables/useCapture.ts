@@ -17,6 +17,8 @@ export type CaptureForm = ItemFieldsForm & {
   home_code: string;
   // home = place ("Auch als Stammplatz")
   home_same: boolean;
+  // barcode of the packaging
+  ean: string;
 };
 
 export type CaptureStep =
@@ -91,6 +93,9 @@ export default function (
 
   const form = reactive<CaptureForm>({ ...defaults(), ...stored?.form });
   const photos = ref<File[]>([]);
+  // photos taken from a product database: their reference "<code>:<index>", the server keeps
+  // the origin (credit, licence) with the photo
+  const photoRefs = new WeakMap<File, string>();
   const place = ref<Place | null>(stored?.place ?? null);
   const home = ref<Place | null>(stored?.home ?? null);
   const key = ref(stored?.key ?? newKey());
@@ -202,6 +207,7 @@ export default function (
       place_code: form.place_code,
       home_code: form.home_same ? form.place_code : form.home_code,
       count: single ? Number(form.count) || 1 : 1,
+      ean: form.ean.trim(),
       capture_key: key.value,
     };
     for (const [name, value] of Object.entries(values)) {
@@ -214,9 +220,13 @@ export default function (
       );
     }
     if (withPhotos) {
-      for (const photo of photos.value) {
-        body.append("photos[]", photo);
-      }
+      photos.value.forEach((photo, index) => {
+        body.append(`photos[${index}]`, photo);
+        const reference = photoRefs.get(photo);
+        if (reference) {
+          body.append(`photo_refs[${index}]`, reference);
+        }
+      });
     }
     return body;
   };
@@ -338,6 +348,7 @@ export default function (
       notes: keep.notes,
       label_hint: keep.label_hint,
       count: keep.count,
+      ean: keep.ean,
     });
     photos.value = [];
     photosLost.value = false;
@@ -363,6 +374,7 @@ export default function (
   return {
     form,
     photos,
+    photoRefs,
     photosLost,
     place,
     home,

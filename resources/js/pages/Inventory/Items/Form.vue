@@ -39,6 +39,14 @@
             hint="Kurzer Text, den Vorlagen mit {hint} drucken. Leer: Das Element bleibt weg."
             :error="form.errors.label_hint"
           />
+          <UiInput
+            v-model="form.ean"
+            label="EAN"
+            inputmode="numeric"
+            placeholder="z. B. 4006381333931"
+            hint="Barcode der Verpackung. Damit findet das Erfassen den Gegenstand beim nächsten Scan."
+            :error="form.errors.ean"
+          />
         </template>
       </InventoryItemFields>
     </UiCard>
@@ -121,6 +129,7 @@ const props = defineProps<{
     public_contents: boolean;
     notes: string | null;
     label_hint: string | null;
+    ean: string | null;
     home: Place | null;
   } | null;
   // number of a scanned stock label the new item gets
@@ -146,6 +155,7 @@ const form = useForm({
   public_contents: props.item?.public_contents ?? true,
   notes: props.item?.notes ?? "",
   label_hint: props.item?.label_hint ?? "",
+  ean: props.item?.ean ?? "",
   reserved_number: props.reservedNumber ?? null,
   // "gut" if it exists, otherwise the first condition
   condition_id:

@@ -28,11 +28,12 @@ class CreateItems
     /**
      * @param  array<string, mixed>  $data  fields of the item, see CreateItem
      * @param  list<UploadedFile>  $photos
+     * @param  array<int, array<string, string|null>|null>  $photoSources  origin of photos from product databases, by the keys of $photos
      * @return list<Item> the new items in the order of their numbers
      *
      * @throws ValidationException
      */
-    public function handle(User $actor, array $data, ItemCondition $condition, Location|Item|null $place, Location|Item|null $home, array $photos, int $count): array
+    public function handle(User $actor, array $data, ItemCondition $condition, Location|Item|null $place, Location|Item|null $home, array $photos, int $count, array $photoSources = []): array
     {
         if ($count < 1 || $count > self::MAX_COUNT) {
             throw ValidationException::withMessages(['count' => 'Es gehen 1 bis '.self::MAX_COUNT.' Stück auf einmal.']);
@@ -41,8 +42,8 @@ class CreateItems
             throw ValidationException::withMessages(['count' => 'Mehrere gleiche Stücke gibt es nur bei Einzelstücken. Für eine Menge wähle „Menge“ und gib die Anzahl dort an.']);
         }
 
-        return DB::transaction(function () use ($actor, $data, $condition, $place, $home, $photos, $count) {
-            $first = $this->createItem->handle($actor, $data, $condition, $place, $home, $photos);
+        return DB::transaction(function () use ($actor, $data, $condition, $place, $home, $photos, $count, $photoSources) {
+            $first = $this->createItem->handle($actor, $data, $condition, $place, $home, $photos, null, $photoSources);
             $items = [$first];
 
             for ($piece = 2; $piece <= $count; $piece++) {

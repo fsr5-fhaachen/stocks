@@ -314,6 +314,27 @@ class InventoryDemo implements DemoPart
         if ($demo->chance(0.04)) {
             $demo->photo($item, $item->name);
         }
+
+        // a third of the single pieces and consumables has the barcode of its packaging; equal
+        // names get the same one, like the same product (no draw, the rest of the data stays as it was)
+        if ($kind !== 'bulk' && $item->id % 3 === 0) {
+            $item->ean = self::demoEan($item->name);
+            Item::whereKey($item->id)->toBase()->update(['ean' => $item->ean]);
+        }
+    }
+
+    /**
+     * A valid EAN-13 made from a name (prefix 40, Germany).
+     */
+    private static function demoEan(string $name): string
+    {
+        $body = '40'.str_pad((string) (crc32($name) % 10_000_000_000), 10, '0', STR_PAD_LEFT);
+        $sum = 0;
+        foreach (array_reverse(str_split($body)) as $position => $digit) {
+            $sum += (int) $digit * ($position % 2 === 0 ? 3 : 1);
+        }
+
+        return $body.((10 - $sum % 10) % 10);
     }
 
     /**

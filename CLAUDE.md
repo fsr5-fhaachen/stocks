@@ -16,7 +16,7 @@ Where to look first; details in `documentation/` (German). Search there before r
 - Settings: `App\Support\Settings` (key/value with defaults in the class), logos and icons `App\Support\Branding`, mail server `MailSettings`, audit log `app/Support/Audit` (models implement `AuditSubject`).
 - Notifications: base class `App\Notifications\StocksNotification` (one `NotificationMessage` for mail and push), events in `NotificationEvents`, mail frame `MailLayout` with theme `resources/views/mail/stocks.blade.php`.
 - Labels: data of a label `app/Support/Labels/LabelData`, short links `ShortLink` (`/s/{code}`), drawing and printing in the browser `resources/js/labels` (`render.ts`, `drivers/`), shared print flow `composables/useLabelPrinting.ts`.
-- Guided capture ("Erfassen"): `CaptureController`, page `Inventory/Capture.vue`, state `composables/useCapture.ts`, steps `components/inventory/capture/`, step line `UiSteps` (also loan issue and return), fields `InventoryItemFields` (also the item form).
+- Guided capture ("Erfassen"): `CaptureController`, page `Inventory/Capture.vue`, state `composables/useCapture.ts`, steps `components/inventory/capture/`, step line `UiSteps` (also loan issue and return), fields `InventoryItemFields` (also the item form). Barcode of the packaging: `app/Support/Products` (`Gtin`, `ProductLookup` with sources `UpcItemDb`, `OpenFacts`, `ImageFetcher` for public addresses only), card `InventoryCaptureProductLookup`, setting `inventory.product_lookup`.
 - Kiosk and other surfaces: `App\Support\Surface` (`Surface::route()`, `link()`, `finish()`); pages use `useSurface()`.
 - Demo data: `app/Support/Demo` (`DemoGenerator`, `DemoContext`, `InventoryDemo`, `TestSheet`), module parts `modules/*/Support/*Demo.php`.
 
