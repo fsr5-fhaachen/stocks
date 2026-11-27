@@ -9,6 +9,7 @@ Etiketten, Kurzlinks, Kamera-Scan und die Box-Inhaltsliste als PDF stehen in [LA
 - [Begriffe](#begriffe)
 - [Standorte und Kennziffern](#standorte-und-kennziffern)
 - [Gegenstände, Boxen, Mengenartikel](#gegenstände-boxen-mengenartikel)
+- [Erfassen](#erfassen)
 - [Artikelnummern](#artikelnummern)
 - [Umlagern und Bewegungsprotokoll](#umlagern-und-bewegungsprotokoll)
 - [Zustand](#zustand)
@@ -73,6 +74,26 @@ Ort und Stammplatz zeigen jeweils auf einen Standort **oder** eine Box (`locatio
 **„Ohne Platz“** listet Gegenstände ohne Ort und solche mit Stammplatz, die nicht dort liegen (`Item::misplaced()`). Gegenstände, die ein Modul bewusst unterwegs hat, fehlen dort (seit Review Phase 5, `ItemExtensions::misplaced()` mit `withoutAway()`): der Verleih nimmt ausgegebene Gegenstände heraus. Zurück, aber noch nicht eingeräumt, und vermisst stehen wieder dort. Dasselbe gilt für die Zahl auf dem Dashboard.
 
 **Nach Boxen gruppieren.** Schalter in „Gegenstände“ und „Ohne Platz“, seit v0.1.1 standardmäßig an. Die Wahl merkt sich der Server je Gerät und Liste in einem Cookie (`stocks_items_grouped`, `stocks_misplaced_grouped`, `ItemsTable::wantsGrouping()`): der Parameter `grouped` gewinnt und setzt das Cookie, sonst gilt das Cookie, sonst an; „aus“ schickt die Seite deshalb ausdrücklich als `grouped=0`. An: oben stehen nur Gegenstände, deren Box nicht selbst in der Liste steht, Boxen mit der Zahl ihres direkten Inhalts; der Pfeil klappt den Inhalt auf (`GET /inventory/items/{box}/contents`, höchstens 200 Zeilen, danach „… und N weitere“ mit Link zur Box), auch Boxen in Boxen. Mit Suche oder Filter ist die Liste flach (`ItemsTable::isGrouped()`). Der Inhalt wird neu geladen, wenn sich die Zeile der Box ändert oder sie neu aufgeklappt wird.
+
+## Erfassen
+
+Geführter Ablauf zum Anlegen vieler Gegenstände (seit 27.11.2026, Entscheidungen von Maurice), Eintrag „Erfassen“ in der Navigation, am Handy in der unteren Leiste. Recht `inventory.edit` wie das Formular, das für Bearbeiten, Einzelfälle und Etiketten auf Vorrat bleibt. Nicht am Kiosk.
+
+**Schritte** mit Fortschrittsbalken oben (`UiSteps`, wie Ausgabe und Rückgabe):
+
+1. **Daten:** Pflichtfelder wie im Formular (`InventoryItemFields`, Regeln aus `App\Support\Inventory\ItemInput`), dazu bei Einzelstücken „Anzahl gleicher Stücke“ (1–50). Beschreibung, Notiz, „Ist eine Box“ und „Inhalt öffentlich zeigen“ unter „Mehr“. Oben bleibt Platz für den späteren Barcode-Scan der Verpackung.
+2. **Bilder:** optional, „Überspringen“; bei mehreren Stücken bekommt jedes eine Kopie.
+3. **Ort:** QR-Code scannen oder Kennziffer tippen; Häkchen „Auch als Stammplatz“ (Vorgabe an). Ohne Häkchen kommt **Stammplatz** als eigener Schritt dazu, damit auf jeder Seite nur ein Scanner läuft. Ohne Ort darf man anlegen, die Übersicht warnt.
+4. **Etikett** (nur mit `labels.print`): Vorschau im Editor mit den eingegebenen Daten und der Nummer als Platzhalter (`FSR5-000000`, `POST /inventory/capture/preview`, `LabelData::forDraft()`), Vorlage für Gegenstand bzw. Box, Hinweis fürs Etikett, Kopien je Stück, Drucker und „Verbinden“.
+5. **Übersicht:** alles in Blöcken mit „Ändern“, das Etikett nur als Bild (`LabelsPreview`).
+
+Der letzte Knopf heißt „Erstellen und drucken“, wenn gleich gedruckt werden kann (Papier oder verbundener Niimbot), sonst „Erstellen“. `POST /inventory/capture` antwortet mit JSON (Gegenstände und ihre Etikettendaten), die Seite bleibt im Ablauf. Mehrere Stücke legt `CreateItems` in einer Transaktion an, fortlaufende Nummern, alles oder nichts. Eine zufällige `capture_key` je Durchlauf verhindert doppeltes Anlegen: Der Server merkt sich die Ids 30 Minuten im Cache und antwortet bei Wiederholung mit denselben Gegenständen (`Cache::lock` gegen gleichzeitige Anfragen).
+
+**Etikettiert** gilt ein Gegenstand nur nach erfolgreichem Direktdruck (bei Abbruch oder Fehler nur die gedruckten) oder mit dem Häkchen „Etikett wurde aufgeklebt“ in der Ergebnis-Ansicht (Papier, Bild für die Niimbot-App; Vorgabe aus). Ohne `labels.print` wird nur angelegt, der Gegenstand bleibt „noch ohne Etikett“.
+
+**Danach:** „Nächster Gegenstand“ behält Kategorie, Art, Einheit, Zustand, Ort und Stammplatz, Vorlage und Drucker und leert Name, Beschreibung, Notiz, Hinweis, Fotos und Anzahl. „Fertig“ zeigt die **Runde**: alles, was in diesem Tab erfasst wurde, mit Druckstatus und „Etiketten drucken“ für den Rest. Formular, Schritt und Runde liegen im `sessionStorage` (`useCapture`); neu laden behält sie, nur die Fotos muss man neu wählen.
+
+**Mengenartikel oder mehrere Einzelstücke:** Ist egal, welches Stück jemand bekommt, und muss man es nicht einzeln wiedererkennen: Menge (eine Nummer, ein Etikett). Sonst Einzelstücke (je Stück Nummer, Etikett, Zustand und Ort). Das Erfassen legt nie abgeteilte Teile an.
 
 ## Artikelnummern
 
@@ -169,9 +190,10 @@ Die Spalten sind die Vorgabe der Startrollen in `config/stocks.php`; danach änd
 | `app/Models` | `Location`, `Category`, `Item`, `ItemCondition`, `ItemPhoto`, `ItemMovement`, `ItemConditionChange` |
 | `app/Enums` | `LocationType`, `ItemKind`, `RetireReason`, `MovementType` mit deutschen Bezeichnungen |
 | `app/Actions/Inventory` | ein Vorgang je Klasse, siehe Tabellen oben |
-| `app/Support/Inventory` | `ItemNumbers` (Nummern, Prüfziffer), `CodeLookup` (Code → Gegenstand oder Standort), `Placement` (Regeln für Boxen) |
+| `app/Support/Inventory` | `ItemNumbers` (Nummern, Prüfziffer, Platzhalter), `CodeLookup` (Code → Gegenstand oder Standort), `Placement` (Regeln für Boxen), `ItemInput` (Regeln und Felder von Formular und Erfassen) |
 | `app/Support/Table/ItemsTable.php` | Liste mit Suche, Filtern und Live-Update |
-| `app/Http/Controllers/Inventory` | Seiten und JSON-Endpunkte (`lookup`, `places`, `stats`) |
+| `app/Http/Controllers/Inventory` | Seiten und JSON-Endpunkte (`lookup`, `places`, `stats`); `CaptureController` für das Erfassen |
+| `resources/js/pages/Inventory/Capture.vue`, `composables/useCapture.ts`, `components/inventory/capture/` | Erfassen |
 | `resources/js/pages/Inventory` | Seiten; Bausteine in `resources/js/components/inventory` |
 | `tests/Feature/Inventory` | Tests je Regel |
 | `database/seeders/InventorySeeder.php` | Demo-Inventar |

@@ -24,6 +24,7 @@ use App\Models\Location;
 use App\Models\ReservedNumber;
 use App\Support\Extensions\ItemExtensions;
 use App\Support\Inventory\CodeLookup;
+use App\Support\Inventory\ItemInput;
 use App\Support\Labels\ShortLink;
 use App\Support\Surface;
 use App\Support\Table\ItemsTable;
@@ -41,7 +42,7 @@ use Inertia\Response;
  */
 class ItemController extends Controller
 {
-    public function __construct(private readonly CodeLookup $codes, private readonly ItemExtensions $extensions) {}
+    public function __construct(private readonly CodeLookup $codes, private readonly ItemExtensions $extensions, private readonly ItemInput $input) {}
 
     /**
      * Display all items.
@@ -73,11 +74,7 @@ class ItemController extends Controller
     public function store(Request $request, CreateItem $createItem): RedirectResponse
     {
         $validated = $request->validate([
-            ...$this->rules(),
-            'condition_id' => ['required', 'integer', 'exists:item_conditions,id'],
-            'place_code' => ['nullable', 'string', 'max:50'],
-            'photos' => ['array', 'max:'.ItemPhoto::MAX_PER_ITEM],
-            'photos.*' => ItemPhotoController::fileRules(),
+            ...$this->input->createRules(),
             'reserved_number' => ['nullable', 'string', 'max:30'],
         ]);
 
@@ -89,10 +86,10 @@ class ItemController extends Controller
 
         $item = $createItem->handle(
             $request->user(),
-            $this->itemData($validated),
+            $this->input->data($validated),
             ItemCondition::findOrFail($validated['condition_id']),
-            $this->placeOf($validated['place_code'] ?? null, 'place_code'),
-            $this->placeOf($validated['home_code'] ?? null, 'home_code'),
+            $this->input->place($validated['place_code'] ?? null, 'place_code'),
+            $this->input->place($validated['home_code'] ?? null, 'home_code'),
             $request->file('photos', []),
             $reserved,
         );
@@ -155,9 +152,9 @@ class ItemController extends Controller
      */
     public function update(Request $request, Item $item, UpdateItem $updateItem): RedirectResponse
     {
-        $validated = $request->validate($this->rules());
+        $validated = $request->validate($this->input->rules());
 
-        $updateItem->handle($request->user(), $item, $this->itemData($validated), $this->placeOf($validated['home_code'] ?? null, 'home_code'));
+        $updateItem->handle($request->user(), $item, $this->input->data($validated), $this->input->place($validated['home_code'] ?? null, 'home_code'));
 
         return to_route('inventory.items.show', $item)->with('success', "{$item->number} wurde gespeichert.");
     }
@@ -411,59 +408,6 @@ class ItemController extends Controller
             'maxPhotos' => ItemPhoto::MAX_PER_ITEM,
             'conditions' => ItemCondition::options(),
         ]);
-    }
-
-    /**
-     * Validation rules of the item fields.
-     *
-     * @return array<string, mixed>
-     */
-    private function rules(): array
-    {
-        return [
-            'name' => ['required', 'string', 'max:150'],
-            'description' => ['nullable', 'string', 'max:5000'],
-            'category_id' => ['nullable', 'integer', 'exists:categories,id'],
-            'kind' => ['required', Rule::enum(ItemKind::class)],
-            'quantity' => ['required_if:kind,bulk', 'nullable', 'integer', 'min:0', 'max:1000000'],
-            'unit' => ['nullable', 'string', 'exists:item_units,name'],
-            'is_container' => ['boolean'],
-            'public_contents' => ['boolean'],
-            'notes' => ['nullable', 'string', 'max:5000'],
-            'label_hint' => ['nullable', 'string', 'max:100'],
-            'home_code' => ['nullable', 'string', 'max:50'],
-        ];
-    }
-
-    /**
-     * Fields of the item itself from the validated input.
-     *
-     * @param  array<string, mixed>  $validated
-     * @return array<string, mixed>
-     */
-    private function itemData(array $validated): array
-    {
-        return [
-            ...array_intersect_key($validated, array_flip(['name', 'description', 'category_id', 'kind', 'unit', 'notes', 'label_hint'])),
-            'quantity' => $validated['quantity'] ?? 1,
-            'is_container' => $validated['is_container'] ?? false,
-            'public_contents' => $validated['public_contents'] ?? true,
-        ];
-    }
-
-    /**
-     * Find the place of a code, null for an empty code.
-     *
-     * @throws ValidationException
-     */
-    private function placeOf(?string $code, string $field): Location|Item|null
-    {
-        if ($code === null || trim($code) === '') {
-            return null;
-        }
-
-        return $this->codes->findPlace($code)
-            ?? throw ValidationException::withMessages([$field => $this->codes->notFoundMessage($code, place: true)]);
     }
 
     /**

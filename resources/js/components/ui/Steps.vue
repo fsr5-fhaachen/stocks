@@ -50,7 +50,7 @@
 
 <script setup lang="ts">
 /**
- * Step line of issue and return: steps before the current one are done and can be opened again,
+ * Step line of a guided task (loan issue and return, capturing items): steps before the current one are done and can be opened again,
  * later steps only up to "reachable" (e.g. the signatures once everything is ticked off).
  */
 defineProps<{ steps: string[]; current: number; reachable: number }>();

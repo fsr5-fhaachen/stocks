@@ -9,13 +9,14 @@
 Where to look first; details in `documentation/` (German). Search there before reading code.
 
 **Core (`app/`)**
-- Business logic lives in actions (`app/Actions/<Area>`, `modules/<Module>/Actions`), controllers stay thin. Inventory: `CreateItem`, `UpdateItem`, `MoveItem` (also `takeAway()` for modules), `MergeItem`, `RetireItem`, `ChangeItemCondition`, `SaveLocation` (levels, full codes of the subtree), `DeleteLocation`.
-- Rules without a database write: `app/Support/Inventory` (`Placement::check`, `CodeLookup` finds items and locations by code, `ItemNumbers`).
+- Business logic lives in actions (`app/Actions/<Area>`, `modules/<Module>/Actions`), controllers stay thin. Inventory: `CreateItem`, `CreateItems` (equal pieces of the guided capture), `UpdateItem`, `MoveItem` (also `takeAway()` for modules), `MergeItem`, `RetireItem`, `ChangeItemCondition`, `SaveLocation` (levels, full codes of the subtree), `DeleteLocation`.
+- Rules without a database write: `app/Support/Inventory` (`Placement::check`, `CodeLookup` finds items and locations by code, `ItemNumbers`, `ItemInput` rules and fields shared by item form and capture).
 - Lists with infinite scroll, search, sorting and live update: `app/Support/Table/Table.php`, one subclass per list (`ItemsTable`, `UsersTable`, `Modules\Loans\Support\LoansTable`), frontend `components/ui/Table.vue` (`UiTable`). See `documentation/TABLE_POLLING.md`.
 - Extension points for modules: `app/Support/Extensions` (`Navigation`, `DashboardTiles`, `ItemExtensions` with `ItemInfoProvider` and `ItemAwayProvider`, `SurfaceRoutes`, `DemoData`). The core never imports a module; modules register in their service provider. See `documentation/MODULES.md`.
 - Settings: `App\Support\Settings` (key/value with defaults in the class), logos and icons `App\Support\Branding`, mail server `MailSettings`, audit log `app/Support/Audit` (models implement `AuditSubject`).
 - Notifications: base class `App\Notifications\StocksNotification` (one `NotificationMessage` for mail and push), events in `NotificationEvents`, mail frame `MailLayout` with theme `resources/views/mail/stocks.blade.php`.
 - Labels: data of a label `app/Support/Labels/LabelData`, short links `ShortLink` (`/s/{code}`), drawing and printing in the browser `resources/js/labels` (`render.ts`, `drivers/`), shared print flow `composables/useLabelPrinting.ts`.
+- Guided capture ("Erfassen"): `CaptureController`, page `Inventory/Capture.vue`, state `composables/useCapture.ts`, steps `components/inventory/capture/`, step line `UiSteps` (also loan issue and return), fields `InventoryItemFields` (also the item form).
 - Kiosk and other surfaces: `App\Support\Surface` (`Surface::route()`, `link()`, `finish()`); pages use `useSurface()`.
 - Demo data: `app/Support/Demo` (`DemoGenerator`, `DemoContext`, `InventoryDemo`, `TestSheet`), module parts `modules/*/Support/*Demo.php`.
 
