@@ -156,15 +156,18 @@
           isActive(entry) ? 'text-accent' : 'text-ink-muted',
         ]"
       >
-        <FontAwesomeIcon :icon="['fas', entry.icon]" class="h-5 w-5" />
-        {{ entry.title }}
+        <FontAwesomeIcon :icon="['fas', entry.icon]" :class="barIcon" />
+        <!-- on very narrow phones (320 px) a long title is cut instead of pushing the others -->
+        <span class="max-w-full truncate px-0.5" :title="entry.title">{{
+          entry.title
+        }}</span>
       </InertiaLink>
       <button
         type="button"
         class="flex min-h-[var(--bottom-bar)] flex-col items-center justify-center gap-1 text-xs text-ink-muted"
         @click="moreOpen = true"
       >
-        <FontAwesomeIcon :icon="['fas', 'bars']" class="h-5 w-5" />
+        <FontAwesomeIcon :icon="['fas', 'bars']" :class="barIcon" />
         Mehr
       </button>
     </nav>
@@ -234,6 +237,10 @@ const mobileEntries = computed(() =>
     .flatMap((entry) => entry.children ?? [entry])
     .filter((entry) => entry.mobile)
     .slice(0, 4),
+);
+// five places (four entries and "Mehr") get smaller icons, so the titles keep their room
+const barIcon = computed(() =>
+  mobileEntries.value.length >= 4 ? "h-4 w-4" : "h-5 w-5",
 );
 
 // the entry with the longest matching address is active

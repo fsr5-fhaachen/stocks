@@ -25,6 +25,7 @@ use OwenIt\Auditing\Contracts\Auditable;
  *
  * @property int $id
  * @property string $number
+ * @property string|null $ean barcode of the packaging (App\Support\Products\Gtin), found again on the next scan
  * @property string $name
  * @property string|null $description
  * @property int|null $category_id
@@ -69,6 +70,7 @@ class Item extends Model implements Auditable, AuditSubject
         'public_contents',
         'notes',
         'label_hint',
+        'ean',
     ];
 
     /**
@@ -375,6 +377,7 @@ class Item extends Model implements Auditable, AuditSubject
             'retired_reason' => 'Grund',
             'retired_note' => 'Notiz zum Ausmustern',
             'label_hint' => 'Hinweis fürs Etikett',
+            'ean' => 'EAN',
             'history' => 'Verlaufseintrag',
         ];
     }

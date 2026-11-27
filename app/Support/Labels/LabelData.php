@@ -7,8 +7,10 @@ use App\Enums\LabelTarget;
 use App\Models\Item;
 use App\Models\Location;
 use App\Models\ReservedNumber;
+use App\Support\Inventory\ItemNumbers;
 use App\Support\Settings;
 use App\Support\Surface;
+use Illuminate\Database\Eloquent\Collection;
 
 /**
  * Data of one label: the code for the short link and the values of the variables of the templates.
@@ -16,7 +18,7 @@ use App\Support\Surface;
  */
 class LabelData
 {
-    public function __construct(private readonly ShortLink $links, private readonly Settings $settings) {}
+    public function __construct(private readonly ShortLink $links, private readonly Settings $settings, private readonly ItemNumbers $numbers) {}
 
     /**
      * Label of an item or a box.
@@ -26,9 +28,39 @@ class LabelData
     public function forItem(Item $item): array
     {
         $item->loadMissing(['category.parent', 'condition', 'location', 'container', 'homeLocation', 'homeContainer', 'photos']);
+
+        return $this->itemLabel($item, "item-{$item->id}", [
+            'photo_url' => ($photo = $item->photos->first()) ? Surface::route('inventory.photos.show', $photo) : null,
+            'printed_at' => $item->label_printed_at?->toIso8601String(),
+        ]);
+    }
+
+    /**
+     * Label of an item that is not saved yet (preview of the guided capture). The number is a
+     * placeholder with the prefix of new numbers; the browser shows the chosen photo itself.
+     *
+     * @return array<string, mixed>
+     */
+    public function forDraft(Item $item): array
+    {
+        $item->number = $this->numbers->placeholder();
+        $item->setRelation('photos', new Collection);
+        $item->loadMissing(['category.parent', 'condition', 'location', 'container', 'homeLocation', 'homeContainer']);
+
+        return $this->itemLabel($item, 'draft');
+    }
+
+    /**
+     * Label data of an item or a box, saved or not.
+     *
+     * @param  array<string, mixed>  $extra
+     * @return array<string, mixed>
+     */
+    private function itemLabel(Item $item, string $key, array $extra = []): array
+    {
         $target = $item->is_container ? LabelTarget::Box : LabelTarget::Item;
 
-        return $this->label($target, "item-{$item->id}", $item->id, $item->number, $item->name, [
+        return $this->label($target, $key, $item->id, $item->number, $item->name, [
             'name' => $item->name,
             'number' => $item->number,
             'category' => $item->category?->fullName() ?? '',
@@ -38,11 +70,8 @@ class LabelData
             'description' => (string) $item->description,
             'condition' => $item->condition->name,
             'hint' => (string) $item->label_hint,
-            'count' => $item->is_container ? (string) $item->contents()->active()->count() : '',
-        ], [
-            'photo_url' => ($photo = $item->photos->first()) ? Surface::route('inventory.photos.show', $photo) : null,
-            'printed_at' => $item->label_printed_at?->toIso8601String(),
-        ]);
+            'count' => $item->is_container ? ($item->exists ? (string) $item->contents()->active()->count() : '0') : '',
+        ], $extra);
     }
 
     /**
@@ -79,7 +108,7 @@ class LabelData
      * @param  array<string, mixed>  $extra
      * @return array<string, mixed>
      */
-    private function label(LabelTarget $target, string $key, int $id, string $code, string $title, array $values, array $extra = []): array
+    private function label(LabelTarget $target, string $key, ?int $id, string $code, string $title, array $values, array $extra = []): array
     {
         $url = $this->links->url($code);
 

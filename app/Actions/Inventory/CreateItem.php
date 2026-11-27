@@ -29,14 +29,15 @@ class CreateItem
      * @param  array{name: string, description?: string|null, category_id?: int|null, kind: string, quantity?: int|null, unit?: string|null, is_container?: bool, public_contents?: bool, notes?: string|null}  $data
      * @param  list<UploadedFile>  $photos  photos of the gallery
      * @param  ReservedNumber|null  $reserved  number of a stock label, used up by this item
+     * @param  array<int, array<string, string|null>|null>  $photoSources  origin of photos from product databases, by the keys of $photos
      */
-    public function handle(User $actor, array $data, ItemCondition $condition, Location|Item|null $place, Location|Item|null $home, array $photos = [], ?ReservedNumber $reserved = null): Item
+    public function handle(User $actor, array $data, ItemCondition $condition, Location|Item|null $place, Location|Item|null $home, array $photos = [], ?ReservedNumber $reserved = null, array $photoSources = []): Item
     {
         $item = new Item($data);
         Placement::check($item, $place, 'place');
         Placement::check($item, $home, 'home');
 
-        return DB::transaction(function () use ($actor, $item, $condition, $place, $home, $photos, $reserved) {
+        return DB::transaction(function () use ($actor, $item, $condition, $place, $home, $photos, $reserved, $photoSources) {
             // single pieces always have the quantity 1
             if ($item->kind === ItemKind::Single) {
                 $item->quantity = 1;
@@ -51,7 +52,7 @@ class CreateItem
             ItemMovement::record($item, MovementType::Create, null, $place, $actor);
 
             // throws if S3 can not store the photos; the transaction then also drops the item
-            ItemPhoto::uploadAll($item, $photos);
+            ItemPhoto::uploadAll($item, $photos, null, $photoSources);
 
             return $item;
         });

@@ -216,7 +216,7 @@ class ItemsTable extends Table
      */
     protected function searchColumns(): array
     {
-        return ['number', 'name', 'description', 'category.name', 'location.full_code', 'container.number'];
+        return ['number', 'ean', 'name', 'description', 'category.name', 'location.full_code', 'container.number'];
     }
 
     /**

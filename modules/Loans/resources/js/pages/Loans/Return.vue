@@ -11,7 +11,7 @@
     >
   </UiPageHeader>
 
-  <LoansSteps
+  <UiSteps
     :steps="steps.map((entry) => entry.label)"
     :current="step"
     :reachable="reachable"
@@ -322,7 +322,6 @@ import { router, useForm, usePage } from "@inertiajs/vue3";
 import type { LoanSummary } from "../../http";
 import LoansScanInput from "../../components/ScanInput.vue";
 import LoansSignaturePad from "../../components/SignaturePad.vue";
-import LoansSteps from "../../components/Steps.vue";
 
 const { kiosk, url } = useSurface();
 

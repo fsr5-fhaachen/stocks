@@ -130,6 +130,10 @@
             <dt class="text-sm text-ink-muted">Artikelnummer</dt>
             <dd class="font-mono font-semibold">{{ item.number }}</dd>
           </div>
+          <div v-if="item.ean">
+            <dt class="text-sm text-ink-muted">EAN</dt>
+            <dd class="font-mono">{{ item.ean }}</dd>
+          </div>
           <div>
             <dt class="text-sm text-ink-muted">Art</dt>
             <dd>
@@ -374,6 +378,34 @@
                   ]"
                 />
               </a>
+              <!-- photo from a product database: credit as small as its licence allows -->
+              <template v-if="photo.credit">
+                <button
+                  type="button"
+                  class="absolute bottom-1.5 right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/40 text-[10px] text-white/90 hover:bg-black/60"
+                  :aria-label="creditText(photo.credit)"
+                  :aria-expanded="shownCredit === photo.id"
+                  @click="
+                    shownCredit = shownCredit === photo.id ? null : photo.id
+                  "
+                >
+                  <FontAwesomeIcon :icon="['fas', 'copyright']" />
+                </button>
+                <p
+                  v-if="shownCredit === photo.id"
+                  class="absolute inset-x-1.5 bottom-8 rounded bg-black/75 px-2 py-1 text-xs text-white"
+                >
+                  {{ creditText(photo.credit) }}
+                  <a
+                    v-if="photo.credit.url"
+                    :href="photo.credit.url"
+                    target="_blank"
+                    rel="noopener"
+                    class="underline"
+                    >Quelle</a
+                  >
+                </p>
+              </template>
               <span
                 v-if="index === 0"
                 class="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-accent px-2.5 py-1 text-xs font-semibold text-white shadow ring-2 ring-white"
@@ -606,7 +638,14 @@
 import { computed, ref } from "vue";
 import { Link as InertiaLink, router, useForm, usePage } from "@inertiajs/vue3";
 
-type Photo = { id: number; url: string };
+type PhotoCredit = {
+  source: string;
+  author: string | null;
+  license: string | null;
+  url: string | null;
+  host: string | null;
+};
+type Photo = { id: number; url: string; credit?: PhotoCredit | null };
 
 /**
  * Detail page of an item: data, place, contents, photos and history.
@@ -615,6 +654,7 @@ type Props = {
   item: {
     id: number;
     number: string;
+    ean: string | null;
     name: string;
     description: string | null;
     kind: "single" | "bulk";
@@ -672,6 +712,13 @@ const props = defineProps<Props>();
 
 const page = usePage<SharedProps>();
 const { can } = usePermissions();
+
+// credit of photos from product databases ("©" on the photo)
+const shownCredit = ref<number | null>(null);
+const creditText = (credit: PhotoCredit) =>
+  credit.license
+    ? `Foto: ${credit.author ?? credit.source}, ${credit.license}`
+    : `Bild über ${credit.source}${credit.host ? `, Quelle: ${credit.host}` : ""}`;
 const { compressImages } = useImageCompression();
 
 // a module locks the item, e.g. while it is lent out

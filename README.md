@@ -148,6 +148,7 @@ PHP und Node laufen direkt auf dem Rechner. Datenbank, Redis und MinIO kann man 
 
 - **PHP 8.5** mit den Erweiterungen `bcmath`, `gd`, `mbstring`, `pdo_mysql` (oder `pdo_sqlite`), `zip`, optional `redis` und `gmp` (schnellerer Web-Push).
   - Windows: [windows.php.net](https://windows.php.net/download/) oder [Laravel Herd](https://herd.laravel.com/); die Erweiterungen in der `php.ini` einschalten.
+    PHP von windows.php.net bringt keine Liste vertrauenswürdiger Zertifizierungsstellen mit; ohne sie scheitert jede HTTPS-Abfrage nach außen (z. B. Produktdaten beim Erfassen: „cURL error 60“). [`cacert.pem`](https://curl.se/docs/caextract.html) herunterladen und in der `php.ini` `curl.cainfo` und `openssl.cafile` auf die Datei setzen.
   - macOS: `brew install php` oder Laravel Herd.
   - Linux: Pakete der Distribution, z. B. `ppa:ondrej/php` unter Ubuntu.
 - [Composer 2](https://getcomposer.org/download/) und **Node 24** (z. B. über [nvm](https://github.com/nvm-sh/nvm) bzw. [nvm-windows](https://github.com/coreybutler/nvm-windows)).

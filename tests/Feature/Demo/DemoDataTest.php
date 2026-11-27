@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Support\Demo\DemoGenerator;
 use App\Support\Demo\InventoryDemo;
 use App\Support\Demo\TestSheet;
+use App\Support\Products\Gtin;
 use App\Support\Settings;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -59,6 +60,8 @@ class DemoDataTest extends TestCase
         $this->assertTrue(Item::whereNull('label_printed_at')->exists(), 'without label');
         $this->assertTrue(Item::whereNotNull('label_hint')->exists(), 'with hint');
         $this->assertTrue(Item::has('photos')->exists(), 'with photos');
+        $this->assertTrue(Item::whereNotNull('ean')->exists(), 'with barcode of the packaging');
+        $this->assertTrue(Item::whereNotNull('ean')->get()->every(fn (Item $item) => Gtin::normalize($item->ean) === $item->ean), 'valid barcodes');
         $this->assertTrue(ReservedNumber::open()->exists(), 'reserved number');
         // one account per start role besides the admin (the account of the download above does not count)
         $this->assertSame(count(config('stocks.start_roles')) + 1, User::where('email', 'like', '%@example.com')->whereKeyNot($user->id)->count());

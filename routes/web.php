@@ -11,6 +11,7 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\BrandingController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Inventory\CaptureController;
 use App\Http\Controllers\Inventory\CategoryController;
 use App\Http\Controllers\Inventory\ConditionController;
 use App\Http\Controllers\Inventory\ContentsPdfController;
@@ -103,6 +104,13 @@ Route::middleware('auth')->group(function () {
         Route::get('/items/{item}/contents.pdf', [ContentsPdfController::class, 'show'])->name('items.contents-pdf');
 
         Route::middleware('can:inventory.edit')->group(function () {
+            // guided capture: data, photos, place, label, create and print (documentation/INVENTORY.md)
+            Route::get('/capture', [CaptureController::class, 'show'])->name('capture');
+            Route::post('/capture/preview', [CaptureController::class, 'preview'])->name('capture.preview');
+            Route::post('/capture', [CaptureController::class, 'store'])->name('capture.store');
+            Route::get('/capture/product', [CaptureController::class, 'product'])->middleware('throttle:30,1')->name('capture.product');
+            Route::get('/capture/product/{gtin}/images/{index}', [CaptureController::class, 'productImage'])
+                ->whereNumber(['gtin', 'index'])->middleware('throttle:60,1')->name('capture.product-image');
             Route::get('/items/create', [ItemController::class, 'create'])->name('items.create');
             Route::post('/items', [ItemController::class, 'store'])->name('items.store');
             Route::get('/items/{item}/edit', [ItemController::class, 'edit'])->name('items.edit');

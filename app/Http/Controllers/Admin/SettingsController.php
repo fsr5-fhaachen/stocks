@@ -52,6 +52,8 @@ class SettingsController extends Controller
             'legal.contact_email' => ['nullable', 'email'],
             // new numbers only, existing numbers never change
             'inventory.number_prefix' => ['nullable', 'regex:/^[A-Z0-9]{1,6}$/'],
+            // product data by barcode in the guided capture, asks outside databases
+            'inventory.product_lookup' => ['boolean'],
             // address in the codes of labels; old labels keep the old address
             'labels.base_url' => ['nullable', 'url:http,https', 'max:100'],
         ], ['inventory.number_prefix.regex' => 'Das Präfix hat 1 bis 6 Großbuchstaben oder Ziffern.', 'organization.phone.regex' => 'Die Telefonnummer hat nur Ziffern, Leerzeichen und + ( ) / -.']);

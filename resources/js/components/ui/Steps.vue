@@ -7,7 +7,8 @@
         :key="step"
         class="relative flex flex-1 flex-col items-center"
       >
-        <!-- line to the next step -->
+        <!-- line to the next step; the circle after it in the markup lies on top without a
+             z-index of its own, so it never covers the sticky header of the layout -->
         <span
           v-if="index < steps.length - 1"
           :class="[
@@ -21,7 +22,7 @@
           :disabled="index > reachable || index === current"
           :aria-current="index === current ? 'step' : undefined"
           :class="[
-            'relative z-10 flex h-10 w-10 items-center justify-center rounded-full text-base font-bold ring-4 ring-surface',
+            'relative flex h-10 w-10 items-center justify-center rounded-full text-base font-bold ring-4 ring-surface',
             index < current
               ? 'bg-accent text-white'
               : index === current
@@ -50,7 +51,7 @@
 
 <script setup lang="ts">
 /**
- * Step line of issue and return: steps before the current one are done and can be opened again,
+ * Step line of a guided task (loan issue and return, capturing items): steps before the current one are done and can be opened again,
  * later steps only up to "reachable" (e.g. the signatures once everything is ticked off).
  */
 defineProps<{ steps: string[]; current: number; reachable: number }>();

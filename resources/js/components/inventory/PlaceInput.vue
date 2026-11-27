@@ -53,6 +53,8 @@ const props = defineProps({
 });
 
 const model = defineModel<string>({ default: "" });
+// a suggestion was chosen, e.g. for showing the place elsewhere
+const emit = defineEmits<{ select: [place: Place] }>();
 const { url } = useSurface();
 const selected = ref<Place | null>(props.initial);
 const suggestions = ref<Place[]>([]);
@@ -91,5 +93,6 @@ const choose = (place: Place) => {
   model.value = place.code;
   selected.value = place;
   suggestions.value = [];
+  emit("select", place);
 };
 </script>

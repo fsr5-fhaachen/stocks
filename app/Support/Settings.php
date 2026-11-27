@@ -58,6 +58,8 @@ class Settings
         'mail.encryption' => null,
         // prefix of new item numbers, empty for the short name (see App\Support\Inventory\ItemNumbers)
         'inventory.number_prefix' => null,
+        // product data by barcode in the guided capture (App\Support\Products\ProductLookup)
+        'inventory.product_lookup' => true,
         // address in the codes of labels, empty for APP_URL (see App\Support\Labels\ShortLink)
         'labels.base_url' => null,
         // address that was confirmed before the first print; a hint shows while it differs

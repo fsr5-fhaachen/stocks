@@ -55,7 +55,7 @@ class Navigation
      * @param  string  $icon  name of a Font Awesome solid icon
      * @param  string|null  $permission  permission the user needs to see the entry
      * @param  string|null  $module  key of the module the entry belongs to, hidden while the module is off
-     * @param  bool  $mobile  show the entry in the bar at the bottom of phones (at most four entries fit)
+     * @param  bool  $mobile  show the entry in the bar at the bottom of phones (at most four entries fit beside "Mehr"; the core already uses four, so modules leave this off)
      * @param  int  $order  position within the section (or the group), lower first
      * @param  string|null  $group  key of a group (addGroup) the entry is shown in
      * @param  Closure(): (array{text: string, variant: string}|null)|null  $badge  short status beside the title, e.g. "getrennt"; must be quick (no network)

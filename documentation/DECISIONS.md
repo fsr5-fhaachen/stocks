@@ -2,6 +2,30 @@
 
 Warum Stocks so gebaut ist, wie es gebaut ist. Neue Einträge oben; jeder Eintrag mit Datum, Entscheidung, Grund und verworfener Alternative.
 
+## 2026-11-27 · Barcode der Verpackung beim Erfassen
+
+**Nur kostenlose Quellen, UPCitemdb zuerst** (Entscheidungen von Maurice): UPCitemdb (Free-Plan) kennt Technik am besten, Open Food Facts und Open Products Facts eher Verbrauchsmaterial. Verworfen: EAN-Search (bezahlt, ohne Produktbilder), Go-UPC und Barcode Lookup (bezahlt).
+
+**Bilder auch von UPCitemdb, vom Server heruntergeladen** (Entscheidung von Maurice). Die Bedingungen von UPCitemdb verlangen keine Namensnennung, die Rechte an den Shop-Bildern liegen aber bei Shops und Herstellern; Stocks merkt sich deshalb Quelle und Host je Foto (`item_photos.source_host`), damit sich Bilder eines Shops finden und entfernen lassen. Bilder von Open Food Facts stehen unter CC BY-SA und tragen Urheber und Lizenz.
+
+**Quellenangaben so unauffällig wie erlaubt** (Entscheidung von Maurice): eine kleine Zeile unter dem Treffer, ein kleines „©“ am Foto, nichts in Listen und auf Etiketten.
+
+**EAN am Gegenstand, Vorschläge abwählbar, abschaltbar in den Einstellungen; die Seite „Scannen“ erkennt EANs nicht** (Entscheidungen von Maurice).
+
+**Treffer 30 Tage im Cache, „nichts gefunden“ einen Tag**: schont das Tageslimit von UPCitemdb, ein unbekanntes Produkt wird am nächsten Tag neu gesucht.
+
+## 2026-11-27 · Geführtes Erfassen
+
+**Neue Gegenstände entstehen in einem geführten Ablauf mit Druck am Ende** (Entscheidungen von Maurice, siehe [INVENTORY.md](INVENTORY.md#erfassen)): Einstieg über die Navigation, Schritte Daten → Bilder → Ort (→ Stammplatz) → Etikett → Übersicht, ein Knopf „Erstellen und drucken“. Grund: Beim Einpflegen vieler Gegenstände auf der Live-Instanz war Anlegen und danach Drucken auf einer anderen Seite zu mühsam. Verworfen: das Formular um einen Druckknopf erweitern (bleibt eine lange Seite ohne Führung).
+
+- **Stammplatz** standardmäßig gleich dem Ort; ohne Häkchen ein eigener Schritt, damit nie zwei Scanner auf einer Seite stehen.
+- **Übersicht** zeigt das Etikett nur an; ändern heißt einen Schritt zurück.
+- **Etikettiert** nur nach Direktdruck oder mit dem Häkchen „Etikett wurde aufgeklebt“ (Vorgabe aus); anders als auf der Druckseite zählt ein heruntergeladenes Bild nicht. Ohne `labels.print` wird nur angelegt.
+- **Anzahl gleicher Stücke** nur für Einzelstücke; Mengenartikel bleiben ein Gegenstand.
+- **Keine Etiketten auf Vorrat** im Ablauf (sie tragen keinen Namen), **kein Kiosk** in dieser Runde.
+- **Untere Leiste am Handy mit fünf Plätzen**, mehr nie; die Symbole werden nur bei fünf Plätzen kleiner.
+- Kleinere Festlegungen (Recht `inventory.edit`, höchstens 50 Stücke, was „Nächster Gegenstand“ behält, Runde im `sessionStorage`, `capture_key` gegen doppeltes Anlegen) hat Maurice im Übergabedokument bestätigt.
+
 ## 2026-11-27 · Mengenartikel im Verleih ohne Abteilen
 
 **Ein Mengenartikel wird für eine Buchung nicht mehr abgeteilt** (Entscheidung von Maurice). Die Zeile hält fest, wie viele draußen (`quantity`), zurück (`returned_quantity`) und vermisst (`missing_quantity`) sind; der Gegenstand behält Bestand, Ort und Nummer. Grund: Ein verliehener Teil liegt nirgends und braucht keine eigene Nummer; das Abteilen brauchte Sonderwege (Rückgabe-Scan über den Ursprung, Zurückbuchen beim Einräumen, Rückbuchen vor der Ausgabe, vermisste Teile) und erzeugte Nummern ohne Etikett. Der Kern erfährt über `ItemAwayProvider::awayQuantities()`, wie viele Stücke weg sind, und begrenzt Umlagern einer Teilmenge, Verbrauchen und Ausmustern darauf. Eine beschädigte Teilmenge bleibt eine Notiz am Mangel (Entscheidung von Maurice). Einräumen bestätigt den Ort per Scan, ein anderer Ort wird abgelehnt (Entscheidung von Maurice). Die Migration bucht bestehende abgeteilte Teile in ihren Ursprung zurück (ausgemustert als „zusammengeführt“, Nummer bleibt) und entfernt `issued_item_id`. Verworfen: Abteilen behalten und nur `label_printed_at` beim Teil leeren.

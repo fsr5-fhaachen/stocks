@@ -12,6 +12,7 @@ declare global {
   const isAppleMobile: typeof import('../composables/useFileViewer').isAppleMobile
   const isHomeScreenApp: typeof import('../composables/useFileViewer').isHomeScreenApp
   const useActiveEntry: typeof import('../composables/useActiveEntry').default
+  const useCapture: typeof import('../composables/useCapture').default
   const useColorMode: typeof import('../composables/useColorMode').default
   const useFileViewer: typeof import('../composables/useFileViewer').default
   const useImageCompression: typeof import('../composables/useImageCompression').default
@@ -27,6 +28,9 @@ declare global {
 }
 // for type re-export
 declare global {
+  // @ts-ignore
+  export type { CaptureForm, CaptureStep, CapturedItem } from '../composables/useCapture'
+  import('../composables/useCapture')
   // @ts-ignore
   export type { ViewerFile } from '../composables/useFileViewer'
   import('../composables/useFileViewer')

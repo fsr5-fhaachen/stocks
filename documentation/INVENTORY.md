@@ -9,6 +9,7 @@ Etiketten, Kurzlinks, Kamera-Scan und die Box-Inhaltsliste als PDF stehen in [LA
 - [Begriffe](#begriffe)
 - [Standorte und Kennziffern](#standorte-und-kennziffern)
 - [Gegenstände, Boxen, Mengenartikel](#gegenstände-boxen-mengenartikel)
+- [Erfassen](#erfassen)
 - [Artikelnummern](#artikelnummern)
 - [Umlagern und Bewegungsprotokoll](#umlagern-und-bewegungsprotokoll)
 - [Zustand](#zustand)
@@ -73,6 +74,35 @@ Ort und Stammplatz zeigen jeweils auf einen Standort **oder** eine Box (`locatio
 **„Ohne Platz“** listet Gegenstände ohne Ort und solche mit Stammplatz, die nicht dort liegen (`Item::misplaced()`). Gegenstände, die ein Modul bewusst unterwegs hat, fehlen dort (seit Review Phase 5, `ItemExtensions::misplaced()` mit `withoutAway()`): der Verleih nimmt ausgegebene Gegenstände heraus. Zurück, aber noch nicht eingeräumt, und vermisst stehen wieder dort. Dasselbe gilt für die Zahl auf dem Dashboard.
 
 **Nach Boxen gruppieren.** Schalter in „Gegenstände“ und „Ohne Platz“, seit v0.1.1 standardmäßig an. Die Wahl merkt sich der Server je Gerät und Liste in einem Cookie (`stocks_items_grouped`, `stocks_misplaced_grouped`, `ItemsTable::wantsGrouping()`): der Parameter `grouped` gewinnt und setzt das Cookie, sonst gilt das Cookie, sonst an; „aus“ schickt die Seite deshalb ausdrücklich als `grouped=0`. An: oben stehen nur Gegenstände, deren Box nicht selbst in der Liste steht, Boxen mit der Zahl ihres direkten Inhalts; der Pfeil klappt den Inhalt auf (`GET /inventory/items/{box}/contents`, höchstens 200 Zeilen, danach „… und N weitere“ mit Link zur Box), auch Boxen in Boxen. Mit Suche oder Filter ist die Liste flach (`ItemsTable::isGrouped()`). Der Inhalt wird neu geladen, wenn sich die Zeile der Box ändert oder sie neu aufgeklappt wird.
+
+## Erfassen
+
+Geführter Ablauf zum Anlegen vieler Gegenstände (seit 27.11.2026, Entscheidungen von Maurice), Eintrag „Erfassen“ in der Navigation, am Handy in der unteren Leiste. Recht `inventory.edit` wie das Formular, das für Bearbeiten, Einzelfälle und Etiketten auf Vorrat bleibt. Nicht am Kiosk.
+
+**Schritte** mit Fortschrittsbalken oben (`UiSteps`, wie Ausgabe und Rückgabe):
+
+1. **Daten:** Pflichtfelder wie im Formular (`InventoryItemFields`, Regeln aus `App\Support\Inventory\ItemInput`), dazu bei Einzelstücken „Anzahl gleicher Stücke“ (1–50). Beschreibung, Notiz, „Ist eine Box“ und „Inhalt öffentlich zeigen“ unter „Mehr“. Oben bleibt Platz für den späteren Barcode-Scan der Verpackung.
+2. **Bilder:** optional, „Überspringen“; bei mehreren Stücken bekommt jedes eine Kopie.
+3. **Ort:** QR-Code scannen oder Kennziffer tippen; Häkchen „Auch als Stammplatz“ (Vorgabe an). Ohne Häkchen kommt **Stammplatz** als eigener Schritt dazu, damit auf jeder Seite nur ein Scanner läuft. Ohne Ort darf man anlegen, die Übersicht warnt.
+4. **Etikett** (nur mit `labels.print`): Bild des Etiketts (`LabelsPreview`, den Editor gibt es erst über „Etikett anpassen“, weil er am Handy beim Scrollen Elemente verschob) mit den eingegebenen Daten und der Nummer als Platzhalter (`FSR5-000000`, `POST /inventory/capture/preview`, `LabelData::forDraft()`), Vorlage für Gegenstand bzw. Box, Hinweis fürs Etikett, Kopien je Stück, Drucker und „Verbinden“.
+5. **Übersicht:** alles in Blöcken mit „Ändern“, das Etikett nur als Bild (`LabelsPreview`).
+
+Der letzte Knopf heißt „Erstellen und drucken“, wenn gleich gedruckt werden kann (Papier oder verbundener Niimbot), sonst „Erstellen“. `POST /inventory/capture` antwortet mit JSON (Gegenstände und ihre Etikettendaten), die Seite bleibt im Ablauf. Mehrere Stücke legt `CreateItems` in einer Transaktion an, fortlaufende Nummern, alles oder nichts. Eine zufällige `capture_key` je Durchlauf verhindert doppeltes Anlegen: Der Server merkt sich die Ids 30 Minuten im Cache und antwortet bei Wiederholung mit denselben Gegenständen (`Cache::lock` gegen gleichzeitige Anfragen).
+
+**Etikettiert** gilt ein Gegenstand nur nach erfolgreichem Direktdruck (bei Abbruch oder Fehler nur die gedruckten) oder mit dem Häkchen „Etikett wurde aufgeklebt“ in der Ergebnis-Ansicht (Papier, Bild für die Niimbot-App; Vorgabe aus). Ohne `labels.print` wird nur angelegt, der Gegenstand bleibt „noch ohne Etikett“.
+
+**Danach:** „Nächster Gegenstand“ behält Kategorie, Art, Einheit, Zustand, Ort und Stammplatz, Vorlage und Drucker und leert Name, Beschreibung, Notiz, Hinweis, Fotos und Anzahl. „Fertig“ zeigt die **Runde**: alles, was in diesem Tab erfasst wurde, mit Druckstatus und „Etiketten drucken“ für den Rest. Formular, Schritt und Runde liegen im `sessionStorage` (`useCapture`); neu laden behält sie, nur die Fotos muss man neu wählen.
+
+**Barcode der Verpackung** (seit 27.11.2026, Entscheidungen von Maurice): Oben im Schritt Daten das Feld „EAN der Verpackung“ mit „Scannen“ (Kamera mit EAN-13, EAN-8, UPC-A, UPC-E) und „Suchen“. `GET /inventory/capture/product?code=` fragt `App\Support\Products\ProductLookup`, der der Reihe nach **UPCitemdb** (Free-Plan, 100 Abfragen am Tag, Technik), **Open Food Facts** und **Open Products Facts** (frei, Verbrauchsmaterial) fragt und daraus Vorschläge macht: Name der ersten Quelle mit Namen (bei Open Facts der deutsche), Beschreibung aus Marke und Modell, Bilder aller Quellen (höchstens 12). Alles ist abwählbar und änderbar; „Übernehmen“ füllt die Felder, die gewählten Bilder kommen vor die eigenen Fotos. Gibt es schon Gegenstände mit dieser EAN, zeigt die Karte sie an („Gibt es schon“).
+
+- **Gespeicherte Form** (`Gtin::normalize()`): Prüfziffer geprüft, UPC-A bekommt die führende 0 (EAN-13), UPC-E wird erst zu UPC-A. `items.ean`, auch im Formular „Bearbeiten“ und in der Suche der Liste. Die Seite „Scannen“ erkennt EANs nicht (bewusst).
+- **Cache je Code:** ein Treffer 30 Tage (ein zweiter Scan derselben Packung kostet keine Abfrage), „nichts gefunden“ einen Tag; Antworten mit nicht erreichbarer Quelle werden nicht gemerkt. Ist das Tageskontingent von UPCitemdb aufgebraucht (429 oder `X-RateLimit-Remaining` 0), pausiert die Quelle bis zum Reset.
+- **Bilder** lädt der Server (`GET /inventory/capture/product/{code}/images/{index}`, `ImageFetcher`): nur Bilder aus dem gemerkten Treffer, nur öffentliche Adressen (Host vorher aufgelöst, private und reservierte Adressen abgelehnt, Verbindung zur geprüften Adresse, Weiterleitungen einzeln geprüft), höchstens 10 MB, als JPEG über `ImageDecoding`. Im Browser werden sie wie eigene Fotos verkleinert.
+- **Herkunft der Fotos:** `item_photos.source`, `source_url`, `license`, `author`, `source_host` (der Browser schickt nur `photo_refs[i]` = „Code:Index“, die Angaben kommen aus dem Treffer auf dem Server). Am Foto ein kleines „©“; Antippen zeigt „Foto: Open Food Facts contributors, CC BY-SA 3.0“ bzw. „Bild über UPCitemdb, Quelle: shop.de“ mit Link. Über `source_host` lassen sich alle Bilder eines Shops finden. Kopien (mehrere Stücke, Abteilen) behalten die Angaben.
+- **Bedingungen:** Open Food Facts verlangt einen eigenen User-Agent (`Stocks/<Version> (<APP_URL>; <Kontaktadresse>)`, `UserAgent`), höchstens 100 Produktabfragen pro Minute, Namensnennung (ODbL für Daten, CC BY-SA für Bilder). UPCitemdb: Nutzung für den eigenen Betrieb, keine Namensnennung verlangt; die Rechte an den Shop-Bildern bleiben bei Shops und Herstellern. Die Quellenangabe steht klein unter dem Treffer.
+- **Einstellung** `inventory.product_lookup` (Verwaltung › Einstellungen › Allgemein, „Produktdaten per Barcode“, Vorgabe an): aus = keine Abfragen nach außen, nur das Feld EAN.
+
+**Mengenartikel oder mehrere Einzelstücke:** Ist egal, welches Stück jemand bekommt, und muss man es nicht einzeln wiedererkennen: Menge (eine Nummer, ein Etikett). Sonst Einzelstücke (je Stück Nummer, Etikett, Zustand und Ort). Das Erfassen legt nie abgeteilte Teile an.
 
 ## Artikelnummern
 
@@ -169,9 +199,11 @@ Die Spalten sind die Vorgabe der Startrollen in `config/stocks.php`; danach änd
 | `app/Models` | `Location`, `Category`, `Item`, `ItemCondition`, `ItemPhoto`, `ItemMovement`, `ItemConditionChange` |
 | `app/Enums` | `LocationType`, `ItemKind`, `RetireReason`, `MovementType` mit deutschen Bezeichnungen |
 | `app/Actions/Inventory` | ein Vorgang je Klasse, siehe Tabellen oben |
-| `app/Support/Inventory` | `ItemNumbers` (Nummern, Prüfziffer), `CodeLookup` (Code → Gegenstand oder Standort), `Placement` (Regeln für Boxen) |
+| `app/Support/Inventory` | `ItemNumbers` (Nummern, Prüfziffer, Platzhalter), `CodeLookup` (Code → Gegenstand oder Standort), `Placement` (Regeln für Boxen), `ItemInput` (Regeln und Felder von Formular und Erfassen) |
 | `app/Support/Table/ItemsTable.php` | Liste mit Suche, Filtern und Live-Update |
-| `app/Http/Controllers/Inventory` | Seiten und JSON-Endpunkte (`lookup`, `places`, `stats`) |
+| `app/Http/Controllers/Inventory` | Seiten und JSON-Endpunkte (`lookup`, `places`, `stats`); `CaptureController` für das Erfassen |
+| `resources/js/pages/Inventory/Capture.vue`, `composables/useCapture.ts`, `components/inventory/capture/` | Erfassen |
+| `app/Support/Products` | Barcode der Verpackung: `Gtin`, `ProductLookup` mit den Quellen `UpcItemDb` und `OpenFacts`, `ImageFetcher`, `UserAgent` |
 | `resources/js/pages/Inventory` | Seiten; Bausteine in `resources/js/components/inventory` |
 | `tests/Feature/Inventory` | Tests je Regel |
 | `database/seeders/InventorySeeder.php` | Demo-Inventar |
