@@ -39,6 +39,8 @@ Fünf Ebenen: Adresse → (Gebäude) → Raum → Lagerplatz → Fach. Das Gebä
 - Die Kennziffer verbindet die Kürzel mit `-`, das Fach mit `.`: `EU` · `EU-014` · `EU-014-R03` · `EU-014-R03.4`.
 - Die Kennziffer ist gespeichert (`locations.full_code`, eindeutig) und wird bei jeder Umbenennung oder Verschiebung für alle Standorte darunter neu berechnet (`SaveLocation`). Eindeutige Kennziffern bedeuten: Ein Kürzel gibt es unter demselben Standort nur einmal.
 - Ein Standort lässt sich mit allem darunter löschen, wenn dort nichts liegt und nichts seinen Stammplatz hat (`DeleteLocation`).
+- Der Dialog zeigt die Kennziffer schon beim Tippen (beim Bearbeiten alt → neu und ein Beispiel darunter) und markiert sie rot, wenn es sie schon gibt; Speichern ist dann gesperrt. Er rechnet wie `Location::fullCodeOf()`, entscheidend bleibt die Prüfung in `SaveLocation`.
+- **Mehrere anlegen** (seit 27.11.2026): Lagerplätze und Fächer lassen sich in einer Reihe anlegen, Häkchen im Dialog, höchstens 50. Aus dem ersten Kürzel zählt `App\Support\Inventory\CodeSequence` im eigenen Muster weiter: Ziffern am Ende als Zahl mit gleicher Breite (`1` → `2`, `R01` → `R02`, `R9` → `R10`), ein Buchstabe am Ende bis `Z` (`A` → `B`). Name, Beschreibung und „Kein Etikett nötig“ gelten für alle. Die Maske zeigt alle geplanten Kennziffern, vergebene rot; `CreateLocations` prüft alle vorher und legt alles oder nichts an („Die Kennziffern … gibt es schon.“).
 - Gegenstände liegen in einem Raum, auf einem Lagerplatz oder in einem Fach, z. B. ein Beamer direkt im Raum, aber nie direkt an einer Adresse oder in einem Gebäude (`Placement::check`, `LocationType::holdsItems()`).
 
 **Gebäude und Kennziffer.** Je Gebäude gibt es den Schalter „Im Code zeigen“ (`locations.show_in_code`, Vorgabe aus):
@@ -89,7 +91,9 @@ Geführter Ablauf zum Anlegen vieler Gegenstände (seit 27.11.2026, Entscheidung
 
 Der letzte Knopf heißt „Erstellen und drucken“, wenn gleich gedruckt werden kann (Papier oder verbundener Niimbot), sonst „Erstellen“. `POST /inventory/capture` antwortet mit JSON (Gegenstände und ihre Etikettendaten), die Seite bleibt im Ablauf. Mehrere Stücke legt `CreateItems` in einer Transaktion an, fortlaufende Nummern, alles oder nichts. Eine zufällige `capture_key` je Durchlauf verhindert doppeltes Anlegen: Der Server merkt sich die Ids 30 Minuten im Cache und antwortet bei Wiederholung mit denselben Gegenständen (`Cache::lock` gegen gleichzeitige Anfragen).
 
-**Etikettiert** gilt ein Gegenstand nur nach erfolgreichem Direktdruck (bei Abbruch oder Fehler nur die gedruckten) oder mit dem Häkchen „Etikett wurde aufgeklebt“ in der Ergebnis-Ansicht (Papier, Bild für die Niimbot-App; Vorgabe aus). Ohne `labels.print` wird nur angelegt, der Gegenstand bleibt „noch ohne Etikett“.
+**Etikettiert** gilt ein Gegenstand nur nach erfolgreichem Direktdruck (bei Abbruch oder Fehler nur die gedruckten) oder mit dem Häkchen „Etikett wurde aufgeklebt“ in der Ergebnis-Ansicht (Papier, Bild für die Niimbot-App; Vorgabe aus). Ohne `labels.print` wird nur angelegt, der Gegenstand bleibt „Etikett fehlt“.
+
+**Kein Etikett nötig** (seit 27.11.2026): Häkchen oben im Schritt Etikett (ohne `labels.print` im Schritt Daten). Dann blendet der Schritt Vorlage und Drucker aus, der letzte Knopf heißt „Erstellen“, der Server schickt keine Etikettendaten und Ergebnis und Runde zeigen „kein Etikett nötig“ statt „ohne Etikett“. Siehe [LABELS.md](LABELS.md#drucken).
 
 **Danach:** „Nächster Gegenstand“ behält Kategorie, Art, Einheit, Zustand, Ort und Stammplatz, Vorlage und Drucker und leert Name, Beschreibung, Notiz, Hinweis, Fotos und Anzahl. „Fertig“ zeigt die **Runde**: alles, was in diesem Tab erfasst wurde, mit Druckstatus und „Etiketten drucken“ für den Rest. Formular, Schritt und Runde liegen im `sessionStorage` (`useCapture`); neu laden behält sie, nur die Fotos muss man neu wählen.
 
@@ -117,6 +121,8 @@ Der letzte Knopf heißt „Erstellen und drucken“, wenn gleich gedruckt werden
 ## Umlagern und Bewegungsprotokoll
 
 Die Seite **Umlagern** arbeitet in zwei Schritten: erst den Gegenstand oder die Box scannen, dann das Ziel (Kennziffer oder Boxnummer). Danach wird sofort gebucht, und die Seite wartet auf den nächsten Scan. Ein Barcode-Handscanner tippt den Code wie eine Tastatur. Bei Mengenartikeln fragt die Seite die Menge ab, vorausgefüllt mit allem. Auf der Seite eines Gegenstands gibt es dasselbe als Dialog mit Vorschlägen.
+
+**Ort / Stammplatz / Beides** (seit 27.11.2026, `InventoryMoveTargetSwitch`): Mit `inventory.edit` zeigen Seite „Umlagern“, Scan-Karte („Umlagern“, „Hierher umlagern“) und der Dialog am Gegenstand einen Umschalter, Vorgabe „Ort“. `POST /inventory/move` nimmt `mode`: `place` (wie bisher), `home` (nur der Stammplatz ändert sich, der Gegenstand bleibt liegen; kein Eintrag im Bewegungsverlauf, das Änderungsprotokoll hält alten und neuen Stammplatz fest) oder `both` (umlagern, und das Ziel wird Stammplatz; bei einer abgeteilten Teilmenge der Teil). Ohne `inventory.edit` lehnt der Server `home` und `both` ab. Für den Stammplatz gelten dieselben Regeln wie für einen Ort (`Placement::check`).
 
 Jede Änderung des Orts schreibt eine Zeile in `item_movements`:
 
@@ -172,7 +178,8 @@ Fotos liegen immer auf der Disk `s3` unter `items/<id>/<zufälliger Name>`; der 
 - Der Browser verkleinert Fotos vorher auf 1600 Pixel (`useImageCompression`, aus Portals).
 - Stocks liefert Fotos über `/inventory/photos/{id}` mit Rechteprüfung und einem Tag Browser-Cache aus. Der S3-Server muss für Besucher nicht erreichbar sein.
 - **Vorschaubilder** (seit v0.1.1, `App\Support\Inventory\PhotoThumbnail`): zu jedem Foto ein JPEG von höchstens 256 Pixeln unter `items/<id>/thumbs/<Name>.jpg`, Pfad in `item_photos.thumb_path`. Es entsteht beim Hochladen und beim Kopieren; die Migration `2026_11_26_000000_add_thumb_path_to_item_photos` erzeugt es für alle vorhandenen Fotos (scheitert nie, bricht nach fünf Fehlern in Folge ab). Fehlt es noch, entsteht es beim ersten Abruf (`ItemPhoto::thumbnailPath()`); geht auch das nicht (S3 weg, WebP ohne WebP im GD), kommt das Foto selbst. Abruf mit `?thumb=1` (`ItemPhoto::thumbUrl()`, öffentlich signiert über `/s-photos/{id}?thumb=1`). Listen, Box-Inhalt, Scan-Karte, öffentliche Inhaltsliste und PDF-Inhaltsliste nutzen das Vorschaubild, die Galerie und die große öffentliche Ansicht das Foto. Löschen entfernt beide Dateien (`ItemPhoto::files()`).
-- Das erste Foto ist das Vorschaubild; „Als erstes“ ändert die Reihenfolge. Löschen entfernt auch die Datei.
+- Das erste Foto ist das Vorschaubild; „Als Vorschau“ ändert die Reihenfolge und nummeriert die Galerie ab 1 neu (vor dem 27.11.2026 setzte es „kleinster Wert − 1“, ab dem zweiten Wechsel negativ, und `item_photos.sort` nimmt keine negativen Werte: Serverfehler). Löschen entfernt auch die Datei.
+- **Android** öffnet bei einem Dateifeld direkt Galerie oder Dateien, ohne die Kamera anzubieten (iOS fragt selbst). Deshalb zeigen `UiPhotoPicker` und die Gegenstandsseite unter Android eigene Knöpfe „Kamera“ (`capture="environment"`, ein Foto) und „Galerie“ (`usePlatform`).
 
 **MinIO:** `docker-compose.yaml` und `docker-compose.sail.yaml` starten MinIO wie in Portals (`ghcr.io/coollabsio/minio`, S3-API auf Port 9000, Konsole auf http://localhost:9001). Der Dienst `minio-setup` wartet, bis MinIO bereit ist, legt den Bucket aus `AWS_BUCKET` an und beendet sich; Exit-Status 0 ist richtig. Zugang standardmäßig `minioadmin`/`minioadmin123`, im Betrieb über die `.env` ändern.
 

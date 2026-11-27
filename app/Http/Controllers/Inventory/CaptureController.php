@@ -142,11 +142,12 @@ class CaptureController extends Controller
 
         return response()->json([
             'items' => array_map(fn (Item $item) => [
-                ...$item->only(['id', 'number', 'name']),
+                ...$item->only(['id', 'number', 'name', 'no_label']),
                 'place' => Item::placeSummary($item->place()),
                 'href' => Surface::link('inventory.items.show', $item),
             ], $items),
-            'labels' => $printing ? array_map(fn (Item $item) => $this->labels->forItem($item), $items) : [],
+            // "Kein Etikett nötig": nothing to print
+            'labels' => $printing ? array_values(array_map(fn (Item $item) => $this->labels->forItem($item), array_filter($items, fn (Item $item) => ! $item->no_label))) : [],
         ], 201);
     }
 
@@ -169,7 +170,7 @@ class CaptureController extends Controller
         return response()->json([
             ...$this->products->lookup($gtin),
             'existing' => $existing->map(fn (Item $item) => [
-                ...$item->only(['id', 'number', 'name']),
+                ...$item->only(['id', 'number', 'name', 'no_label']),
                 'place' => Item::placeSummary($item->place()),
                 'href' => Surface::link('inventory.items.show', $item),
             ])->all(),

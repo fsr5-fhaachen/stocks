@@ -36,6 +36,7 @@ class PrintController extends Controller
     /**
      * Display the print preview. Query: items, locations, reserved (lists of ids separated by
      * commas), box (id: its whole contents), below (id of a location: shelves and compartments).
+     * Box and below leave out what is marked "Kein Etikett nötig"; chosen ids are always printed.
      */
     public function create(Request $request, LabelData $labels, ShortLink $links, Branding $branding, Settings $settings): Response
     {
@@ -71,7 +72,8 @@ class PrintController extends Controller
     }
 
     /**
-     * Remember when labels were printed (also a downloaded image counts). No audit entry.
+     * Remember when labels were printed (also a downloaded image counts). No audit entry. A printed
+     * label takes away "Kein Etikett nötig" (App\Enums\LabelStatus).
      */
     public function printed(Request $request): RedirectResponse
     {
@@ -83,8 +85,8 @@ class PrintController extends Controller
         ]);
 
         // query updates, so neither the audit nor updated_at change
-        Item::whereIn('id', $validated['items'] ?? [])->toBase()->update(['label_printed_at' => now()]);
-        Location::whereIn('id', $validated['locations'] ?? [])->toBase()->update(['label_printed_at' => now()]);
+        Item::whereIn('id', $validated['items'] ?? [])->toBase()->update(['label_printed_at' => now(), 'no_label' => false]);
+        Location::whereIn('id', $validated['locations'] ?? [])->toBase()->update(['label_printed_at' => now(), 'no_label' => false]);
 
         return back();
     }
@@ -118,6 +120,7 @@ class PrintController extends Controller
             $locations = $locations->concat(
                 Location::whereIn('id', $parent->subtreeIds())
                     ->whereIn('type', [LocationType::Shelf, LocationType::Compartment])
+                    ->where('no_label', false)
                     ->orderBy('full_code')->get(),
             );
         }
@@ -141,6 +144,6 @@ class PrintController extends Controller
         }
 
         return $box->contents()->active()->get()
-            ->flatMap(fn (Item $item) => [$item, ...($item->is_container ? $this->contentsOf($item, $depth + 1) : [])]);
+            ->flatMap(fn (Item $item) => [...($item->no_label ? [] : [$item]), ...($item->is_container ? $this->contentsOf($item, $depth + 1) : [])]);
     }
 }

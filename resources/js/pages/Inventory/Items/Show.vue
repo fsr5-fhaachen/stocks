@@ -96,18 +96,43 @@
         Zurück an den Stammplatz
       </button>
     </UiAlert>
-    <!-- right after creating or splitting: a new number needs a label -->
+    <!-- right after creating or splitting: a new number needs a label, unless nobody wants one -->
     <UiAlert
-      v-if="!item.label_printed_at && !item.retired_at && can('labels.print')"
+      v-if="
+        !item.label_printed_at &&
+        !item.no_label &&
+        !item.retired_at &&
+        (can('labels.print') || can('inventory.edit'))
+      "
       type="info"
     >
       Für {{ item.number }} wurde noch kein Etikett gedruckt.
       <InertiaLink
+        v-if="can('labels.print')"
         :href="`/labels/print?items=${item.id}`"
         class="ml-1 font-bold underline"
       >
         Etikett drucken
       </InertiaLink>
+      <button
+        v-if="can('inventory.edit')"
+        type="button"
+        class="ml-1 font-bold underline"
+        @click="setNoLabel(true)"
+      >
+        Kein Etikett nötig
+      </button>
+    </UiAlert>
+    <UiAlert v-if="item.no_label && !item.retired_at" type="info">
+      {{ item.number }} ist bewusst ohne Etikett.
+      <button
+        v-if="can('inventory.edit')"
+        type="button"
+        class="ml-1 font-bold underline"
+        @click="setNoLabel(false)"
+      >
+        Braucht doch eins
+      </button>
     </UiAlert>
     <UiAlert v-if="item.can_merge" type="info">
       Abgeteilt von <InventoryPlaceLink :place="item.split_from" />.
@@ -196,6 +221,7 @@
                 :with-time="false"
               />
               <template v-else>noch nie</template>
+              <template v-if="item.no_label"> · kein Etikett nötig</template>
             </dd>
           </div>
           <div v-if="item.description" class="sm:col-span-2">
@@ -448,6 +474,25 @@
           class="mt-4"
           @submit.prevent
         >
+          <!-- Android opens the gallery directly: the camera gets its own button (usePlatform) -->
+          <label
+            v-if="isAndroid"
+            :class="[
+              'mb-3 inline-flex cursor-pointer items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-medium text-white',
+              photoForm.processing ? 'pointer-events-none opacity-50' : '',
+            ]"
+          >
+            <FontAwesomeIcon :icon="['fas', 'camera']" />
+            Foto mit der Kamera
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              class="sr-only"
+              :disabled="photoForm.processing"
+              @change="uploadPhotos"
+            />
+          </label>
           <label class="block">
             <span class="sr-only">Fotos hochladen</span>
             <input
@@ -470,14 +515,19 @@
   <!-- move -->
   <UiModal v-if="moveOpen" title="Umlagern" @close="moveOpen = false">
     <form class="space-y-5" @submit.prevent="move()">
+      <InventoryMoveTargetSwitch v-model="moveForm.mode" />
       <InventoryPlaceInput
         v-model="moveForm.target_code"
         label="Ziel"
         required
-        :error="moveForm.errors.target_code ?? moveForm.errors.target"
+        :error="
+          moveForm.errors.target_code ??
+          moveForm.errors.target ??
+          moveForm.errors.mode
+        "
       />
       <UiInput
-        v-if="item.kind === 'bulk'"
+        v-if="item.kind === 'bulk' && moveForm.mode !== 'home'"
         v-model="moveForm.quantity"
         label="Menge"
         type="number"
@@ -496,7 +546,7 @@
         @confirm="move(true)"
       />
       <UiButton type="submit" class="w-full" :disabled="moveForm.processing">
-        Umlagern
+        {{ moveForm.mode === "home" ? "Stammplatz setzen" : "Umlagern" }}
       </UiButton>
     </form>
   </UiModal>
@@ -637,6 +687,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { Link as InertiaLink, router, useForm, usePage } from "@inertiajs/vue3";
+import type { MoveMode } from "../../../components/inventory/MoveTargetSwitch.vue";
 
 type PhotoCredit = {
   source: string;
@@ -681,6 +732,7 @@ type Props = {
     retired_reason: string | null;
     retired_note: string | null;
     label_hint: string | null;
+    no_label: boolean;
     label_printed_at: string | null;
     photos: Photo[];
     contents: ContentsItem[];
@@ -745,12 +797,19 @@ const moveForm = useForm({
   target_code: "",
   quantity: props.item.quantity as number | null,
   note: "",
+  // "Ort / Stammplatz / beides", starts with "Ort"
+  mode: "place" as MoveMode,
 });
 // confirmed: asked before and answered "Ja, trotzdem" (the item is booked)
 const move = (confirmed = false) =>
   // the id is taken when sending, the page can show another item by now
   moveForm
-    .transform((data) => ({ ...data, item_id: props.item.id, confirmed }))
+    .transform((data) => ({
+      ...data,
+      item_id: props.item.id,
+      quantity: data.mode === "home" ? null : data.quantity,
+      confirmed,
+    }))
     .post("/inventory/move", {
       preserveScroll: true,
       onSuccess: () => {
@@ -758,6 +817,16 @@ const move = (confirmed = false) =>
         moveForm.reset();
       },
     });
+
+const { isAndroid } = usePlatform();
+
+// "Kein Etikett nötig" (App\Enums\LabelStatus)
+const setNoLabel = (noLabel: boolean) =>
+  router.post(
+    `/inventory/items/${props.item.id}/no-label`,
+    { no_label: noLabel },
+    { preserveScroll: true },
+  );
 
 const returnHome = () =>
   router.post(

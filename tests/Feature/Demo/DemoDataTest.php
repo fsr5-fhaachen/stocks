@@ -57,7 +57,9 @@ class DemoDataTest extends TestCase
         $this->assertTrue(Item::whereNotNull('retired_at')->exists(), 'retired');
         $this->assertTrue(Item::whereHas('condition', fn ($query) => $query->where('is_defect', true))->exists(), 'defective');
         $this->assertTrue(Item::active()->whereNull('location_id')->whereNull('container_id')->exists(), 'without place');
-        $this->assertTrue(Item::whereNull('label_printed_at')->exists(), 'without label');
+        $this->assertTrue(Item::whereNull('label_printed_at')->where('no_label', false)->exists(), 'without label');
+        $this->assertTrue(Item::where('no_label', true)->exists(), 'item needs no label');
+        $this->assertTrue(Location::where('no_label', true)->exists(), 'location needs no label');
         $this->assertTrue(Item::whereNotNull('label_hint')->exists(), 'with hint');
         $this->assertTrue(Item::has('photos')->exists(), 'with photos');
         $this->assertTrue(Item::whereNotNull('ean')->exists(), 'with barcode of the packaging');

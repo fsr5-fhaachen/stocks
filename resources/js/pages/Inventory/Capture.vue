@@ -28,9 +28,7 @@
               <InventoryPlaceLink :place="entry.place" empty="ohne Ort" />
             </span>
           </span>
-          <UiBadge :variant="entry.printed ? 'success' : 'warning'">
-            {{ entry.printed ? "etikettiert" : "ohne Etikett" }}
-          </UiBadge>
+          <InventoryCaptureLabelBadge :entry="entry" />
         </li>
       </ul>
       <UiEmptyState v-else icon="plus" title="Noch nichts erfasst" />
@@ -73,9 +71,7 @@
               <InventoryPlaceLink :place="entry.place" empty="ohne Ort" />
             </span>
           </span>
-          <UiBadge :variant="entry.printed ? 'success' : 'warning'">
-            {{ entry.printed ? "etikettiert" : "ohne Etikett" }}
-          </UiBadge>
+          <InventoryCaptureLabelBadge :entry="entry" />
         </li>
       </ul>
 
@@ -247,6 +243,12 @@
             placeholder="z. B. Achtung, zerbrechlich"
             :error="errors.label_hint"
           />
+          <UiCheckbox
+            v-if="!printing"
+            v-model="form.no_label"
+            label="Kein Etikett nötig"
+            description="Gilt als bewusst ohne Etikett und fehlt unter „Etikett fehlt“."
+          />
           <div class="space-y-4 sm:col-span-2">
             <UiCheckbox
               v-model="form.is_container"
@@ -297,141 +299,150 @@
     </UiCard>
 
     <template v-else-if="step === 'label' && printing">
-      <UiAlert v-if="!printing.baseUrlConfirmed" type="warning" class="mb-4">
-        Die Codes führen auf
-        <strong class="font-mono">{{ printing.baseUrl }}</strong>. Ändert sich
-        diese Adresse später, öffnet die Handykamera die Etiketten nicht mehr.
-        <button
-          type="button"
-          class="ml-1 font-bold underline"
-          @click="confirmAddress"
-        >
-          Adresse stimmt, weiter
-        </button>
-      </UiAlert>
-      <UiEmptyState
-        v-if="!design"
-        icon="tag"
-        :title="`Keine Vorlage für ${target === 'box' ? 'Boxen' : 'Gegenstände'}`"
-        description="Ohne Vorlage gibt es kein Etikett; der Gegenstand wird trotzdem angelegt."
-      />
-      <template v-else-if="previewData">
-        <!-- the editor only on request: on phones it takes the whole screen and moves elements
+      <UiCard class="mb-4">
+        <UiCheckbox
+          v-model="form.no_label"
+          label="Kein Etikett nötig"
+          description="Es wird nichts gedruckt, der Gegenstand gilt als bewusst ohne Etikett und fehlt unter „Etikett fehlt“."
+        />
+      </UiCard>
+      <template v-if="!form.no_label">
+        <UiAlert v-if="!printing.baseUrlConfirmed" type="warning" class="mb-4">
+          Die Codes führen auf
+          <strong class="font-mono">{{ printing.baseUrl }}</strong>. Ändert sich
+          diese Adresse später, öffnet die Handykamera die Etiketten nicht mehr.
+          <button
+            type="button"
+            class="ml-1 font-bold underline"
+            @click="confirmAddress"
+          >
+            Adresse stimmt, weiter
+          </button>
+        </UiAlert>
+        <UiEmptyState
+          v-if="!design"
+          icon="tag"
+          :title="`Keine Vorlage für ${target === 'box' ? 'Boxen' : 'Gegenstände'}`"
+          description="Ohne Vorlage gibt es kein Etikett; der Gegenstand wird trotzdem angelegt."
+        />
+        <template v-else-if="previewData">
+          <!-- the editor only on request: on phones it takes the whole screen and moves elements
              while scrolling -->
-        <template v-if="editing">
-          <LabelsEditor
-            :key="target"
-            v-model="designs[target]"
-            :data="previewData"
-            :variables="printing.variables[target] ?? []"
-            :logo-url="printing.logoUrl"
-            :printer="printer"
-          />
-          <div class="mt-3 flex justify-end">
-            <UiButton
-              variant="secondary"
-              size="sm"
-              icon="check"
-              @click="editing = false"
-            >
-              Fertig angepasst
-            </UiButton>
-          </div>
-        </template>
-        <template v-else>
-          <LabelsPreview
-            :template="design"
-            :data="previewData"
-            :logo-url="printing.logoUrl"
-            :printer="printer"
-          />
-          <div class="mt-2 flex justify-end">
-            <UiButton
-              variant="ghost"
-              size="sm"
-              icon="pen"
-              @click="editing = true"
-            >
-              Etikett anpassen
-            </UiButton>
-          </div>
-        </template>
-        <UiCard title="Druck" class="mt-4">
-          <div class="space-y-4">
-            <UiSelect
-              v-if="printing.printers.length"
-              v-model="printerId"
-              label="Drucker"
-              :options="
-                printing.printers.map((entry) => ({
-                  value: entry.id,
-                  label: entry.name,
-                }))
-              "
-              :placeholder="null"
+          <template v-if="editing">
+            <LabelsEditor
+              :key="target"
+              v-model="designs[target]"
+              :data="previewData"
+              :variables="printing.variables[target] ?? []"
+              :logo-url="printing.logoUrl"
+              :printer="printer"
             />
-            <p v-else class="text-sm text-ink-muted">
-              Es ist kein Drucker angelegt.
-              <UiLink v-if="can('labels.manage')" href="/labels/printers"
-                >Drucker anlegen</UiLink
+            <div class="mt-3 flex justify-end">
+              <UiButton
+                variant="secondary"
+                size="sm"
+                icon="check"
+                @click="editing = false"
               >
-            </p>
-            <UiSelect
-              :model-value="templateIds[target]"
-              label="Vorlage"
-              :options="templatesOf(target)"
-              :placeholder="null"
-              @update:model-value="chooseTemplate(target, Number($event))"
-            />
-            <UiInput
-              v-model="form.label_hint"
-              label="Hinweis fürs Etikett"
-              placeholder="z. B. Achtung, zerbrechlich"
-              hint="Wird beim Gegenstand gespeichert. Leer: Das Element bleibt weg."
-              :error="errors.label_hint"
-            />
-            <UiInput
-              v-model="copies"
-              label="Kopien je Stück"
-              type="number"
-              inputmode="numeric"
-            />
-
-            <!-- connecting needs its own tap (the browser asks for the device) -->
-            <div
-              v-if="printer?.driver === 'niimbot'"
-              class="space-y-2 border-t border-line pt-4"
-            >
-              <template v-if="connections.length">
-                <UiButton
-                  v-for="connection in connections"
-                  v-show="!connected"
-                  :key="connection"
-                  variant="secondary"
-                  class="w-full"
-                  :disabled="busy"
-                  @click="connectPrinter(connection)"
-                >
-                  {{
-                    connection === "bluetooth"
-                      ? "Per Bluetooth verbinden"
-                      : "Per USB verbinden"
-                  }}
-                </UiButton>
-                <p v-if="connected" class="text-sm text-ink-muted">
-                  Verbunden{{ deviceName ? ` mit ${deviceName}` : "" }}.
-                </p>
-                <p v-else class="text-xs text-ink-muted">
-                  Ohne Verbindung wird erst angelegt, gedruckt wird danach.
-                </p>
-              </template>
-              <LabelsDirectPrintHint v-else />
-              <p v-if="printError" class="text-sm text-red-600">
-                {{ printError }}
-              </p>
+                Fertig angepasst
+              </UiButton>
             </div>
-          </div>
-        </UiCard>
+          </template>
+          <template v-else>
+            <LabelsPreview
+              :template="design"
+              :data="previewData"
+              :logo-url="printing.logoUrl"
+              :printer="printer"
+            />
+            <div class="mt-2 flex justify-end">
+              <UiButton
+                variant="ghost"
+                size="sm"
+                icon="pen"
+                @click="editing = true"
+              >
+                Etikett anpassen
+              </UiButton>
+            </div>
+          </template>
+          <UiCard title="Druck" class="mt-4">
+            <div class="space-y-4">
+              <UiSelect
+                v-if="printing.printers.length"
+                v-model="printerId"
+                label="Drucker"
+                :options="
+                  printing.printers.map((entry) => ({
+                    value: entry.id,
+                    label: entry.name,
+                  }))
+                "
+                :placeholder="null"
+              />
+              <p v-else class="text-sm text-ink-muted">
+                Es ist kein Drucker angelegt.
+                <UiLink v-if="can('labels.manage')" href="/labels/printers"
+                  >Drucker anlegen</UiLink
+                >
+              </p>
+              <UiSelect
+                :model-value="templateIds[target]"
+                label="Vorlage"
+                :options="templatesOf(target)"
+                :placeholder="null"
+                @update:model-value="chooseTemplate(target, Number($event))"
+              />
+              <UiInput
+                v-model="form.label_hint"
+                label="Hinweis fürs Etikett"
+                placeholder="z. B. Achtung, zerbrechlich"
+                hint="Wird beim Gegenstand gespeichert. Leer: Das Element bleibt weg."
+                :error="errors.label_hint"
+              />
+              <UiInput
+                v-model="copies"
+                label="Kopien je Stück"
+                type="number"
+                inputmode="numeric"
+              />
+
+              <!-- connecting needs its own tap (the browser asks for the device) -->
+              <div
+                v-if="printer?.driver === 'niimbot'"
+                class="space-y-2 border-t border-line pt-4"
+              >
+                <template v-if="connections.length">
+                  <UiButton
+                    v-for="connection in connections"
+                    v-show="!connected"
+                    :key="connection"
+                    variant="secondary"
+                    class="w-full"
+                    :disabled="busy"
+                    @click="connectPrinter(connection)"
+                  >
+                    {{
+                      connection === "bluetooth"
+                        ? "Per Bluetooth verbinden"
+                        : "Per USB verbinden"
+                    }}
+                  </UiButton>
+                  <p v-if="connected" class="text-sm text-ink-muted">
+                    Verbunden{{ deviceName ? ` mit ${deviceName}` : "" }}.
+                  </p>
+                  <p v-else class="text-xs text-ink-muted">
+                    Ohne Verbindung wird erst angelegt, gedruckt wird danach.
+                  </p>
+                </template>
+                <LabelsDirectPrintHint v-else />
+                <p v-if="printError" class="text-sm text-red-600">
+                  {{ printError }}
+                </p>
+              </div>
+            </div>
+          </UiCard>
+        </template>
       </template>
     </template>
 
@@ -537,7 +548,7 @@
           >
         </template>
         <LabelsPreview
-          v-if="design && previewData"
+          v-if="design && previewData && !form.no_label"
           :template="design"
           :data="previewData"
           :logo-url="printing.logoUrl"
@@ -650,6 +661,7 @@ const defaults = (): CaptureForm => ({
   is_container: false,
   public_contents: true,
   label_hint: "",
+  no_label: false,
   place_code: "",
   home_code: "",
   home_same: true,
@@ -907,11 +919,16 @@ const unprintedLabels = computed(() =>
 const anyPrinted = computed(() =>
   resultItems.value.some((entry) => entry.printed),
 );
+// "Kein Etikett nötig" needs no print
 const unprintedResult = computed(() =>
-  resultItems.value.filter((entry) => !entry.printed).map((entry) => entry.id),
+  resultItems.value
+    .filter((entry) => !entry.printed && !entry.no_label)
+    .map((entry) => entry.id),
 );
 const unprintedInRound = computed(() =>
-  round.value.filter((entry) => !entry.printed).map((entry) => entry.id),
+  round.value
+    .filter((entry) => !entry.printed && !entry.no_label)
+    .map((entry) => entry.id),
 );
 
 const printLabels = (): (PrintLabel & { name: string })[] =>
@@ -975,11 +992,15 @@ const directReady = computed(
 const willPrint = computed(
   () =>
     props.printing !== null &&
+    !form.no_label &&
     design.value !== null &&
     baseUrlConfirmed.value &&
     (printer.value?.driver === "paper" || directReady.value),
 );
 const printSummary = computed(() => {
+  if (form.no_label) {
+    return "Kein Etikett nötig: Es wird nur angelegt.";
+  }
   if (!design.value) {
     return "Keine Vorlage: Es wird nur angelegt.";
   }

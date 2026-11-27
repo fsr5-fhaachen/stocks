@@ -214,4 +214,19 @@ class CaptureTest extends TestCase
             'name' => 'Beamer', 'kind' => 'single', 'condition_id' => $this->conditionId('gut'),
         ])->assertUnprocessable()->assertJsonValidationErrors('capture_key');
     }
+
+    public function test_an_item_without_label_gets_nothing_to_print(): void
+    {
+        $actor = $this->userWithPermissions('inventory.view', 'inventory.edit', 'labels.print');
+
+        $this->actingAs($actor)->postJson('/inventory/capture', [
+            'name' => 'XLR-Kabel', 'kind' => 'single', 'count' => 2, 'condition_id' => $this->conditionId('gut'), 'no_label' => true, 'capture_key' => 'n1',
+        ])
+            ->assertCreated()
+            ->assertJsonCount(2, 'items')
+            ->assertJsonPath('items.0.no_label', true)
+            ->assertJsonCount(0, 'labels');
+
+        $this->assertSame(2, Item::where('no_label', true)->count());
+    }
 }

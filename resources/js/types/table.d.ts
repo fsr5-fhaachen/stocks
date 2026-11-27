@@ -39,6 +39,8 @@ declare global {
     retired: boolean;
     photo_url: string | null;
     label_printed_at: string | null;
+    // App\Enums\LabelStatus
+    label_status: "missing" | "printed" | "none";
     // active items directly in the box
     contents_count: number;
     badges: { text: string; variant: string }[];

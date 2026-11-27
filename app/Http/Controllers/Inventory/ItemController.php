@@ -10,6 +10,7 @@ use App\Actions\Inventory\MoveItem;
 use App\Actions\Inventory\RetireItem;
 use App\Actions\Inventory\UpdateItem;
 use App\Enums\ItemKind;
+use App\Enums\LabelStatus;
 use App\Enums\LocationType;
 use App\Enums\RetireReason;
 use App\Http\Controllers\Controller;
@@ -110,6 +111,7 @@ class ItemController extends Controller
                 // pieces of a bulk item that are there ("vorhanden"), without those lent or missing
                 'quantity_here' => $item->kind === ItemKind::Bulk ? $this->extensions->quantityHere($item) : null,
                 'label_printed_at' => $item->label_printed_at?->toIso8601String(),
+                'no_label' => $item->no_label,
                 'kind' => $item->kind->value,
                 'kind_label' => $item->kind->label(),
                 'condition_id' => $item->condition_id,
@@ -180,6 +182,19 @@ class ItemController extends Controller
         $changeCondition->handle($request->user(), $item, $condition, $validated['reason'], $request->file('photos', []));
 
         return back()->with('success', 'Der Zustand wurde geändert.');
+    }
+
+    /**
+     * Mark an item as "Kein Etikett nötig" or take the mark away (App\Enums\LabelStatus).
+     */
+    public function noLabel(Request $request, Item $item): RedirectResponse
+    {
+        $validated = $request->validate(['no_label' => ['required', 'boolean']]);
+        $item->update(['no_label' => $validated['no_label']]);
+
+        return back()->with('success', $item->no_label
+            ? "{$item->number} braucht kein Etikett."
+            : "{$item->number} braucht wieder ein Etikett.");
     }
 
     /**
@@ -380,8 +395,10 @@ class ItemController extends Controller
             'misplaced' => $onlyMisplaced,
             'categories' => Category::options(),
             'conditions' => ItemCondition::options(),
+            'labelStatuses' => LabelStatus::options(),
             'filters' => [
-                ...$request->only(['category', 'condition', 'retired', 'unlabeled']),
+                ...$request->only(['category', 'condition', 'retired']),
+                'label' => $request->boolean('unlabeled') ? LabelStatus::Missing->value : $request->query('label'),
                 'grouped' => $table->wantsGrouping() ? '1' : '0',
             ],
         ]);
@@ -396,7 +413,7 @@ class ItemController extends Controller
 
         return Inertia::render('Inventory/Items/Form', [
             'item' => $item ? [
-                ...$item->only(['id', 'number', 'name', 'description', 'category_id', 'quantity', 'unit', 'is_container', 'public_contents', 'notes', 'label_hint', 'ean']),
+                ...$item->only(['id', 'number', 'name', 'description', 'category_id', 'quantity', 'unit', 'is_container', 'public_contents', 'notes', 'label_hint', 'ean', 'no_label']),
                 'kind' => $item->kind->value,
                 'home' => Item::placeSummary($item->home()),
             ] : null,

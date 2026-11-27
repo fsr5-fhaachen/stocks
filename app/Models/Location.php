@@ -27,6 +27,7 @@ use OwenIt\Auditing\Contracts\Auditable;
  * @property string $full_code
  * @property bool $show_in_code
  * @property Carbon|null $label_printed_at time of the last printed label
+ * @property bool $no_label marked as "Kein Etikett nötig": left out of "Etikett fehlt", see App\Support\Labels\LabelStatus
  */
 class Location extends Model implements Auditable, AuditSubject
 {
@@ -48,6 +49,7 @@ class Location extends Model implements Auditable, AuditSubject
         'description',
         'full_code',
         'show_in_code',
+        'no_label',
     ];
 
     /**
@@ -69,6 +71,7 @@ class Location extends Model implements Auditable, AuditSubject
         return [
             'type' => LocationType::class,
             'show_in_code' => 'boolean',
+            'no_label' => 'boolean',
             'label_printed_at' => 'datetime',
         ];
     }
@@ -180,6 +183,7 @@ class Location extends Model implements Auditable, AuditSubject
             'description' => 'Beschreibung',
             'full_code' => 'Kennziffer',
             'show_in_code' => 'Im Code zeigen',
+            'no_label' => 'Kein Etikett nötig',
         ];
     }
 }

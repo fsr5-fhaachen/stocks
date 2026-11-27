@@ -26,6 +26,9 @@
           </li>
         </ol>
 
+        <!-- the target becomes the place, the home or both; stays for the next scans -->
+        <InventoryMoveTargetSwitch v-model="mode" />
+
         <!-- camera: the first scan picks the item, the second the target, as with typing -->
         <InventoryCameraScanner
           v-if="cameraOpen"
@@ -45,7 +48,7 @@
         </div>
 
         <UiInput
-          v-if="item && item.kind === 'bulk'"
+          v-if="item && item.kind === 'bulk' && mode !== 'home'"
           v-model="quantity"
           label="Menge"
           type="number"
@@ -69,6 +72,16 @@
             class="mt-1 block w-full rounded-md border-0 bg-surface py-3 font-mono text-lg text-ink shadow-sm ring-1 ring-inset ring-line focus:ring-2 focus:ring-inset focus:ring-accent"
           />
           <p v-if="error" class="mt-1 text-sm text-red-600">{{ error }}</p>
+          <p
+            v-if="item && mode !== 'place'"
+            class="mt-1 text-sm text-ink-muted"
+          >
+            {{
+              mode === "home"
+                ? "Das Ziel wird nur der Stammplatz, der Gegenstand bleibt, wo er ist."
+                : "Der Gegenstand kommt ins Ziel, das wird auch sein Stammplatz."
+            }}
+          </p>
         </div>
 
         <InventoryReservedConfirm
@@ -79,7 +92,13 @@
 
         <div class="flex gap-3">
           <UiButton type="submit" class="flex-1" size="lg" :disabled="busy">
-            {{ item ? "Umlagern" : "Weiter" }}
+            {{
+              item
+                ? mode === "home"
+                  ? "Stammplatz setzen"
+                  : "Umlagern"
+                : "Weiter"
+            }}
           </UiButton>
           <UiButton
             v-if="!cameraOpen"
@@ -115,6 +134,7 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref } from "vue";
 import { useForm, usePage } from "@inertiajs/vue3";
+import type { MoveMode } from "../../components/inventory/MoveTargetSwitch.vue";
 
 type ScannedItem = {
   id: number;
@@ -141,6 +161,8 @@ const item = ref<ScannedItem | null>(null);
 const quantity = ref<number | null>(null);
 const log = ref<string[]>([]);
 const cameraOpen = ref(false);
+// "Ort / Stammplatz / beides", starts with "Ort"
+const mode = ref<MoveMode>("place");
 
 const form = useForm({
   item_id: 0,
@@ -214,9 +236,12 @@ const moveTo = (targetCode: string, confirmed = false) => {
   reserved.value = null;
   form.item_id = item.value!.id;
   form.target_code = targetCode;
-  form.quantity = item.value!.kind === "bulk" ? quantity.value : null;
+  form.quantity =
+    item.value!.kind === "bulk" && mode.value !== "home"
+      ? quantity.value
+      : null;
   form
-    .transform((data) => ({ ...data, confirmed }))
+    .transform((data) => ({ ...data, confirmed, mode: mode.value }))
     .post("/inventory/move", {
       preserveScroll: true,
       onSuccess: () => {
@@ -234,7 +259,11 @@ const moveTo = (targetCode: string, confirmed = false) => {
           return;
         }
         error.value =
-          errors.target_code ?? errors.target ?? errors.item ?? null;
+          errors.target_code ??
+          errors.target ??
+          errors.item ??
+          errors.mode ??
+          null;
         code.value = "";
         focus();
       },

@@ -151,4 +151,69 @@ class MoveTest extends TestCase
         $this->actingAs($actor)->get('/inventory/misplaced?sort=name')
             ->assertInertia(fn ($page) => $page->has('items.data', 2)->where('items.data.0.name', 'Ohne Ort')->where('items.data.1.name', 'Woanders'));
     }
+
+    public function test_the_target_can_become_only_the_home(): void
+    {
+        $actor = $this->userWithPermissions('inventory.view', 'inventory.move', 'inventory.edit');
+        $from = Location::factory()->create(['code' => 'EU']);
+        $shelf = Location::factory()->create(['code' => 'GO']);
+        $item = Item::factory()->at($from)->create();
+        $movements = $item->movements()->count();
+
+        $this->actingAs($actor)->post('/inventory/move', ['item_id' => $item->id, 'target_code' => 'GO', 'mode' => 'home'])
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('success', "Stammplatz von {$item->number} ist jetzt GO.");
+
+        $item->refresh();
+        $this->assertTrue($item->location->is($from));
+        $this->assertTrue($item->homeLocation->is($shelf));
+        $this->assertSame($movements, $item->movements()->count());
+
+        $this->actingAs($actor)->post('/inventory/move', ['item_id' => $item->id, 'target_code' => 'GO', 'mode' => 'home'])
+            ->assertSessionHasErrors('target_code');
+    }
+
+    public function test_the_target_can_become_place_and_home(): void
+    {
+        $actor = $this->userWithPermissions('inventory.view', 'inventory.move', 'inventory.edit');
+        $from = Location::factory()->create(['code' => 'EU']);
+        $shelf = Location::factory()->create(['code' => 'GO']);
+        $item = Item::factory()->at($from)->create(['home_location_id' => $from->id]);
+
+        $this->actingAs($actor)->post('/inventory/move', ['item_id' => $item->id, 'target_code' => 'GO', 'mode' => 'both'])
+            ->assertSessionHasNoErrors();
+
+        $item->refresh();
+        $this->assertTrue($item->location->is($shelf));
+        $this->assertTrue($item->homeLocation->is($shelf));
+        $this->assertFalse($item->isAwayFromHome());
+    }
+
+    public function test_a_new_home_needs_the_right_to_edit(): void
+    {
+        $actor = $this->userWithPermissions('inventory.view', 'inventory.move');
+        $from = Location::factory()->create(['code' => 'EU']);
+        Location::factory()->create(['code' => 'GO']);
+        $item = Item::factory()->at($from)->create();
+
+        foreach (['home', 'both'] as $mode) {
+            $this->actingAs($actor)->post('/inventory/move', ['item_id' => $item->id, 'target_code' => 'GO', 'mode' => $mode])
+                ->assertSessionHasErrors('mode');
+        }
+
+        $item->refresh();
+        $this->assertTrue($item->location->is($from));
+        $this->assertNull($item->home_location_id);
+    }
+
+    public function test_a_home_follows_the_rules_of_a_place(): void
+    {
+        $actor = $this->userWithPermissions('inventory.view', 'inventory.move', 'inventory.edit');
+        Location::factory()->address()->create(['code' => 'EU']);
+        $item = Item::factory()->create();
+
+        $this->actingAs($actor)->post('/inventory/move', ['item_id' => $item->id, 'target_code' => 'EU', 'mode' => 'home'])
+            ->assertSessionHasErrors('target');
+        $this->assertNull($item->fresh()->home_location_id);
+    }
 }

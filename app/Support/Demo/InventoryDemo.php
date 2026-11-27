@@ -8,6 +8,8 @@ use App\Actions\Inventory\MoveItem;
 use App\Actions\Inventory\RetireItem;
 use App\Actions\Inventory\SaveLocation;
 use App\Actions\Labels\ReserveNumbers;
+use App\Enums\ItemKind;
+use App\Enums\LocationType;
 use App\Enums\RetireReason;
 use App\Models\Category;
 use App\Models\Item;
@@ -385,8 +387,10 @@ class InventoryDemo implements DemoPart
     }
 
     /**
-     * Most items have a printed label; one in ten has none yet ("Noch ohne Etikett"). Written as
-     * query like the print itself, so neither audit nor updated_at change.
+     * Most items have a printed label; one in ten has none yet ("Etikett fehlt"). Of the rest, one
+     * in four bulk items and one in five compartments need no label ("Kein Etikett nötig", e.g.
+     * cables in a crate). Written as query like the print itself, so neither audit nor updated_at
+     * change.
      */
     private function markLabels(DemoContext $demo): void
     {
@@ -399,5 +403,21 @@ class InventoryDemo implements DemoPart
 
         Item::whereNotIn('id', $unlabeled)->toBase()->update(['label_printed_at' => $demo->today->subDays(3)]);
         Location::query()->toBase()->update(['label_printed_at' => $demo->today->subDays(3)]);
+
+        $noLabel = [];
+        foreach (Item::where('kind', ItemKind::Bulk)->whereNotIn('id', $unlabeled)->orderBy('id')->pluck('id') as $id) {
+            if ($demo->chance(0.25)) {
+                $noLabel[] = $id;
+            }
+        }
+        Item::whereIn('id', $noLabel)->toBase()->update(['label_printed_at' => null, 'no_label' => true]);
+
+        $noLabel = [];
+        foreach (Location::where('type', LocationType::Compartment)->orderBy('id')->pluck('id') as $id) {
+            if ($demo->chance(0.2)) {
+                $noLabel[] = $id;
+            }
+        }
+        Location::whereIn('id', $noLabel)->toBase()->update(['label_printed_at' => null, 'no_label' => true]);
     }
 }

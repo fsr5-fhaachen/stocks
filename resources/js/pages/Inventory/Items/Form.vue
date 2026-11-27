@@ -39,6 +39,11 @@
             hint="Kurzer Text, den Vorlagen mit {hint} drucken. Leer: Das Element bleibt weg."
             :error="form.errors.label_hint"
           />
+          <UiCheckbox
+            v-model="form.no_label"
+            label="Kein Etikett nötig"
+            description="Gilt als bewusst ohne Etikett und fehlt unter „Etikett fehlt“, z. B. bei Kabeln oder Kleinkram."
+          />
           <UiInput
             v-model="form.ean"
             label="EAN"
@@ -129,6 +134,7 @@ const props = defineProps<{
     public_contents: boolean;
     notes: string | null;
     label_hint: string | null;
+    no_label: boolean;
     ean: string | null;
     home: Place | null;
   } | null;
@@ -155,6 +161,7 @@ const form = useForm({
   public_contents: props.item?.public_contents ?? true,
   notes: props.item?.notes ?? "",
   label_hint: props.item?.label_hint ?? "",
+  no_label: props.item?.no_label ?? false,
   ean: props.item?.ean ?? "",
   reserved_number: props.reservedNumber ?? null,
   // "gut" if it exists, otherwise the first condition

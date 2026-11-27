@@ -3,6 +3,7 @@
 namespace App\Support\Table;
 
 use App\Enums\ItemKind;
+use App\Enums\LabelStatus;
 use App\Models\Category;
 use App\Models\Item;
 use App\Models\ItemCondition;
@@ -14,8 +15,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 
 /**
- * Items of the inventory. Filters: category (with its sub categories), condition, retired, without
- * printed label ("noch ohne Etikett").
+ * Items of the inventory. Filters: category (with its sub categories), condition, retired, label
+ * status ("label": App\Enums\LabelStatus; the older "unlabeled=1" means "Etikett fehlt").
  *
  * "grouped" (switch "Nach Boxen gruppieren"): without search and filters the list shows only the
  * items whose box is not in the list itself, boxes with the number of their contents; the page
@@ -109,7 +110,7 @@ class ItemsTable extends Table
     {
         return $this->wantsGrouping()
             && trim((string) $this->request->query('search', '')) === ''
-            && ! array_filter($this->request->only(['category', 'condition', 'retired', 'unlabeled']));
+            && ! array_filter($this->request->only(['category', 'condition', 'retired', 'label', 'unlabeled']));
     }
 
     /**
@@ -153,8 +154,8 @@ class ItemsTable extends Table
             $query->where('condition_id', $conditionId);
         }
 
-        if ($this->request->boolean('unlabeled')) {
-            $query->whereNull('label_printed_at');
+        if ($status = $this->labelStatus()) {
+            $status->apply($query);
         }
 
         // grouped: the contents of a box in the list are shown below the box
@@ -162,6 +163,18 @@ class ItemsTable extends Table
             $query->where(fn (Builder $query) => $query->whereNull('items.container_id')
                 ->orWhereNotIn('items.container_id', $this->scope()->whereNull('retired_at')->select('items.id')));
         }
+    }
+
+    /**
+     * Label status of the filter "Etikett", null for all.
+     */
+    private function labelStatus(): ?LabelStatus
+    {
+        if ($this->request->boolean('unlabeled')) {
+            return LabelStatus::Missing;
+        }
+
+        return LabelStatus::tryFrom((string) $this->request->query('label', ''));
     }
 
     /**
@@ -201,6 +214,7 @@ class ItemsTable extends Table
             'retired' => $model->isRetired(),
             'photo_url' => $model->photos->first()?->thumbUrl(),
             'label_printed_at' => $model->label_printed_at?->toIso8601String(),
+            'label_status' => LabelStatus::of($model)->value,
             // active items directly in the box, for the grouped list
             'contents_count' => $model->is_container ? (int) $model->contents_count : 0,
             // short notices of modules, e.g. "ausgegeben bis 12.11."

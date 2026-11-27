@@ -13,24 +13,29 @@
           <FontAwesomeIcon :icon="['fas', 'xmark']" />
         </button>
       </div>
-      <!-- every choice adds photos: phones take one photo per camera call -->
-      <label
-        v-if="model.length < max"
-        :class="[
-          'flex h-16 w-16 cursor-pointer flex-col items-center justify-center gap-1 rounded border-2 border-dashed border-line text-xs text-ink-muted hover:border-accent hover:text-accent',
-          busy ? 'pointer-events-none opacity-50' : '',
-        ]"
-      >
-        <FontAwesomeIcon :icon="['fas', busy ? 'rotate' : 'camera']" />
-        {{ model.length ? "Weiteres" : "Foto" }}
-        <input
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          multiple
-          class="sr-only"
-          @change="add"
-        />
-      </label>
+      <!-- every choice adds photos: phones take one photo per camera call. Android opens the
+           gallery directly, so the camera gets its own button there (usePlatform) -->
+      <template v-if="model.length < max">
+        <label
+          v-for="source in sources"
+          :key="source.key"
+          :class="[
+            'flex h-16 w-16 cursor-pointer flex-col items-center justify-center gap-1 rounded border-2 border-dashed border-line text-xs text-ink-muted hover:border-accent hover:text-accent',
+            busy ? 'pointer-events-none opacity-50' : '',
+          ]"
+        >
+          <FontAwesomeIcon :icon="['fas', busy ? 'rotate' : source.icon]" />
+          {{ source.label }}
+          <input
+            type="file"
+            :accept="source.accept"
+            :multiple="source.multiple"
+            :capture="source.capture"
+            class="sr-only"
+            @change="add"
+          />
+        </label>
+      </template>
     </div>
     <p v-if="hint" class="text-sm text-ink-muted">{{ hint }}</p>
     <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
@@ -38,7 +43,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 
 /**
  * Photos for a form. Each choice adds to the photos already chosen (the camera of a phone takes
@@ -56,6 +61,45 @@ const props = withDefaults(
 const model = defineModel<File[]>({ required: true });
 
 const { compressImages } = useImageCompression();
+const { isAndroid } = usePlatform();
+
+type Source = {
+  key: string;
+  label: string;
+  icon: string;
+  accept: string;
+  multiple: boolean;
+  capture?: "environment";
+};
+const sources = computed<Source[]>(() =>
+  isAndroid
+    ? [
+        {
+          key: "camera",
+          label: "Kamera",
+          icon: "camera",
+          accept: "image/*",
+          multiple: false,
+          capture: "environment",
+        },
+        {
+          key: "gallery",
+          label: "Galerie",
+          icon: "image",
+          accept: "image/jpeg,image/png,image/webp",
+          multiple: true,
+        },
+      ]
+    : [
+        {
+          key: "any",
+          label: model.value.length ? "Weiteres" : "Foto",
+          icon: "camera",
+          accept: "image/jpeg,image/png,image/webp",
+          multiple: true,
+        },
+      ],
+);
 const busy = ref(false);
 
 const add = async (event: Event) => {

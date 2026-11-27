@@ -47,8 +47,9 @@
     <div class="space-y-4">
       <!-- second step of moving, or putting everything at one place -->
       <UiAlert v-if="mode?.type === 'move'" type="info">
-        <strong>Umlagern:</strong> {{ mode.item.number }} {{ mode.item.name }}
-        <template v-if="mode.item.kind === 'bulk'">
+        <strong>{{ moveTitle }}:</strong> {{ mode.item.number }}
+        {{ mode.item.name }}
+        <template v-if="mode.item.kind === 'bulk' && moveMode !== 'home'">
           ({{ moveQuantity }} {{ mode.item.unit }})</template
         >. Scanne jetzt das Ziel.
         <button
@@ -58,10 +59,17 @@
         >
           Abbrechen
         </button>
+        <InventoryMoveTargetSwitch v-model="moveMode" class="mt-2 flex w-fit" />
       </UiAlert>
       <UiAlert v-if="mode?.type === 'here'" type="info">
-        <strong>Hierher umlagern:</strong> Jeder gescannte Gegenstand kommt nach
-        {{ mode.code }}.
+        <strong>{{ hereTitle }}:</strong>
+        {{
+          moveMode === "home"
+            ? `Jeder gescannte Gegenstand bekommt ${mode.code} als Stammplatz.`
+            : moveMode === "both"
+              ? `Jeder gescannte Gegenstand kommt nach ${mode.code}, das wird auch sein Stammplatz.`
+              : `Jeder gescannte Gegenstand kommt nach ${mode.code}.`
+        }}
         <button
           type="button"
           class="ml-1 font-bold underline"
@@ -69,6 +77,7 @@
         >
           Beenden
         </button>
+        <InventoryMoveTargetSwitch v-model="moveMode" class="mt-2 flex w-fit" />
       </UiAlert>
       <UiAlert v-if="error" type="error">{{ error }}</UiAlert>
       <InventoryReservedConfirm
@@ -218,7 +227,7 @@
             "
             icon="right-left"
             size="md"
-            @click="mode = { type: 'here', code: card.full_code }"
+            @click="startHere(card.full_code)"
           >
             Hierher umlagern
           </UiButton>
@@ -301,6 +310,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { router } from "@inertiajs/vue3";
+import type { MoveMode } from "../../components/inventory/MoveTargetSwitch.vue";
 
 type ScannedItem = {
   type: "item";
@@ -360,6 +370,24 @@ const mode = ref<
   { type: "move"; item: ScannedItem } | { type: "here"; code: string } | null
 >(null);
 const moveQuantity = ref<number | string>(1);
+// the target becomes the place, the home or both; every move starts with "Ort"
+const moveMode = ref<MoveMode>("place");
+const moveTitle = computed(
+  () =>
+    ({
+      place: "Umlagern",
+      home: "Stammplatz ändern",
+      both: "Umlagern mit Stammplatz",
+    })[moveMode.value],
+);
+const hereTitle = computed(
+  () =>
+    ({
+      place: "Hierher umlagern",
+      home: "Stammplatz hier",
+      both: "Hierher mit Stammplatz",
+    })[moveMode.value],
+);
 
 const canMove = computed(
   () =>
@@ -425,10 +453,17 @@ const move = (
   quantity: number | null,
   onSuccess?: () => void,
   confirmed = false,
+  target: MoveMode = "place",
 ) =>
   router.post(
     url("/inventory/move"),
-    { item_id: itemId, target_code: targetCode, quantity, confirmed },
+    {
+      item_id: itemId,
+      target_code: targetCode,
+      quantity: target === "home" ? null : quantity,
+      confirmed,
+      mode: target,
+    },
     {
       preserveScroll: true,
       preserveState: true,
@@ -440,7 +475,8 @@ const move = (
         if (errors.confirm) {
           reserved.value = {
             message: errors.confirm,
-            retry: () => move(itemId, targetCode, quantity, onSuccess, true),
+            retry: () =>
+              move(itemId, targetCode, quantity, onSuccess, true, target),
           };
           return;
         }
@@ -449,6 +485,7 @@ const move = (
           errors.target ??
           errors.item ??
           errors.quantity ??
+          errors.mode ??
           null;
       },
     },
@@ -466,6 +503,8 @@ const scanned = async (code: string) => {
       code,
       item.kind === "bulk" ? Number(moveQuantity.value) : null,
       () => show(item.number),
+      false,
+      moveMode.value,
     );
     return;
   }
@@ -474,7 +513,14 @@ const scanned = async (code: string) => {
     const found = await lookup(code);
     if (found?.type === "item") {
       card.value = found;
-      move(found.id, mode.value.code, null, () => show(found.number));
+      move(
+        found.id,
+        mode.value.code,
+        null,
+        () => show(found.number),
+        false,
+        moveMode.value,
+      );
     } else if (found) {
       error.value =
         "Das ist kein Gegenstand. „Hierher umlagern“ beenden, um etwas anderes zu scannen.";
@@ -496,8 +542,13 @@ const submitTyped = () => {
 
 const startMove = () => {
   if (card.value?.type === "item") {
+    moveMode.value = "place";
     mode.value = { type: "move", item: card.value };
   }
+};
+const startHere = (code: string) => {
+  moveMode.value = "place";
+  mode.value = { type: "here", code };
 };
 
 const hasResult = computed(() => !!(card.value || mode.value || error.value));
