@@ -124,7 +124,9 @@ const scanned = async (scannedCode: string) => {
     scanError.value = `${data.full_code} ist ein Gebäude bzw. eine Adresse. Gegenstände liegen in einem Raum, Lagerplatz oder Fach.`;
     return;
   }
-  place.value =
+  // set both from the same value: reading place.value right after setting it still gives the
+  // old place, the model only changes once the page renders again
+  const found: Place =
     data.type === "item"
       ? { type: "container", id: data.id, code: data.number, name: data.name }
       : {
@@ -133,7 +135,8 @@ const scanned = async (scannedCode: string) => {
           code: data.full_code,
           name: data.name,
         };
-  code.value = place.value.code;
+  place.value = found;
+  code.value = found.code;
   inputKey.value++;
   cameraOpen.value = false;
 };
