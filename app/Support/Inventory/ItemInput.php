@@ -7,6 +7,8 @@ use App\Http\Controllers\Inventory\ItemPhotoController;
 use App\Models\Item;
 use App\Models\ItemPhoto;
 use App\Models\Location;
+use App\Support\Products\Gtin;
+use Closure;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -37,6 +39,12 @@ class ItemInput
             'notes' => ['nullable', 'string', 'max:5000'],
             'label_hint' => ['nullable', 'string', 'max:100'],
             'home_code' => ['nullable', 'string', 'max:50'],
+            // barcode of the packaging; stored in one form, see Gtin::normalize()
+            'ean' => ['nullable', 'string', 'max:20', function (string $attribute, mixed $value, Closure $fail): void {
+                if (Gtin::normalize((string) $value) === null) {
+                    $fail('Das ist keine gültige EAN (8, 12, 13 oder 14 Ziffern mit Prüfziffer).');
+                }
+            }],
         ];
     }
 
@@ -69,6 +77,7 @@ class ItemInput
             'quantity' => $validated['quantity'] ?? 1,
             'is_container' => $validated['is_container'] ?? false,
             'public_contents' => $validated['public_contents'] ?? true,
+            'ean' => isset($validated['ean']) ? Gtin::normalize($validated['ean']) : null,
         ];
     }
 

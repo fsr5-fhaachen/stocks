@@ -28,6 +28,10 @@ use App\Support\MailSettings;
 use App\Support\Modules\ModuleRegistry;
 use App\Support\Notifications\MailLayout;
 use App\Support\Notifications\NotificationEvents;
+use App\Support\Products\OpenFacts;
+use App\Support\Products\ProductLookup;
+use App\Support\Products\UpcItemDb;
+use App\Support\Products\UserAgent;
 use App\Support\Settings;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -64,6 +68,13 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(AuditSubjects::class);
         $this->app->singleton(Settings::class);
         $this->app->singleton(NotificationEvents::class);
+        // product databases of the guided capture, in the order they are asked (UPCitemdb knows
+        // technology best, the Open Facts databases consumables)
+        $this->app->bind(ProductLookup::class, fn ($app) => new ProductLookup($app->make(Settings::class), [
+            $app->make(UpcItemDb::class),
+            new OpenFacts($app->make(UserAgent::class), 'world.openfoodfacts.org', 'Open Food Facts'),
+            new OpenFacts($app->make(UserAgent::class), 'world.openproductsfacts.org', 'Open Products Facts'),
+        ]));
 
         foreach ($this->app->make(ModuleRegistry::class)->all() as $module) {
             $this->app->register($module->provider);

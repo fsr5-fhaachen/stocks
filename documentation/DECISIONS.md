@@ -2,6 +2,18 @@
 
 Warum Stocks so gebaut ist, wie es gebaut ist. Neue Einträge oben; jeder Eintrag mit Datum, Entscheidung, Grund und verworfener Alternative.
 
+## 2026-11-27 · Barcode der Verpackung beim Erfassen
+
+**Nur kostenlose Quellen, UPCitemdb zuerst** (Entscheidungen von Maurice): UPCitemdb (Free-Plan) kennt Technik am besten, Open Food Facts und Open Products Facts eher Verbrauchsmaterial. Verworfen: EAN-Search (bezahlt, ohne Produktbilder), Go-UPC und Barcode Lookup (bezahlt).
+
+**Bilder auch von UPCitemdb, vom Server heruntergeladen** (Entscheidung von Maurice). Die Bedingungen von UPCitemdb verlangen keine Namensnennung, die Rechte an den Shop-Bildern liegen aber bei Shops und Herstellern; Stocks merkt sich deshalb Quelle und Host je Foto (`item_photos.source_host`), damit sich Bilder eines Shops finden und entfernen lassen. Bilder von Open Food Facts stehen unter CC BY-SA und tragen Urheber und Lizenz.
+
+**Quellenangaben so unauffällig wie erlaubt** (Entscheidung von Maurice): eine kleine Zeile unter dem Treffer, ein kleines „©“ am Foto, nichts in Listen und auf Etiketten.
+
+**EAN am Gegenstand, Vorschläge abwählbar, abschaltbar in den Einstellungen; die Seite „Scannen“ erkennt EANs nicht** (Entscheidungen von Maurice).
+
+**Treffer 30 Tage im Cache, „nichts gefunden“ einen Tag**: schont das Tageslimit von UPCitemdb, ein unbekanntes Produkt wird am nächsten Tag neu gesucht.
+
 ## 2026-11-27 · Geführtes Erfassen
 
 **Neue Gegenstände entstehen in einem geführten Ablauf mit Druck am Ende** (Entscheidungen von Maurice, siehe [INVENTORY.md](INVENTORY.md#erfassen)): Einstieg über die Navigation, Schritte Daten → Bilder → Ort (→ Stammplatz) → Etikett → Übersicht, ein Knopf „Erstellen und drucken“. Grund: Beim Einpflegen vieler Gegenstände auf der Live-Instanz war Anlegen und danach Drucken auf einer anderen Seite zu mühsam. Verworfen: das Formular um einen Druckknopf erweitern (bleibt eine lange Seite ohne Führung).

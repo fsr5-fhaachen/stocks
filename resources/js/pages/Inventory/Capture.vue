@@ -211,7 +211,14 @@
     </UiAlert>
 
     <UiCard v-if="step === 'data'">
-      <!-- room for the barcode scan of the packaging (next round) -->
+      <!-- barcode of the packaging: suggestions from product databases -->
+      <InventoryCaptureProductLookup
+        v-model:code="form.ean"
+        class="mb-5"
+        :enabled="productLookup"
+        :code-error="errors.ean"
+        @apply="applyProduct"
+      />
       <InventoryItemFields
         :form="form"
         :errors="errors"
@@ -454,6 +461,10 @@
               }}{{ form.is_container ? " · Box" : "" }}
             </dd>
           </div>
+          <div v-if="form.ean">
+            <dt class="text-ink-muted">EAN</dt>
+            <dd class="font-mono">{{ form.ean }}</dd>
+          </div>
           <div>
             <dt class="text-ink-muted">Kategorie</dt>
             <dd>{{ labelOf(categories, form.category_id) ?? "keine" }}</dd>
@@ -590,6 +601,7 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { router } from "@inertiajs/vue3";
 import type { PrintLabel } from "../../labels/drivers";
 import type { CaptureForm } from "../../composables/useCapture";
+import type { ProductSuggestion } from "../../components/inventory/capture/ProductLookup.vue";
 
 /**
  * Guided capture of new items: data, photos, place (and home), label, summary, then one tap
@@ -603,6 +615,8 @@ const props = defineProps<{
   conditions: Option[];
   maxPhotos: number;
   maxCount: number;
+  // setting "Produktdaten per Barcode"
+  productLookup: boolean;
   // only with the right to print labels
   printing: {
     templates: LabelTemplate[];
@@ -639,11 +653,13 @@ const defaults = (): CaptureForm => ({
   place_code: "",
   home_code: "",
   home_same: true,
+  ean: "",
 });
 
 const {
   form,
   photos,
+  photoRefs,
   photosLost,
   place,
   home,
@@ -687,6 +703,7 @@ const shownFields: Record<string, string[]> = {
     "description",
     "notes",
     "count",
+    "ean",
   ],
   place: ["place_code", "place"],
   home: ["home_code", "home"],
@@ -752,6 +769,23 @@ const open = async (position: number) => {
     }
   }
   goTo(position);
+};
+
+// a hit of the product databases: the chosen parts go into the form, images before own photos
+const applyProduct = (suggestion: ProductSuggestion) => {
+  if (suggestion.name) {
+    form.name = suggestion.name;
+  }
+  if (suggestion.description) {
+    form.description = suggestion.description;
+  }
+  for (const image of suggestion.images) {
+    photoRefs.set(image.file, image.ref);
+  }
+  photos.value = [
+    ...suggestion.images.map((image) => image.file),
+    ...photos.value,
+  ].slice(0, props.maxPhotos);
 };
 
 const labelOf = (options: Option[], value: unknown) =>

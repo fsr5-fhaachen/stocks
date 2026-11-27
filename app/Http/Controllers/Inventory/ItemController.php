@@ -106,7 +106,7 @@ class ItemController extends Controller
 
         return Inertia::render('Inventory/Items/Show', [
             'item' => [
-                ...$item->only(['id', 'number', 'name', 'description', 'quantity', 'unit', 'is_container', 'public_contents', 'notes', 'retired_note', 'label_hint']),
+                ...$item->only(['id', 'number', 'name', 'description', 'quantity', 'unit', 'is_container', 'public_contents', 'notes', 'retired_note', 'label_hint', 'ean']),
                 // pieces of a bulk item that are there ("vorhanden"), without those lent or missing
                 'quantity_here' => $item->kind === ItemKind::Bulk ? $this->extensions->quantityHere($item) : null,
                 'label_printed_at' => $item->label_printed_at?->toIso8601String(),
@@ -124,7 +124,7 @@ class ItemController extends Controller
                 'can_merge' => ($target = $item->mergeTarget()) !== null && ! $target->isRetired() && ! $item->isRetired(),
                 'retired_at' => $item->retired_at?->toIso8601String(),
                 'retired_reason' => $item->retired_reason?->label(),
-                'photos' => $item->photos->map(fn (ItemPhoto $photo) => ['id' => $photo->id, 'url' => $photo->url()]),
+                'photos' => $item->photos->map(fn (ItemPhoto $photo) => ['id' => $photo->id, 'url' => $photo->url(), 'credit' => $photo->credit()]),
                 'contents' => $item->is_container ? $this->contentsTree($item) : [],
             ],
             // notices and tabs of modules, e.g. "ausgegeben an … bis …" and the tab "Verleih"
@@ -396,7 +396,7 @@ class ItemController extends Controller
 
         return Inertia::render('Inventory/Items/Form', [
             'item' => $item ? [
-                ...$item->only(['id', 'number', 'name', 'description', 'category_id', 'quantity', 'unit', 'is_container', 'public_contents', 'notes', 'label_hint']),
+                ...$item->only(['id', 'number', 'name', 'description', 'category_id', 'quantity', 'unit', 'is_container', 'public_contents', 'notes', 'label_hint', 'ean']),
                 'kind' => $item->kind->value,
                 'home' => Item::placeSummary($item->home()),
             ] : null,

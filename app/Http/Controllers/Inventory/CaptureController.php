@@ -18,10 +18,15 @@ use App\Support\Inventory\ItemInput;
 use App\Support\Inventory\Placement;
 use App\Support\Labels\LabelData;
 use App\Support\Labels\ShortLink;
+use App\Support\Products\Gtin;
+use App\Support\Products\ImageFetcher;
+use App\Support\Products\ProductLookup;
 use App\Support\Surface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -37,7 +42,7 @@ class CaptureController extends Controller
      */
     private const KEY_MINUTES = 30;
 
-    public function __construct(private readonly ItemInput $input, private readonly LabelData $labels) {}
+    public function __construct(private readonly ItemInput $input, private readonly LabelData $labels, private readonly ProductLookup $products) {}
 
     /**
      * Display the guided capture. Templates and printers only with the right to print labels.
@@ -53,6 +58,8 @@ class CaptureController extends Controller
             'conditions' => ItemCondition::options(),
             'maxPhotos' => ItemPhoto::MAX_PER_ITEM,
             'maxCount' => CreateItems::MAX_COUNT,
+            // barcode of the packaging: name and images from product databases (setting)
+            'productLookup' => $this->products->enabled(),
             'printing' => $printing ? [
                 'templates' => LabelTemplate::whereIn('target', [LabelTarget::Item, LabelTarget::Box])->orderBy('name')->get()
                     ->map(fn (LabelTemplate $template) => $template->summary()),
@@ -103,6 +110,9 @@ class CaptureController extends Controller
             ...$this->input->createRules(),
             'count' => ['nullable', 'integer', 'min:1', 'max:'.CreateItems::MAX_COUNT],
             'capture_key' => ['required', 'string', 'max:64'],
+            // photos taken from a product database: "<barcode>:<index of the image>" per photo
+            'photo_refs' => ['array'],
+            'photo_refs.*' => ['nullable', 'string', 'regex:/^\d{8,14}:\d{1,2}$/'],
         ]);
         $user = $request->user();
         $key = "inventory-capture:{$user->id}:{$validated['capture_key']}";
@@ -121,6 +131,7 @@ class CaptureController extends Controller
                 $this->input->place($validated['home_code'] ?? null, 'home_code'),
                 $request->file('photos', []),
                 (int) ($validated['count'] ?? 1),
+                $this->photoSources($validated['photo_refs'] ?? []),
             );
             Cache::put($key, array_map(fn (Item $item) => $item->id, $items), now()->addMinutes(self::KEY_MINUTES));
 
@@ -137,5 +148,66 @@ class CaptureController extends Controller
             ], $items),
             'labels' => $printing ? array_map(fn (Item $item) => $this->labels->forItem($item), $items) : [],
         ], 201);
+    }
+
+    /**
+     * Suggestions for the barcode of a packaging (json): name, description, images and the items
+     * that have this barcode already.
+     */
+    public function product(Request $request): JsonResponse
+    {
+        abort_unless($this->products->enabled(), 404);
+        $validated = $request->validate([
+            'code' => ['required', 'string', 'max:20'],
+            'format' => ['nullable', 'string', 'max:20'],
+        ]);
+        $gtin = Gtin::normalize($validated['code'], $validated['format'] ?? null)
+            ?? throw ValidationException::withMessages(['code' => 'Das ist kein gültiger Barcode einer Verpackung (EAN oder UPC). Prüfziffer falsch?']);
+
+        $existing = Item::active()->where('ean', $gtin)->with(['location', 'container'])->orderBy('number')->limit(5)->get();
+
+        return response()->json([
+            ...$this->products->lookup($gtin),
+            'existing' => $existing->map(fn (Item $item) => [
+                ...$item->only(['id', 'number', 'name']),
+                'place' => Item::placeSummary($item->place()),
+                'href' => Surface::link('inventory.items.show', $item),
+            ])->all(),
+        ]);
+    }
+
+    /**
+     * An image of the suggestions, downloaded by the server and handed on as jpeg. Only images of
+     * a cached answer, never a free address.
+     */
+    public function productImage(string $gtin, int $index, ImageFetcher $fetcher): HttpResponse
+    {
+        abort_unless($this->products->enabled(), 404);
+        $image = $this->products->cachedImage($gtin, $index);
+        abort_if($image === null, 404);
+
+        $jpeg = $fetcher->fetch($image['url']);
+        abort_if($jpeg === null, 404, 'Das Bild ließ sich nicht laden.');
+
+        return response($jpeg, 200, ['Content-Type' => 'image/jpeg', 'Cache-Control' => 'private, max-age=3600']);
+    }
+
+    /**
+     * Origin of the photos taken from product databases, by the keys of the photos.
+     *
+     * @param  array<int|string, string|null>  $refs
+     * @return array<int, array<string, string|null>|null>
+     */
+    private function photoSources(array $refs): array
+    {
+        $sources = [];
+        foreach ($refs as $key => $ref) {
+            if ($ref !== null && str_contains($ref, ':')) {
+                [$gtin, $index] = explode(':', $ref);
+                $sources[(int) $key] = $this->products->origin($gtin, (int) $index);
+            }
+        }
+
+        return $sources;
     }
 }

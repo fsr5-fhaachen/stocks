@@ -93,6 +93,15 @@ Der letzte Knopf heißt „Erstellen und drucken“, wenn gleich gedruckt werden
 
 **Danach:** „Nächster Gegenstand“ behält Kategorie, Art, Einheit, Zustand, Ort und Stammplatz, Vorlage und Drucker und leert Name, Beschreibung, Notiz, Hinweis, Fotos und Anzahl. „Fertig“ zeigt die **Runde**: alles, was in diesem Tab erfasst wurde, mit Druckstatus und „Etiketten drucken“ für den Rest. Formular, Schritt und Runde liegen im `sessionStorage` (`useCapture`); neu laden behält sie, nur die Fotos muss man neu wählen.
 
+**Barcode der Verpackung** (seit 27.11.2026, Entscheidungen von Maurice): Oben im Schritt Daten das Feld „EAN der Verpackung“ mit „Scannen“ (Kamera mit EAN-13, EAN-8, UPC-A, UPC-E) und „Suchen“. `GET /inventory/capture/product?code=` fragt `App\Support\Products\ProductLookup`, der der Reihe nach **UPCitemdb** (Free-Plan, 100 Abfragen am Tag, Technik), **Open Food Facts** und **Open Products Facts** (frei, Verbrauchsmaterial) fragt und daraus Vorschläge macht: Name der ersten Quelle mit Namen (bei Open Facts der deutsche), Beschreibung aus Marke und Modell, Bilder aller Quellen (höchstens 12). Alles ist abwählbar und änderbar; „Übernehmen“ füllt die Felder, die gewählten Bilder kommen vor die eigenen Fotos. Gibt es schon Gegenstände mit dieser EAN, zeigt die Karte sie an („Gibt es schon“).
+
+- **Gespeicherte Form** (`Gtin::normalize()`): Prüfziffer geprüft, UPC-A bekommt die führende 0 (EAN-13), UPC-E wird erst zu UPC-A. `items.ean`, auch im Formular „Bearbeiten“ und in der Suche der Liste. Die Seite „Scannen“ erkennt EANs nicht (bewusst).
+- **Cache je Code:** ein Treffer 30 Tage (ein zweiter Scan derselben Packung kostet keine Abfrage), „nichts gefunden“ einen Tag; Antworten mit nicht erreichbarer Quelle werden nicht gemerkt. Ist das Tageskontingent von UPCitemdb aufgebraucht (429 oder `X-RateLimit-Remaining` 0), pausiert die Quelle bis zum Reset.
+- **Bilder** lädt der Server (`GET /inventory/capture/product/{code}/images/{index}`, `ImageFetcher`): nur Bilder aus dem gemerkten Treffer, nur öffentliche Adressen (Host vorher aufgelöst, private und reservierte Adressen abgelehnt, Verbindung zur geprüften Adresse, Weiterleitungen einzeln geprüft), höchstens 10 MB, als JPEG über `ImageDecoding`. Im Browser werden sie wie eigene Fotos verkleinert.
+- **Herkunft der Fotos:** `item_photos.source`, `source_url`, `license`, `author`, `source_host` (der Browser schickt nur `photo_refs[i]` = „Code:Index“, die Angaben kommen aus dem Treffer auf dem Server). Am Foto ein kleines „©“; Antippen zeigt „Foto: Open Food Facts contributors, CC BY-SA 3.0“ bzw. „Bild über UPCitemdb, Quelle: shop.de“ mit Link. Über `source_host` lassen sich alle Bilder eines Shops finden. Kopien (mehrere Stücke, Abteilen) behalten die Angaben.
+- **Bedingungen:** Open Food Facts verlangt einen eigenen User-Agent (`Stocks/<Version> (<APP_URL>; <Kontaktadresse>)`, `UserAgent`), höchstens 100 Produktabfragen pro Minute, Namensnennung (ODbL für Daten, CC BY-SA für Bilder). UPCitemdb: Nutzung für den eigenen Betrieb, keine Namensnennung verlangt; die Rechte an den Shop-Bildern bleiben bei Shops und Herstellern. Die Quellenangabe steht klein unter dem Treffer.
+- **Einstellung** `inventory.product_lookup` (Verwaltung › Einstellungen › Allgemein, „Produktdaten per Barcode“, Vorgabe an): aus = keine Abfragen nach außen, nur das Feld EAN.
+
 **Mengenartikel oder mehrere Einzelstücke:** Ist egal, welches Stück jemand bekommt, und muss man es nicht einzeln wiedererkennen: Menge (eine Nummer, ein Etikett). Sonst Einzelstücke (je Stück Nummer, Etikett, Zustand und Ort). Das Erfassen legt nie abgeteilte Teile an.
 
 ## Artikelnummern
@@ -194,6 +203,7 @@ Die Spalten sind die Vorgabe der Startrollen in `config/stocks.php`; danach änd
 | `app/Support/Table/ItemsTable.php` | Liste mit Suche, Filtern und Live-Update |
 | `app/Http/Controllers/Inventory` | Seiten und JSON-Endpunkte (`lookup`, `places`, `stats`); `CaptureController` für das Erfassen |
 | `resources/js/pages/Inventory/Capture.vue`, `composables/useCapture.ts`, `components/inventory/capture/` | Erfassen |
+| `app/Support/Products` | Barcode der Verpackung: `Gtin`, `ProductLookup` mit den Quellen `UpcItemDb` und `OpenFacts`, `ImageFetcher`, `UserAgent` |
 | `resources/js/pages/Inventory` | Seiten; Bausteine in `resources/js/components/inventory` |
 | `tests/Feature/Inventory` | Tests je Regel |
 | `database/seeders/InventorySeeder.php` | Demo-Inventar |

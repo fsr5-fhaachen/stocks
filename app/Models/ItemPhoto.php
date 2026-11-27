@@ -18,6 +18,11 @@ use Illuminate\Validation\ValidationException;
  * @property string $path
  * @property string|null $thumb_path small preview for lists, see App\Support\Inventory\PhotoThumbnail
  * @property int $sort
+ * @property string|null $source product database the photo came from, null for own photos
+ * @property string|null $source_url page of the product at the source, or the address of the image
+ * @property string|null $license e.g. "CC BY-SA 3.0"
+ * @property string|null $author e.g. "Open Food Facts contributors"
+ * @property string|null $source_host host the image was downloaded from
  */
 class ItemPhoto extends Model
 {
@@ -45,7 +50,19 @@ class ItemPhoto extends Model
         'path',
         'thumb_path',
         'sort',
+        'source',
+        'source_url',
+        'license',
+        'author',
+        'source_host',
     ];
+
+    /**
+     * Fields of the origin of a photo from a product database.
+     *
+     * @var list<string>
+     */
+    public const SOURCE_FIELDS = ['source', 'source_url', 'license', 'author', 'source_host'];
 
     /**
      * Store uploaded photos on S3 under "items/<id>/<random name>".
@@ -55,14 +72,17 @@ class ItemPhoto extends Model
      *
      * @param  list<UploadedFile>  $files
      * @param  ItemConditionChange|null  $conditionChange  photos of a condition change instead of the gallery
+     * @param  array<int, array<string, string|null>|null>  $sources  origin per file (same keys as $files), see SOURCE_FIELDS
      * @return list<self>
      *
      * @throws ValidationException
      */
-    public static function uploadAll(Item $item, array $files, ?ItemConditionChange $conditionChange = null): array
+    public static function uploadAll(Item $item, array $files, ?ItemConditionChange $conditionChange = null, array $sources = []): array
     {
         $paths = [];
-        foreach ($files as $file) {
+        $origins = [];
+        foreach ($files as $key => $file) {
+            $origins[] = array_intersect_key($sources[$key] ?? [], array_flip(self::SOURCE_FIELDS));
             $path = $file->store("items/{$item->id}", self::DISK);
             if ($path === false) {
                 if ($paths) {
@@ -76,12 +96,12 @@ class ItemPhoto extends Model
 
         $sort = (int) self::where('item_id', $item->id)->max('sort');
 
-        return array_map(function (string $path) use ($item, $conditionChange, &$sort) {
-            $photo = new self(['condition_change_id' => $conditionChange?->id, 'path' => $path, 'thumb_path' => PhotoThumbnail::create($path), 'sort' => ++$sort]);
+        return array_map(function (string $path, array $origin) use ($item, $conditionChange, &$sort) {
+            $photo = new self([...$origin, 'condition_change_id' => $conditionChange?->id, 'path' => $path, 'thumb_path' => PhotoThumbnail::create($path), 'sort' => ++$sort]);
             $photo->item()->associate($item)->save();
 
             return $photo;
-        }, $paths);
+        }, $paths, $origins);
     }
 
     /**
@@ -95,7 +115,7 @@ class ItemPhoto extends Model
             return null;
         }
 
-        $photo = new self(['path' => $path, 'thumb_path' => PhotoThumbnail::create($path), 'sort' => $this->sort]);
+        $photo = new self([...$this->only(self::SOURCE_FIELDS), 'path' => $path, 'thumb_path' => PhotoThumbnail::create($path), 'sort' => $this->sort]);
         $photo->item()->associate($item)->save();
 
         return $photo;
@@ -163,6 +183,20 @@ class ItemPhoto extends Model
     public function url(): string
     {
         return route('inventory.photos.show', $this, absolute: false);
+    }
+
+    /**
+     * Credit of a photo from a product database for the small "©" on the photo, null for own photos.
+     *
+     * @return array{source: string, author: string|null, license: string|null, url: string|null, host: string|null}|null
+     */
+    public function credit(): ?array
+    {
+        if ($this->source === null) {
+            return null;
+        }
+
+        return ['source' => $this->source, 'author' => $this->author, 'license' => $this->license, 'url' => $this->source_url, 'host' => $this->source_host];
     }
 
     /**

@@ -139,6 +139,13 @@
           :error="form.errors['inventory.number_prefix']"
         />
       </div>
+      <div class="mt-5">
+        <UiCheckbox
+          v-model="form.inventory.product_lookup"
+          label="Produktdaten per Barcode"
+          description="Beim Erfassen lässt sich der Barcode der Verpackung scannen; Stocks fragt dann UPCitemdb, Open Food Facts und Open Products Facts nach Name und Bildern. Aus: keine Abfragen nach außen, die EAN lässt sich weiter eintippen."
+        />
+      </div>
     </UiCard>
 
     <UiCard
@@ -276,6 +283,8 @@ const form = useForm({
   },
   inventory: {
     number_prefix: value("inventory.number_prefix"),
+    product_lookup:
+      (props.settings["inventory.product_lookup"] as unknown) !== false,
   },
   labels: {
     base_url: value("labels.base_url"),
@@ -304,6 +313,7 @@ const submit = () =>
       legal: nullIfEmpty(data.legal),
       inventory: {
         number_prefix: data.inventory.number_prefix.toUpperCase() || null,
+        product_lookup: data.inventory.product_lookup,
       },
       labels: nullIfEmpty(data.labels),
     }))
