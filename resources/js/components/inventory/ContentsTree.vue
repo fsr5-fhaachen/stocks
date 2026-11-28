@@ -56,14 +56,22 @@
         >
         <!-- right in the list: "Verbraucht" (consumables) and "Ausmustern", from this box -->
         <span v-if="actions" class="ml-auto flex shrink-0 gap-1">
-          <!-- bulk pieces: count them in this box and set their target ("Sollmenge") -->
+          <!-- bulk pieces: "+" out of "Eingang", their target ("Sollmenge") -->
+          <UiButton
+            v-if="item.stock && can('inventory.move')"
+            size="sm"
+            variant="secondary"
+            icon="plus"
+            :aria-label="`${item.name} aus dem Eingang dazutun`"
+            @click="$emit('add', item)"
+          />
           <UiButton
             v-if="item.stock && can('inventory.edit')"
             size="sm"
             variant="secondary"
-            icon="calculator"
-            :aria-label="`${item.name} zählen, Sollmenge`"
-            @click="$emit('edit', item)"
+            icon="bullseye"
+            :aria-label="`${item.name}: Sollmenge`"
+            @click="$emit('target', item)"
           />
           <UiButton
             v-if="item.consumable && item.quantity > 0 && can('inventory.move')"
@@ -93,7 +101,8 @@
         nested
         @consume="$emit('consume', $event)"
         @retire="$emit('retire', $event)"
-        @edit="$emit('edit', $event)"
+        @add="$emit('add', $event)"
+        @target="$emit('target', $event)"
       />
     </li>
   </ul>
@@ -116,7 +125,8 @@ defineProps({
 defineEmits<{
   consume: [item: ContentsItem];
   retire: [item: ContentsItem];
-  edit: [item: ContentsItem];
+  add: [item: ContentsItem];
+  target: [item: ContentsItem];
 }>();
 const { can } = usePermissions();
 

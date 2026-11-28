@@ -37,7 +37,7 @@
     <UiButton
       v-if="canStock && can('inventory.edit')"
       variant="secondary"
-      icon="calculator"
+      icon="bullseye"
       @click="targetOpen = true"
     >
       Sollmenge festlegen
@@ -178,15 +178,23 @@
             >
             {{ stock.unit }}</UiBadge
           >
-          <!-- count here and set the target; "Verbraucht" (consumables), "Ausmustern" -->
+          <!-- "+" out of "Eingang", target; "Verbraucht" (consumables), "Ausmustern" -->
           <span class="ml-auto flex gap-1">
+            <UiButton
+              v-if="can('inventory.move')"
+              size="sm"
+              variant="secondary"
+              icon="plus"
+              :aria-label="`${stock.name} aus dem Eingang dazutun`"
+              @click="editing = { stock, mode: 'add' }"
+            />
             <UiButton
               v-if="can('inventory.edit')"
               size="sm"
               variant="secondary"
-              icon="calculator"
-              :aria-label="`${stock.name} zählen, Sollmenge`"
-              @click="editing = stock"
+              icon="bullseye"
+              :aria-label="`${stock.name}: Sollmenge`"
+              @click="editing = { stock, mode: 'target' }"
             />
             <UiButton
               v-if="
@@ -226,16 +234,19 @@
     @close="targetOpen = false"
     @done="targetOpen = false"
   />
-  <InventoryStockEditModal
+  <component
+    :is="
+      editing.mode === 'add' ? InventoryStockAddModal : InventoryStockEditModal
+    "
     v-if="editing"
-    :item-id="editing.id"
-    :unit="editing.unit"
+    :item-id="editing.stock.id"
+    :unit="editing.stock.unit"
     :stock="{
       id: 0,
-      key: editing.stock.key,
-      quantity: editing.quantity,
-      target_quantity: editing.stock.target_quantity,
-      short: editing.stock.short,
+      key: editing.stock.stock.key,
+      quantity: editing.stock.quantity,
+      target_quantity: editing.stock.stock.target_quantity,
+      short: editing.stock.stock.short,
       place: { code: location.full_code } as Place,
     }"
     @close="editing = null"
@@ -279,6 +290,8 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { router } from "@inertiajs/vue3";
+import InventoryStockAddModal from "../../../components/inventory/StockAddModal.vue";
+import InventoryStockEditModal from "../../../components/inventory/StockEditModal.vue";
 
 type LocationSummary = {
   id: number;
@@ -340,7 +353,7 @@ const packOpen = ref(false);
 // "Verbraucht" and "Ausmustern" from this location
 type Stock = (typeof props.stocks)[number];
 const consuming = ref<Stock | null>(null);
-const editing = ref<Stock | null>(null);
+const editing = ref<{ stock: Stock; mode: "add" | "target" } | null>(null);
 const targetOpen = ref(false);
 const retiring = ref<{
   id: number;

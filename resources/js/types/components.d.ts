@@ -32,6 +32,7 @@ declare module 'vue' {
     InventoryPlaceLink: typeof import('./../components/inventory/PlaceLink.vue')['default']
     InventoryReservedConfirm: typeof import('./../components/inventory/ReservedConfirm.vue')['default']
     InventoryRetireModal: typeof import('./../components/inventory/RetireModal.vue')['default']
+    InventoryStockAddModal: typeof import('./../components/inventory/StockAddModal.vue')['default']
     InventoryStockCard: typeof import('./../components/inventory/StockCard.vue')['default']
     InventoryStockEditModal: typeof import('./../components/inventory/StockEditModal.vue')['default']
     InventoryStockTargetModal: typeof import('./../components/inventory/StockTargetModal.vue')['default']

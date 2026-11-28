@@ -30,7 +30,7 @@
         :quantity-locked="item?.kind === 'bulk'"
         :quantity-hint="
           item?.kind === 'bulk'
-            ? 'Die Menge folgt den Stellen: Wareneingang, Zählen, Verbraucht.'
+            ? 'Die Menge folgt den Stellen: Wareneingang, Verbraucht, Ausmustern.'
             : null
         "
       >

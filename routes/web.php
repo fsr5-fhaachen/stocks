@@ -136,6 +136,8 @@ Route::middleware('auth')->group(function () {
             Route::post('/items/{item}/condition', [ItemController::class, 'changeCondition'])->name('items.condition');
             Route::post('/items/{item}/consume', [ItemController::class, 'consume'])->name('items.consume');
             Route::post('/stocks/fill', [StockController::class, 'fill'])->name('stocks.fill');
+            // "+" at a place: out of "Eingang" (at "Eingang" itself: Wareneingang, inventory.edit)
+            Route::post('/items/{item}/stocks/add', [StockController::class, 'add'])->name('items.stocks.add');
         });
 
         Route::middleware('can:inventory.retire')->group(function () {

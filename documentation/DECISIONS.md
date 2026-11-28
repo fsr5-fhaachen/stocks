@@ -11,7 +11,7 @@ Warum Stocks so gebaut ist, wie es gebaut ist. Neue Einträge oben; jeder Eintra
 - **Buchung reserviert nur eine Anzahl, abgezogen wird bei der Ausgabe** (Entscheidung von Maurice), von der gewählten Stelle (`loan_items.source_key`) oder der einzigen. Umlagern von Stücken fragt deshalb nicht mehr nach, wenn eine Buchung damit rechnet.
 - **Einräumen nach dem Verleih: der Scan entscheidet die Stelle** (Entscheidung von Maurice); vorgeschlagen wird die Stelle, von der die Stücke kamen, sonst der Stammplatz. Zurück, aber noch nicht eingeräumt, darf gleich wieder ausgegeben werden: die Ausgabe räumt diese Stücke dann an der Quelle ein. Gefundene vermisste Stücke landen im Eingang.
 - **Ganz verbraucht heißt nicht ausgemustert**: ein Mengenartikel mit 0 Stück bleibt, damit er wieder aufgefüllt werden kann. Ausmustern als Ganzes geht weiter über „Ausmustern“ ohne Menge.
-- **Das Formular ändert die Menge nicht mehr**; sie folgt den Stellen (Wareneingang, Zählen, Verbraucht).
+- **Das Formular ändert die Menge nicht mehr**; sie folgt den Stellen (Wareneingang, „+“ aus dem Eingang, Verbraucht, Ausmustern). Ein eigenes Zählen gibt es nicht (Entscheidung von Maurice): ein falsch erfasster Bestand wird über Ausmustern oder Wareneingang korrigiert.
 
 ## 2026-11-27 · Barcode der Verpackung beim Erfassen
 

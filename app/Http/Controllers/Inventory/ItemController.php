@@ -11,6 +11,7 @@ use App\Actions\Inventory\UpdateItem;
 use App\Enums\ItemKind;
 use App\Enums\LabelStatus;
 use App\Enums\LocationType;
+use App\Enums\MovementType;
 use App\Enums\RetireReason;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
@@ -126,6 +127,9 @@ class ItemController extends Controller
                 // bulk item: its places ("Bestand"), "Eingang" first; the rest of its quantity is away
                 'stocks' => $item->isBulk() ? $this->stocksOf($item) : [],
                 'away_quantity' => $item->isBulk() ? $this->extensions->awayQuantity($item) : 0,
+                // bulk item: how much left the inventory so far, used up and retired
+                'consumed_total' => $item->isBulk() ? (int) $item->movements()->where('type', MovementType::Consume)->sum('quantity') : 0,
+                'retired_total' => $item->isBulk() ? (int) $item->movements()->where('type', MovementType::Retire)->sum('quantity') : 0,
                 'min_quantity' => $item->min_quantity,
                 'retired_at' => $item->retired_at?->toIso8601String(),
                 'retired_reason' => $item->retired_reason?->label(),
@@ -469,19 +473,34 @@ class ItemController extends Controller
      */
     private function history(Item $item): array
     {
-        $movements = $item->movements()->with(['user', 'fromLocation', 'fromContainer', 'toLocation', 'toContainer'])->limit(100)->get()
-            ->map(fn (ItemMovement $movement) => [
+        $movements = $item->movements()->with(['user', 'fromLocation', 'fromContainer', 'toLocation', 'toContainer'])->limit(100)->get();
+        // a box: also what happened to the pieces of bulk items in it (packed, taken out, counted,
+        // used up), with the name of the item
+        if ($item->is_container) {
+            $movements = $movements->concat(ItemMovement::query()
+                ->where('item_id', '!=', $item->id)
+                ->where(fn ($query) => $query->where('from_container_id', $item->id)->orWhere('to_container_id', $item->id))
+                ->whereHas('item', fn ($query) => $query->where('kind', ItemKind::Bulk))
+                ->with(['item', 'user', 'fromLocation', 'fromContainer', 'toLocation', 'toContainer'])
+                ->latest('id')->limit(100)->get());
+        }
+        $movements = $movements->map(function (ItemMovement $movement) use ($item) {
+            $other = $movement->item_id !== $item->id ? $movement->item : null;
+
+            return [
                 'key' => "movement-{$movement->id}",
                 'at' => $movement->created_at->toIso8601String(),
-                'title' => ucfirst($movement->type->label()),
+                'title' => ucfirst($movement->type->label()).($other ? " · {$other->name} {$other->number}" : ''),
                 'from' => Item::placeSummary($movement->fromLocation ?? $movement->fromContainer),
                 'to' => Item::placeSummary($movement->toLocation ?? $movement->toContainer),
-                'quantity' => $item->kind === ItemKind::Bulk ? $movement->quantity : null,
+                'quantity' => ($other ?? $item)->kind === ItemKind::Bulk ? $movement->quantity : null,
+                'unit' => ($other ?? $item)->unit,
                 'text' => $movement->note,
                 'user' => $movement->user?->name,
                 'photos' => [],
-                'delete_url' => route('inventory.items.movements.destroy', [$item, $movement], absolute: false),
-            ]);
+                'delete_url' => route('inventory.items.movements.destroy', [$other ?? $item, $movement], absolute: false),
+            ];
+        });
 
         $changes = $item->conditionChanges()->with(['user', 'photos'])->limit(100)->get()
             ->map(fn (ItemConditionChange $change) => [

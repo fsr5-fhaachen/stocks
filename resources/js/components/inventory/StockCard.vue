@@ -33,6 +33,15 @@
     <p v-else-if="minQuantity !== null" class="mt-1 text-sm text-ink-muted">
       Mindestbestand {{ minQuantity }} {{ unit }}
     </p>
+    <p v-if="consumedTotal || retiredTotal" class="mt-1 text-sm text-ink-muted">
+      Bisher
+      <template v-if="consumedTotal"
+        >{{ consumedTotal }} {{ unit }} verbraucht</template
+      ><template v-if="consumedTotal && retiredTotal">, </template
+      ><template v-if="retiredTotal"
+        >{{ retiredTotal }} {{ unit }} ausgemustert</template
+      >.
+    </p>
     <ul v-if="stocks.length" class="mt-3 divide-y divide-line">
       <li
         v-for="stock in stocks"
@@ -54,13 +63,28 @@
           </UiBadge>
         </div>
         <span v-if="canAct" class="flex shrink-0 gap-1">
+          <!-- "+": out of "Eingang"; at "Eingang" itself new pieces (Wareneingang) -->
           <UiButton
-            v-if="can('inventory.edit')"
+            v-if="
+              stock.key === 'IN' ? can('inventory.edit') : can('inventory.move')
+            "
             size="sm"
             variant="secondary"
-            icon="calculator"
-            :aria-label="`${stock.place?.code ?? 'Eingang'} zählen, Sollmenge`"
-            @click="$emit('edit', stock)"
+            icon="plus"
+            :aria-label="
+              stock.key === 'IN'
+                ? 'Wareneingang'
+                : `Aus dem Eingang in ${stock.place?.code}`
+            "
+            @click="$emit('add', stock)"
+          />
+          <UiButton
+            v-if="stock.key !== 'IN' && can('inventory.edit')"
+            size="sm"
+            variant="secondary"
+            icon="bullseye"
+            :aria-label="`Sollmenge in ${stock.place?.code}`"
+            @click="$emit('target', stock)"
           />
           <UiButton
             v-if="can('inventory.move') && stock.quantity > 0"
@@ -100,8 +124,8 @@
 
 <script setup lang="ts">
 /**
- * Stock of a bulk item per place with the actions of each place (zählen and Sollmenge, umlagern,
- * verbraucht, ausmustern) and "Einpacken"; the page opens its dialogs with the place as source
+ * Stock of a bulk item per place with the actions of each place ("+" out of "Eingang", Sollmenge,
+ * umlagern, verbraucht, ausmustern) and "Einpacken"; the page opens its dialogs with the place as source
  * ("from").
  */
 withDefaults(
@@ -113,18 +137,22 @@ withDefaults(
     unit: string | null;
     home: Place | null;
     minQuantity?: number | null;
+    // used up and retired so far (movement log)
+    consumedTotal?: number;
+    retiredTotal?: number;
     consumable: boolean;
     // false for retired items and while a module locks the item
     canAct: boolean;
   }>(),
-  { minQuantity: null },
+  { minQuantity: null, consumedTotal: 0, retiredTotal: 0 },
 );
 defineEmits<{
   move: [key: string];
   consume: [key: string];
   retire: [key: string];
   pack: [];
-  edit: [stock: StockEntry];
+  add: [stock: StockEntry];
+  target: [stock: StockEntry];
 }>();
 
 const { can } = usePermissions();

@@ -56,29 +56,68 @@ class StockInTest extends TestCase
         $this->actingAs($actor)->get("/inventory/items/{$box->id}")->assertInertia(fn ($page) => $page->where('item.contents.0.quantity', 4));
     }
 
-    public function test_counting_a_place_corrects_the_stock_and_sets_its_target(): void
+    public function test_the_target_of_a_place_is_set_from_its_row(): void
     {
         $actor = $this->userWithPermissions('inventory.view', 'inventory.edit');
         $box = Item::factory()->container()->create(['number' => 'B-12']);
-        $batteries = Item::factory()->bulk(10)->stockedAt($box)->create();
+        $batteries = Item::factory()->bulk(7)->stockedAt($box)->create();
 
-        $this->actingAs($actor)->post("/inventory/items/{$batteries->id}/stocks", ['place' => ItemStock::keyOf($box), 'quantity' => 7, 'target_quantity' => 8])
+        $this->actingAs($actor)->post("/inventory/items/{$batteries->id}/stocks", ['place' => ItemStock::keyOf($box), 'target_quantity' => 8])
             ->assertSessionHasNoErrors();
-
         $stock = ItemStock::for($batteries, $box);
         $this->assertSame(7, $stock->quantity);
         $this->assertSame(8, $stock->target_quantity);
         $this->assertTrue($stock->isShort());
-        $this->assertSame(7, $batteries->fresh()->quantity);
-        $this->assertDatabaseHas('item_movements', ['item_id' => $batteries->id, 'type' => 'count', 'quantity' => 7]);
 
-        // counted to 0 the place stays because of its target; without target it goes
-        $this->actingAs($actor)->post("/inventory/items/{$batteries->id}/stocks", ['place' => ItemStock::keyOf($box), 'quantity' => 0, 'target_quantity' => 8]);
-        $this->assertTrue(ItemStock::for($batteries, $box)->exists);
-        $this->actingAs($actor)->post("/inventory/items/{$batteries->id}/stocks", ['place' => ItemStock::keyOf($box), 'quantity' => 0]);
-        $this->assertFalse(ItemStock::for($batteries, $box)->exists);
+        // "Eingang" has no target; empty clears it
+        $this->actingAs($actor)->post('/inventory/stock-in', ['code' => $batteries->number, 'quantity' => 1]);
+        $this->actingAs($actor)->post("/inventory/items/{$batteries->id}/stocks", ['place' => ItemStock::INCOMING, 'target_quantity' => 3])->assertSessionHasErrors('target_quantity');
+        $this->actingAs($actor)->post("/inventory/items/{$batteries->id}/stocks", ['place' => ItemStock::keyOf($box)])->assertSessionHasNoErrors();
+        $this->assertNull(ItemStock::for($batteries, $box)->target_quantity);
         $this->actingAs($this->userWithPermissions('inventory.view', 'inventory.move'))
-            ->post("/inventory/items/{$batteries->id}/stocks", ['place' => ItemStock::INCOMING, 'quantity' => 3])->assertForbidden();
+            ->post("/inventory/items/{$batteries->id}/stocks", ['place' => ItemStock::keyOf($box), 'target_quantity' => 3])->assertForbidden();
+    }
+
+    public function test_plus_takes_pieces_out_of_incoming_or_books_new_ones_in(): void
+    {
+        $actor = $this->userWithPermissions('inventory.view', 'inventory.edit', 'inventory.move');
+        $box = Item::factory()->container()->create();
+        $batteries = Item::factory()->bulk(3)->stockedAt($box)->create();
+
+        // nothing in "Eingang" yet
+        $this->actingAs($actor)->post("/inventory/items/{$batteries->id}/stocks/add", ['place' => ItemStock::keyOf($box), 'quantity' => 1])->assertSessionHasErrors('quantity');
+        $this->actingAs($actor)->post('/inventory/stock-in', ['code' => $batteries->number, 'quantity' => 2]);
+        $this->actingAs($actor)->post("/inventory/items/{$batteries->id}/stocks/add", ['place' => ItemStock::keyOf($box), 'quantity' => 3])
+            ->assertSessionHasErrors(['quantity' => 'Im Eingang liegen nur 2 Stück.']);
+        $this->actingAs($actor)->post("/inventory/items/{$batteries->id}/stocks/add", ['place' => ItemStock::keyOf($box), 'quantity' => 2, 'note' => 'Für die Party'])
+            ->assertSessionHasNoErrors();
+        $this->assertSame(5, ItemStock::for($batteries, $box)->quantity);
+        $this->assertFalse(ItemStock::for($batteries, null)->exists);
+        $this->assertSame(5, $batteries->fresh()->quantity);
+        $this->assertDatabaseHas('item_movements', ['item_id' => $batteries->id, 'type' => 'move', 'quantity' => 2, 'to_container_id' => $box->id, 'note' => 'Für die Party']);
+
+        // "+" at "Eingang" itself: new pieces, needs inventory.edit
+        $this->actingAs($actor)->post('/inventory/stock-in', ['code' => $batteries->number, 'quantity' => 1]);
+        $this->actingAs($actor)->post("/inventory/items/{$batteries->id}/stocks/add", ['place' => ItemStock::INCOMING, 'quantity' => 3, 'note' => 'Nachlieferung'])
+            ->assertSessionHasNoErrors();
+        $this->assertSame(4, ItemStock::for($batteries, null)->quantity);
+        $this->assertSame(9, $batteries->fresh()->quantity);
+        $this->actingAs($this->userWithPermissions('inventory.view', 'inventory.move'))
+            ->post("/inventory/items/{$batteries->id}/stocks/add", ['place' => ItemStock::INCOMING, 'quantity' => 1])->assertForbidden();
+    }
+
+    public function test_the_box_history_shows_its_bulk_items_and_the_item_the_total_used_up(): void
+    {
+        $actor = $this->userWithPermissions('inventory.view', 'inventory.move');
+        $box = Item::factory()->container()->create();
+        $ties = Item::factory()->bulk(10, 'Packungen')->stockedAt($box)->create(['name' => 'Kabelbinder']);
+
+        $this->actingAs($actor)->post("/inventory/items/{$ties->id}/consume", ['quantity' => 4, 'from' => ItemStock::keyOf($box), 'note' => 'Aufbau Party'])
+            ->assertSessionHasNoErrors();
+
+        $this->actingAs($actor)->get("/inventory/items/{$box->id}")
+            ->assertInertia(fn ($page) => $page->where('history', fn ($history) => collect($history)->contains(fn ($entry) => str_contains($entry['title'], 'Kabelbinder') && $entry['text'] === 'Aufbau Party' && $entry['quantity'] === 4)));
+        $this->actingAs($actor)->get("/inventory/items/{$ties->id}")->assertInertia(fn ($page) => $page->where('item.consumed_total', 4));
     }
 
     public function test_filling_up_takes_the_missing_pieces_from_incoming(): void
