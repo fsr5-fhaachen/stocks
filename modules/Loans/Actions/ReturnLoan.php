@@ -83,7 +83,7 @@ class ReturnLoan
      *
      * @throws ValidationException
      */
-    public function check(User $actor, Loan $loan, bool $inspect, ?string $code, ?int $rowId, ?int $quantity = null, array $quantities = []): LoanItem
+    public function check(User $actor, Loan $loan, bool $inspect, ?string $code, ?int $rowId, ?int $quantity = null, array $quantities = [], ?int $consumed = null): LoanItem
     {
         $this->ensureMode($loan, $inspect);
         $rows = $this->rows($loan, $inspect);
@@ -94,8 +94,8 @@ class ReturnLoan
 
         $fill = ['return_checked_at' => now(), 'return_checked_by' => $actor->id, 'return_checked_by_scan' => $rowId === null];
         // a wrong count in the box leaves nothing ticked
-        DB::transaction(function () use ($row, $fill, $quantity, $inspect, $quantities) {
-            $row->forceFill([...$fill, ...$this->counted($row, $quantity)])->save();
+        DB::transaction(function () use ($row, $fill, $quantity, $inspect, $quantities, $consumed) {
+            $row->forceFill([...$fill, ...$this->counted($row, $quantity, $consumed)])->save();
             $this->tickAlong($row, $fill, $inspect, $quantities);
         });
 
@@ -103,13 +103,14 @@ class ReturnLoan
     }
 
     /**
-     * Fields of a counted bulk row: the quantity and "missing" when less came back.
+     * Fields of a counted bulk row: the quantity back, for consumables how many were used up
+     * ($consumed, by default all that did not come back), and "missing" for the rest.
      *
      * @return array<string, mixed>
      *
      * @throws ValidationException
      */
-    private function counted(LoanItem $row, ?int $quantity): array
+    private function counted(LoanItem $row, ?int $quantity, ?int $consumed = null): array
     {
         if (! $row->isBulk()) {
             return [];
@@ -119,13 +120,22 @@ class ReturnLoan
             throw ValidationException::withMessages(['quantity' => "Die Menge von {$row->item->number} muss zwischen 0 und {$row->quantity} liegen."]);
         }
         $short = $row->quantity - $quantity;
-        if ($short > 0 && ! ItemUnit::isConsumable($row->item->unit)) {
-            return ['returned_quantity' => $quantity, 'return_state' => ReturnState::Missing, 'return_note' => "{$short} {$row->item->unit} fehlen."];
+        $fields = ['returned_quantity' => $quantity, 'consumed_quantity' => null];
+        if (ItemUnit::isConsumable($row->item->unit)) {
+            $consumed ??= $short;
+            if ($consumed < 0 || $consumed > $short) {
+                throw ValidationException::withMessages(['consumed' => "Verbraucht sein können von {$row->item->number} höchstens {$short} {$row->item->unit}."]);
+            }
+            $fields['consumed_quantity'] = $consumed;
+            $short -= $consumed;
+        }
+        if ($short > 0) {
+            return [...$fields, 'return_state' => ReturnState::Missing, 'return_note' => "{$short} {$row->item->unit} fehlen."];
         }
 
         return $row->return_state === ReturnState::Missing
-            ? ['returned_quantity' => $quantity, 'return_state' => null, 'return_note' => null]
-            : ['returned_quantity' => $quantity];
+            ? [...$fields, 'return_state' => null, 'return_note' => null]
+            : $fields;
     }
 
     /**
@@ -137,18 +147,21 @@ class ReturnLoan
      *
      * @throws ValidationException
      */
-    public function defect(User $actor, Loan $loan, bool $inspect, LoanItem $row, ReturnState $state, string $note, ?ItemCondition $condition, array $photos, ?int $quantity = null): void
+    public function defect(User $actor, Loan $loan, bool $inspect, LoanItem $row, ReturnState $state, string $note, ?ItemCondition $condition, array $photos, ?int $quantity = null, ?int $consumed = null): void
     {
         $this->ensureMode($loan, $inspect);
         $this->ensureInScope($loan, $inspect, $row);
-        // damaged or dirty: the count of a bulk row counts, pieces short stay in the note
-        $returned = $state === ReturnState::Missing ? 0 : ($row->isBulk() ? ($this->counted($row, $quantity ?? $row->returned_quantity)['returned_quantity']) : null);
-        if ($row->isBulk() && $returned < $row->quantity && $state !== ReturnState::Missing && ! ItemUnit::isConsumable($row->item->unit)) {
-            $note .= ' '.($row->quantity - $returned)." {$row->item->unit} fehlen.";
+        // damaged or dirty: the count of a bulk row counts, pieces short stay in the note; a row
+        // missing as a whole: nothing came back and nothing counts as used up
+        $counted = $row->isBulk() && $state !== ReturnState::Missing ? $this->counted($row, $quantity ?? $row->returned_quantity, $consumed ?? $row->consumed_quantity) : null;
+        $returned = $state === ReturnState::Missing ? ($row->isBulk() ? 0 : null) : ($counted['returned_quantity'] ?? null);
+        $consumedPieces = $state === ReturnState::Missing ? ($row->isBulk() && ItemUnit::isConsumable($row->item->unit) ? 0 : null) : ($counted['consumed_quantity'] ?? null);
+        if ($row->isBulk() && $state !== ReturnState::Missing && ($missing = $row->quantity - $returned - (int) $consumedPieces) > 0) {
+            $note .= ' '.$missing." {$row->item->unit} fehlen.";
         }
         $item = $row->item;
 
-        DB::transaction(function () use ($actor, $loan, $row, $state, $note, $condition, $photos, $item, $returned) {
+        DB::transaction(function () use ($actor, $loan, $row, $state, $note, $condition, $photos, $item, $returned, $consumedPieces) {
             $this->recordDefect->handle($actor, $loan, $item, $state, $note, $condition, $photos, 'zurück aus');
 
             $row->forceFill([
@@ -157,6 +170,7 @@ class ReturnLoan
                 'return_checked_at' => $row->return_checked_at ?? now(),
                 'return_checked_by' => $actor->id,
                 'returned_quantity' => $returned,
+                'consumed_quantity' => $consumedPieces,
             ])->save();
         });
     }
@@ -170,7 +184,7 @@ class ReturnLoan
     {
         $this->ensureMode($loan, $inspect);
         $this->ensureInScope($loan, $inspect, $row);
-        $reset = ['return_checked_at' => null, 'return_checked_by' => null, 'return_checked_by_scan' => false, 'returned_quantity' => null, 'return_state' => null, 'return_note' => null];
+        $reset = ['return_checked_at' => null, 'return_checked_by' => null, 'return_checked_by_scan' => false, 'returned_quantity' => null, 'consumed_quantity' => null, 'return_state' => null, 'return_note' => null];
         $row->forceFill($reset)->save();
 
         // the contents of a box go back with it; a box with a row taken back is not complete
@@ -406,10 +420,14 @@ class ReturnLoan
         if ($row->isBulk()) {
             $returned = $row->return_state === ReturnState::Missing ? (int) $row->returned_quantity : ($row->returned_quantity ?? $row->quantity);
             $short = $row->quantity - $returned;
-            if ($short > 0) {
-                ItemUnit::isConsumable($item->unit)
-                    ? $this->stock->remove($actor, $item, false, min($short, $item->quantity), RetireReason::Consumed, "Verbraucht mit {$loan->number}.")
-                    : $row->forceFill(['missing_quantity' => $short])->save();
+            // consumables: what was counted as used up leaves the stock, the rest is missing; rows
+            // returned before the count of its own count all of it as used up
+            $consumed = ItemUnit::isConsumable($item->unit) ? min($row->consumed_quantity ?? $short, $short) : 0;
+            if ($consumed > 0) {
+                $this->stock->remove($actor, $item, false, min($consumed, $item->quantity), RetireReason::Consumed, "Verbraucht mit {$loan->number}.");
+            }
+            if ($short - $consumed > 0) {
+                $row->forceFill(['missing_quantity' => $short - $consumed])->save();
             }
             if ($row->parent_id !== null && $row->stowed_at === null) {
                 $this->backIntoBox($actor, $loan, $row, $returned);

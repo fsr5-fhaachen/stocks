@@ -18,7 +18,12 @@
                 <tr>
                     <td class="mono nowrap" style="padding-left: {{ 1.2 + $row['depth'] * 5 }}mm;">{{ $row['number'] }}</td>
                     <td>{{ $row['name'] }}</td>
-                    <td>{{ $row['quantity'] !== null ? $row['quantity'].' von '.$row['of'].' '.$row['unit'] : '1' }}</td>
+                    <td>
+                        {{ $row['quantity'] !== null ? $row['quantity'].' von '.$row['of'].' '.$row['unit'] : '1' }}
+                        @if (! empty($row['consumed']))
+                            <br>{{ $row['consumed'] }} verbraucht
+                        @endif
+                    </td>
                     <td>{{ $row['state'] }}</td>
                     <td>{{ $row['note'] }}@if ($row['manual']) <span class="muted">(von Hand abgehakt)</span>@endif</td>
                 </tr>

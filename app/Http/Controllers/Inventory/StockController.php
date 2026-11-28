@@ -11,14 +11,14 @@ use App\Support\Inventory\CodeLookup;
 use App\Support\Products\Gtin;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Stock of bulk items per place: "Wareneingang" (new pieces into "Eingang"), counting and the target
- * quantity of a place ("Sollmenge"), and filling a box or location up to its targets ("Auffüllen").
+ * Stock of bulk items per place: "Wareneingang" (new pieces into "Eingang"), "+" at a place (out of
+ * "Eingang"), the target quantity of a place ("Sollmenge"), and filling a box or location up to its
+ * targets ("Auffüllen").
  * Moving pieces ("Einpacken", "Einräumen") is a move (MoveController). See documentation/INVENTORY.md.
  */
 class StockController extends Controller
@@ -68,32 +68,81 @@ class StockController extends Controller
     }
 
     /**
-     * Count a place ("Zählen") and set its target quantity ("Sollmenge") in one go.
+     * Target quantity ("Sollmenge") of a place of a bulk item, from its row (item page, box
+     * contents, location). Empty clears it. Counting is no own action: more pieces come out of
+     * "Eingang" (add()), fewer leave with "Verbraucht" or "Ausmustern" (Entscheidung von Maurice).
      */
     public function update(Request $request, Item $item, StockBook $stock): RedirectResponse
     {
         $validated = $request->validate([
             'place' => ['required', 'string', 'max:20'],
-            'quantity' => ['required', 'integer', 'min:0', 'max:1000000'],
             'target_quantity' => ['nullable', 'integer', 'min:1', 'max:1000000'],
+        ]);
+        $place = StockBook::sourceOf($item, $validated['place'], 'place');
+        if ($place === null) {
+            throw ValidationException::withMessages(['target_quantity' => 'Das Eingang hat keine Sollmenge, es wird geleert, nicht gefüllt.']);
+        }
+        $stock->setTarget($item, $place, $validated['target_quantity'] ?? null);
+        $code = Item::placeSummary($place)['code'];
+
+        return back()->with('success', isset($validated['target_quantity'])
+            ? "In {$code} sollen {$validated['target_quantity']} {$item->unit} liegen."
+            : "{$item->name} hat in {$code} keine Sollmenge mehr.");
+    }
+
+    /**
+     * "+" at a place: pieces out of "Eingang" to this place (enough must lie there); at "Eingang"
+     * itself new pieces ("Wareneingang", needs inventory.edit).
+     */
+    public function add(Request $request, Item $item, StockBook $stock): RedirectResponse
+    {
+        $validated = $request->validate([
+            'place' => ['required', 'string', 'max:20'],
+            'quantity' => ['required', 'integer', 'min:1', 'max:1000000'],
             'note' => ['nullable', 'string', 'max:2000'],
         ]);
         $place = StockBook::sourceOf($item, $validated['place'], 'place');
-        // "Eingang" has no target: it is emptied, not filled
-        $target = $place === null ? null : ($validated['target_quantity'] ?? null);
+        $quantity = $validated['quantity'];
 
-        DB::transaction(function () use ($request, $item, $stock, $place, $validated, $target) {
-            // the target first: a place with a target stays at 0
-            if ($target !== null) {
-                $stock->setTarget($item, $place, $target);
-            }
-            $stock->count($request->user(), $item, $place, $validated['quantity'], $validated['note'] ?? 'Gezählt.');
-            if ($target === null && $place !== null && ItemStock::for($item, $place)->exists) {
-                $stock->setTarget($item, $place, null);
-            }
-        });
+        if ($place === null) {
+            abort_unless($request->user()->can('inventory.edit'), 403);
+            $stock->receive($request->user(), $item, $quantity, null, $validated['note'] ?? null);
 
-        return back()->with('success', StockBook::placeName($place)." liegen jetzt {$validated['quantity']} {$item->unit}.");
+            return back()->with('success', "{$quantity} {$item->unit} von {$item->number} liegen im Eingang.");
+        }
+
+        $incoming = ItemStock::for($item, null)->quantity;
+        if ($incoming < $quantity) {
+            throw ValidationException::withMessages(['quantity' => $incoming === 0
+                ? "Im Eingang liegt nichts von {$item->number}. Erst einbuchen (Wareneingang)."
+                : "Im Eingang liegen nur {$incoming} {$item->unit}."]);
+        }
+        $stock->transfer($request->user(), $item, null, $place, $quantity, $validated['note'] ?? 'Aus dem Eingang.');
+
+        return back()->with('success', "{$quantity} {$item->unit} aus dem Eingang liegen jetzt in ".Item::placeSummary($place)['code'].'.');
+    }
+
+    /**
+     * Target quantity ("Sollmenge") of a bulk item at a box or location, also where nothing of it
+     * lies yet ("0 / soll 8"); "Auffüllen" then brings the pieces. An empty target clears it.
+     */
+    public function target(Request $request, CodeLookup $codes, StockBook $stock): RedirectResponse
+    {
+        $validated = $request->validate([
+            'code' => ['required', 'string', 'max:200'],
+            'place_code' => ['required', 'string', 'max:200'],
+            'target_quantity' => ['nullable', 'integer', 'min:1', 'max:1000000'],
+        ]);
+        $item = $this->bulkItemOf($codes, $validated['code']);
+        $place = $codes->findPlace($validated['place_code'])
+            ?? throw ValidationException::withMessages(['place_code' => $codes->notFoundMessage($validated['place_code'], place: true)]);
+
+        $stock->setTarget($item, $place, $validated['target_quantity'] ?? null);
+        $code = Item::placeSummary($place)['code'];
+
+        return back()->with('success', isset($validated['target_quantity'])
+            ? "In {$code} sollen {$validated['target_quantity']} {$item->unit} {$item->name} liegen."
+            : "{$item->name} hat in {$code} keine Sollmenge mehr.");
     }
 
     /**

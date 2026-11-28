@@ -133,6 +133,32 @@ class ReturnTest extends LoansTestCase
         $this->assertSame(4, ItemStock::for($cables, $this->shelf)->quantity);
     }
 
+    public function test_consumables_count_used_up_pieces_on_their_own_and_the_rest_is_missing(): void
+    {
+        $tape = $this->item(['kind' => 'bulk', 'quantity' => 10, 'unit' => 'Rollen', 'name' => 'Gaffa']);
+        $loan = $this->issued([[$tape, 6]]);
+        $row = $loan->positions()->sole();
+        $admin = $this->admin();
+
+        // more used up than did not come back is refused
+        $this->actingAs($admin)->post("/loans/{$loan->id}/return/check", ['row_id' => $row->id, 'quantity' => 2, 'consumed' => 5])->assertSessionHasErrors('consumed');
+        // 2 back, 3 used up: 1 is missing
+        $this->actingAs($admin)->post("/loans/{$loan->id}/return/check", ['row_id' => $row->id, 'quantity' => 2, 'consumed' => 3])->assertSessionHasNoErrors();
+        $row->refresh();
+        $this->assertSame(3, $row->consumed_quantity);
+        $this->assertSame(ReturnState::Missing, $row->return_state);
+        $this->assertSame('1 Rollen fehlen.', $row->return_note);
+        $this->actingAs($admin)->get("/loans/{$loan->id}/return")->assertInertia(fn ($page) => $page->where('rows.0.consumed_quantity', 3));
+
+        $this->actingAs($admin)->post("/loans/{$loan->id}/return/complete", $this->signatures())->assertSessionHasNoErrors();
+        $this->assertSame(7, $tape->refresh()->quantity);
+        $this->assertSame(3, $tape->movements()->where('type', MovementType::Consume)->sole()->quantity);
+        $this->assertSame(1, $row->refresh()->missing_quantity);
+        $this->actingAs($admin)->get("/loans/{$loan->id}")->assertInertia(fn ($page) => $page->where('positions.0.consumed_quantity', 3));
+        $receipt = $loan->documents()->where('type', DocumentType::ReturnReceipt)->firstOrFail();
+        $this->assertSame(3, $receipt->snapshot['rows'][0]['consumed']);
+    }
+
     public function test_a_defect_on_a_bulk_row_keeps_the_count(): void
     {
         $cables = $this->item(['kind' => 'bulk', 'quantity' => 10, 'unit' => 'Stück']);

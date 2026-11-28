@@ -18,6 +18,17 @@ enum RetireReason: string
     // set for split off parts that went back into their origin, not offered for selection
     case Merged = 'merged';
 
+    /**
+     * Reasons to choose when retiring: "verbraucht" has its own action, "zurückgebucht" is only set
+     * by the migration of split off parts.
+     *
+     * @return list<array{value: string, label: string}>
+     */
+    public static function choices(): array
+    {
+        return array_values(array_filter(self::options(), fn (array $option) => ! in_array($option['value'], [self::Consumed->value, self::Merged->value], true)));
+    }
+
     public function label(): string
     {
         return match ($this) {

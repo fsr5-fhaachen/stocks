@@ -1,28 +1,15 @@
 <template>
-  <UiModal :title="`${placeName} zählen`" @close="$emit('close')">
+  <UiModal :title="`Sollmenge in ${placeName}`" @close="$emit('close')">
     <form class="space-y-5" @submit.prevent="submit">
       <UiInput
-        v-model="form.quantity"
-        label="Wie viele liegen dort?"
-        type="number"
-        inputmode="numeric"
-        min="0"
-        required
-        :hint="`Bisher ${stock.quantity} ${unit ?? ''}. Der Gesamtbestand passt sich an.`"
-        :error="form.errors.quantity ?? form.errors.place"
-      />
-      <!-- "Eingang" is emptied, not filled: no target there -->
-      <UiInput
-        v-if="stock.place"
         v-model="form.target_quantity"
-        label="Sollmenge (optional)"
+        label="Sollmenge"
         type="number"
         inputmode="numeric"
         min="1"
-        hint="Liegt dort weniger, ist die Stelle ein Mangel; „Auffüllen“ holt die Differenz aus dem Eingang."
-        :error="form.errors.target_quantity"
+        :hint="`Dort liegen ${stock.quantity} ${unit ?? ''}. Liegt weniger als die Sollmenge dort, ist die Stelle ein Mangel; „Auffüllen“ holt die Differenz aus dem Eingang. Leer: keine Sollmenge.`"
+        :error="form.errors.target_quantity ?? form.errors.place"
       />
-      <UiInput v-model="form.note" label="Notiz (optional)" />
       <UiButton type="submit" class="w-full" :disabled="form.processing">
         Speichern
       </UiButton>
@@ -35,7 +22,8 @@ import { useForm } from "@inertiajs/vue3";
 import { computed } from "vue";
 
 /**
- * Count a place of a bulk item ("Zählen") and set its target quantity ("Sollmenge").
+ * Target quantity ("Sollmenge") of a place of a bulk item, from its row (item page, box contents,
+ * location).
  */
 const props = defineProps<{
   itemId: number;
@@ -47,9 +35,7 @@ const emit = defineEmits<{ close: []; done: [] }>();
 const placeName = computed(() => props.stock.place?.code ?? "Eingang");
 const form = useForm({
   place: props.stock.key,
-  quantity: props.stock.quantity as number | null,
   target_quantity: props.stock.target_quantity as number | null | string,
-  note: "",
 });
 
 const submit = () =>

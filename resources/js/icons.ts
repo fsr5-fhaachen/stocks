@@ -85,6 +85,7 @@ import {
   faTruckRampBox,
   faFillDrip,
   faCalculator,
+  faBullseye,
 } from "@fortawesome/free-solid-svg-icons";
 
 /**
@@ -178,4 +179,5 @@ export default [
   faTruckRampBox,
   faFillDrip,
   faCalculator,
+  faBullseye,
 ];

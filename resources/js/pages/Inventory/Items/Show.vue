@@ -229,6 +229,15 @@
             Mengenartikel einpacken
           </UiButton>
           <UiButton
+            v-if="can('inventory.edit') && !item.retired_at"
+            variant="secondary"
+            size="sm"
+            icon="bullseye"
+            @click="targetOpen = true"
+          >
+            Sollmenge festlegen
+          </UiButton>
+          <UiButton
             v-if="can('inventory.move') && hasShort && !item.retired_at"
             variant="secondary"
             size="sm"
@@ -251,6 +260,11 @@
           <InventoryContentsTree
             v-if="item.contents.length"
             :items="item.contents"
+            :actions="!item.retired_at"
+            @consume="contentConsume = $event"
+            @retire="contentRetire = $event"
+            @add="editContent($event, 'add')"
+            @target="editContent($event, 'target')"
           />
           <UiEmptyState v-else icon="box" title="Die Box ist leer" />
         </div>
@@ -308,7 +322,7 @@
                 <span class="sr-only">Eintrag löschen</span>
               </button>
               <span v-if="entry.quantity !== null" class="text-sm">
-                {{ entry.quantity }} {{ item.unit }}
+                {{ entry.quantity }} {{ entry.unit ?? item.unit }}
               </span>
               <span class="text-sm text-ink-muted">
                 <UiDateTime :value="entry.at" />
@@ -361,13 +375,17 @@
         :away-quantity="item.away_quantity"
         :unit="item.unit"
         :home="item.home"
+        :min-quantity="item.min_quantity"
+        :consumed-total="item.consumed_total"
+        :retired-total="item.retired_total"
         :consumable="consumable"
         :can-act="!item.retired_at && !isLocked"
         @move="openMove"
         @consume="openConsume"
         @retire="openRetire"
         @pack="packOpen = 'item'"
-        @edit="editStock = $event"
+        @add="editStock = { stock: $event, mode: 'add' }"
+        @target="editStock = { stock: $event, mode: 'target' }"
       />
       <UiCard v-else title="Ort">
         <dl class="space-y-4">
@@ -587,12 +605,55 @@
     @close="packOpen = null"
     @done="packOpen = null"
   />
-  <!-- count a place and set its target ("Sollmenge") -->
-  <InventoryStockEditModal
+  <!-- "Verbraucht" and "Ausmustern" right in the contents of this box -->
+  <InventoryConsumeModal
+    v-if="contentConsume"
+    :item="contentConsume"
+    :from="contentConsume.stock?.key ?? null"
+    @close="contentConsume = null"
+    @done="contentConsume = null"
+  />
+  <InventoryRetireModal
+    v-if="contentRetire"
+    :item="contentRetire"
+    :reasons="retireReasons"
+    :from="contentRetire.stock?.key ?? null"
+    :there="contentRetire.stock ? contentRetire.quantity : null"
+    @close="contentRetire = null"
+    @done="contentRetire = null"
+  />
+  <InventoryStockTargetModal
+    v-if="targetOpen"
+    :place-code="item.number"
+    @close="targetOpen = false"
+    @done="targetOpen = false"
+  />
+  <!-- bulk pieces in this box: "+" out of "Eingang", their target -->
+  <component
+    :is="
+      contentStock.mode === 'add'
+        ? InventoryStockAddModal
+        : InventoryStockEditModal
+    "
+    v-if="contentStock"
+    :item-id="contentStock.itemId"
+    :unit="contentStock.unit"
+    :stock="contentStock.stock"
+    @close="contentStock = null"
+    @done="contentStock = null"
+  />
+  <!-- a place of this bulk item: "+" out of "Eingang" (Wareneingang at "Eingang"), target -->
+  <component
+    :is="
+      editStock.mode === 'add'
+        ? InventoryStockAddModal
+        : InventoryStockEditModal
+    "
     v-if="editStock"
     :item-id="item.id"
     :unit="item.unit"
-    :stock="editStock"
+    :stock="editStock.stock"
+    :incoming-quantity="editStock.mode === 'add' ? incomingQuantity : undefined"
     @close="editStock = null"
     @done="editStock = null"
   />
@@ -724,6 +785,8 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { Link as InertiaLink, router, useForm, usePage } from "@inertiajs/vue3";
+import InventoryStockAddModal from "../../../components/inventory/StockAddModal.vue";
+import InventoryStockEditModal from "../../../components/inventory/StockEditModal.vue";
 import type { MoveMode } from "../../../components/inventory/MoveTargetSwitch.vue";
 
 type PhotoCredit = {
@@ -766,6 +829,9 @@ type Props = {
     stocks: StockEntry[];
     away_quantity: number;
     min_quantity: number | null;
+    // used up and retired so far
+    consumed_total: number;
+    retired_total: number;
     // split off part of old whose stock went into another item
     merged_into: Place | null;
     retired_at: string | null;
@@ -784,6 +850,8 @@ type Props = {
     from: Place | null;
     to: Place | null;
     quantity: number | null;
+    // unit of the item of the entry (a box shows entries of the bulk items in it)
+    unit?: string | null;
     text: string | null;
     user: string | null;
     photos: Photo[];
@@ -946,7 +1014,46 @@ const consumeFrom = ref<string | null>(null);
 
 // "Einpacken" of this bulk item ("item") or into this box ("box"); counting a place
 const packOpen = ref<"item" | "box" | null>(null);
-const editStock = ref<StockEntry | null>(null);
+const editStock = ref<{ stock: StockEntry; mode: "add" | "target" } | null>(
+  null,
+);
+const incomingQuantity = computed(
+  () => props.item.stocks.find((stock) => stock.key === "IN")?.quantity ?? 0,
+);
+const contentConsume = ref<ContentsItem | null>(null);
+const targetOpen = ref(false);
+const contentStock = ref<{
+  itemId: number;
+  unit: string | null;
+  mode: "add" | "target";
+  stock: StockEntry;
+} | null>(null);
+// the entry of a bulk item in this box (or a box in it) as a place of its stock
+const editContent = (entry: ContentsItem, mode: "add" | "target") => {
+  if (!entry.stock) {
+    return;
+  }
+  contentStock.value = {
+    itemId: entry.id,
+    unit: entry.unit,
+    mode,
+    stock: {
+      id: 0,
+      key: entry.stock.key,
+      quantity: entry.quantity,
+      target_quantity: entry.stock.target_quantity,
+      short: entry.stock.short,
+      // the entry of a box in this box names that box only by its key
+      place: {
+        code:
+          entry.stock.key === `B${props.item.id}`
+            ? props.item.number
+            : "der inneren Box",
+      } as Place,
+    },
+  };
+};
+const contentRetire = ref<ContentsItem | null>(null);
 // "Auffüllen": bulk pieces below their target in this box get the difference from "Eingang"
 const hasShort = computed(() =>
   props.item.contents.some((entry) => entry.stock?.short),

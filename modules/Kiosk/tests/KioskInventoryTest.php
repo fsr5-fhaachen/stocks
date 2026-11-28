@@ -104,6 +104,24 @@ class KioskInventoryTest extends TestCase
         $this->asKiosk()->post('/kiosk/inventory/move', ['item_id' => $item->id, 'target_code' => 'GO'])->assertForbidden();
     }
 
+    public function test_retiring_on_the_kiosk_needs_the_permission(): void
+    {
+        $item = Item::factory()->create();
+        $this->unlockWith('inventory.view', 'inventory.move');
+
+        $this->asKiosk()->post("/kiosk/inventory/items/{$item->id}/retire", ['reason' => 'defective'])->assertForbidden();
+    }
+
+    public function test_the_scan_card_retires_on_the_kiosk(): void
+    {
+        $item = Item::factory()->create();
+        $this->unlockWith('inventory.view', 'inventory.retire');
+
+        $this->asKiosk()->from('/kiosk/inventory/scan')->post("/kiosk/inventory/items/{$item->id}/retire", ['reason' => 'defective'])
+            ->assertSessionHasNoErrors();
+        $this->assertTrue($item->fresh()->isRetired());
+    }
+
     public function test_pages_that_are_not_listed_do_not_exist_on_the_kiosk(): void
     {
         $this->unlockWith('inventory.view', 'inventory.edit', 'inventory.move');

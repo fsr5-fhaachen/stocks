@@ -124,6 +124,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/stock-in', [StockController::class, 'index'])->name('stock-in');
             Route::post('/stock-in', [StockController::class, 'receive'])->name('stock-in.store');
             Route::post('/items/{item}/stocks', [StockController::class, 'update'])->name('items.stocks.update');
+            Route::post('/stocks/target', [StockController::class, 'target'])->name('stocks.target');
         });
 
         Route::get('/items/{item}', [ItemController::class, 'show'])->name('items.show');
@@ -135,6 +136,8 @@ Route::middleware('auth')->group(function () {
             Route::post('/items/{item}/condition', [ItemController::class, 'changeCondition'])->name('items.condition');
             Route::post('/items/{item}/consume', [ItemController::class, 'consume'])->name('items.consume');
             Route::post('/stocks/fill', [StockController::class, 'fill'])->name('stocks.fill');
+            // "+" at a place: out of "Eingang" (at "Eingang" itself: Wareneingang, inventory.edit)
+            Route::post('/items/{item}/stocks/add', [StockController::class, 'add'])->name('items.stocks.add');
         });
 
         Route::middleware('can:inventory.retire')->group(function () {

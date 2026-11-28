@@ -4,6 +4,7 @@ namespace App\Support\Inventory;
 
 use App\Models\Item;
 use App\Models\ItemStock;
+use App\Models\ItemUnit;
 use Illuminate\Support\Collection;
 
 /**
@@ -60,6 +61,8 @@ class BoxContents
             ...$item->only(['id', 'number', 'name', 'unit', 'is_container']),
             'quantity' => $entry['quantity'],
             'kind' => $item->kind->value,
+            // bulk item whose unit is a consumable: "Verbraucht" next to "Ausmustern"
+            'consumable' => $item->isBulk() && ItemUnit::isConsumable($item->unit),
             'stock' => $entry['stock'] ? [
                 'key' => $entry['stock']->place_key,
                 'target_quantity' => $entry['stock']->target_quantity,

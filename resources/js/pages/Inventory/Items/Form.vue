@@ -27,8 +27,11 @@
         :kinds="kinds"
         :units="units"
         :conditions="item ? null : conditions"
+        :quantity-locked="item?.kind === 'bulk'"
         :quantity-hint="
-          item ? 'Eine geänderte Menge wird als Zählung protokolliert.' : null
+          item?.kind === 'bulk'
+            ? 'Die Menge folgt den Stellen: Wareneingang, Verbraucht, Ausmustern.'
+            : null
         "
       >
         <template #more>
@@ -129,6 +132,7 @@ const props = defineProps<{
     category_id: number | null;
     kind: string;
     quantity: number;
+    min_quantity: number | null;
     unit: string | null;
     is_container: boolean;
     public_contents: boolean;
@@ -155,6 +159,7 @@ const form = useForm({
   category_id: props.item?.category_id ?? null,
   kind: props.item?.kind ?? "single",
   quantity: props.item?.quantity ?? 1,
+  min_quantity: (props.item?.min_quantity ?? null) as number | string | null,
   // the units come from the settings; a new item starts with the first one ("Stück")
   unit: props.item?.unit ?? props.units[0]?.value ?? null,
   is_container: props.item?.is_container ?? false,

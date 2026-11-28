@@ -120,10 +120,10 @@ class LoanPageData
             'depth' => $row['depth'],
             'number' => $row['number'],
             'name' => $row['name'],
-            'amount' => $row['kind'] === 'bulk' ? "{$row['quantity']} {$row['unit']}" : null,
+            'amount' => $row['kind'] === 'bulk' ? "{$row['quantity']} {$row['unit']}".($row['consumed'] ? ", davon {$row['consumed']} verbraucht" : '') : null,
             'is_container' => $row['is_container'],
             'checked' => $row['checked'],
-        ], RowTree::flatten($left, fn (LoanItem $row) => ['checked' => $row->borrower_checked_at !== null]));
+        ], RowTree::flatten($left, fn (LoanItem $row) => ['checked' => $row->borrower_checked_at !== null, 'consumed' => $row->consumed_quantity ?: null]));
     }
 
     /**

@@ -246,6 +246,10 @@ class InventoryDemo implements DemoPart
             $single = $this->createSingle($demo, 'Audio', $first);
             $bulk = $this->createBulk($demo, 'Kabel', $first);
             $consumable = $this->createConsumable($demo, $second);
+            // the first consumable is below its minimum stock ("Mangel", filter "Unter Mindestbestand")
+            if ($round === 0) {
+                Item::whereKey($consumable->id)->toBase()->update(['min_quantity' => $consumable->quantity + 10]);
+            }
             $defect = $this->createSingle($demo, 'Licht', $second);
             $this->changeCondition->handle($demo->actor, $defect, $this->conditions['defekt'], 'Lüfter läuft nicht mehr an.');
             $retired = $this->createSingle($demo, 'Video', $second);

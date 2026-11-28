@@ -56,6 +56,8 @@ class DemoDataTest extends TestCase
         $this->assertTrue(Item::where('kind', ItemKind::Bulk)->whereIn('unit', ['Rollen', 'Packungen'])->exists(), 'consumable');
         $this->assertTrue(ItemStock::where('quantity', '>', 0)->groupBy('item_id')->havingRaw('count(*) > 1')->exists(), 'bulk item at several places');
         $this->assertTrue(ItemStock::where('place_key', ItemStock::INCOMING)->where('quantity', '>', 0)->exists(), 'pieces in Eingang');
+        $this->assertTrue(Item::whereNotNull('min_quantity')->whereColumn('quantity', '<', 'min_quantity')->exists(), 'below the minimum stock');
+        $this->assertTrue(ItemStock::whereNotNull('target_quantity')->whereColumn('quantity', '<', 'target_quantity')->exists(), 'place below its target');
         $this->assertFalse(Item::where('kind', ItemKind::Bulk)->where(fn ($query) => $query->whereNotNull('location_id')->orWhereNotNull('container_id'))->exists(), 'bulk items have no place of their own');
         $this->assertTrue(Item::whereNotNull('retired_at')->exists(), 'retired');
         $this->assertTrue(Item::whereHas('condition', fn ($query) => $query->where('is_defect', true))->exists(), 'defective');

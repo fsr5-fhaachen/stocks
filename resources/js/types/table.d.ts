@@ -45,6 +45,9 @@ declare global {
     contents_count: number;
     // bulk item: places with pieces (instead of a place)
     places_count: number | null;
+    // bulk item below its minimum stock or with a place below its target ("Mangel")
+    short?: boolean;
+    min_quantity?: number | null;
     badges: { text: string; variant: string }[];
     _version?: number;
   }

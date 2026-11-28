@@ -72,7 +72,9 @@ class ItemsTable extends Table
         return $this->scope()->with(['category.parent', 'condition', 'location', 'container', 'photos'])
             ->withCount(['contents' => fn (Builder $query) => $query->active(), 'stocksInside' => fn (Builder $query) => $query->where('quantity', '>', 0)])
             // bulk items: number of places with pieces, shown instead of a place
-            ->withCount(['stocks' => fn (Builder $query) => $query->where('quantity', '>', 0)]);
+            ->withCount(['stocks' => fn (Builder $query) => $query->where('quantity', '>', 0)])
+            // bulk items: places below their target ("Sollmenge"), for the badge "Mangel"
+            ->withCount(['stocks as short_places_count' => fn (Builder $query) => $query->whereNotNull('target_quantity')->whereColumn('quantity', '<', 'target_quantity')]);
     }
 
     /**
@@ -113,7 +115,7 @@ class ItemsTable extends Table
     {
         return $this->wantsGrouping()
             && trim((string) $this->request->query('search', '')) === ''
-            && ! array_filter($this->request->only(['category', 'condition', 'retired', 'label', 'unlabeled']));
+            && ! array_filter($this->request->only(['category', 'condition', 'retired', 'label', 'unlabeled', 'short']));
     }
 
     /**
@@ -170,6 +172,11 @@ class ItemsTable extends Table
 
         if ($status = $this->labelStatus()) {
             $status->apply($query);
+        }
+
+        // "Unter Mindestbestand": below the minimum stock or a place below its target
+        if ($this->request->boolean('short')) {
+            $query->short();
         }
 
         // grouped: the contents of a box in the list are shown below the box
@@ -233,6 +240,9 @@ class ItemsTable extends Table
             'contents_count' => $model->is_container ? (int) $model->contents_count + (int) $model->stocks_inside_count : 0,
             // bulk item: places with pieces (instead of a place)
             'places_count' => $model->kind === ItemKind::Bulk ? (int) $model->stocks_count : null,
+            // bulk item below its minimum stock or with a place below its target ("Mangel")
+            'short' => $model->isShort() || (int) ($model->short_places_count ?? 0) > 0,
+            'min_quantity' => $model->min_quantity,
             // short notices of modules, e.g. "ausgegeben bis 12.11."
             'badges' => array_values(array_filter(array_map(
                 fn (array $notice) => $notice['badge'] ? ['text' => $notice['badge'], 'variant' => $notice['variant']] : null,

@@ -47,6 +47,7 @@ Route::prefix('loans')->name('loans.')->group(function () {
         Route::post('/{loan}/positions', [PositionController::class, 'store'])->name('positions.store');
         Route::put('/{loan}/positions/{position}', [PositionController::class, 'update'])->scopeBindings()->name('positions.update');
         Route::delete('/{loan}/positions/{position}', [PositionController::class, 'destroy'])->scopeBindings()->name('positions.destroy');
+        Route::post('/{loan}/positions/{position}/take-off', [PositionController::class, 'takeOff'])->scopeBindings()->name('positions.take-off');
         Route::get('/search-items', [PositionController::class, 'search'])->name('search-items');
 
         // chat and borrower page (documentation/LOANS.md)

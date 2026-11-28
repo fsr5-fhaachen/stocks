@@ -26,6 +26,7 @@
         type="number"
         inputmode="numeric"
         required
+        :disabled="quantityLocked"
         :hint="quantityHint"
         :error="errors.quantity"
       />
@@ -40,6 +41,15 @@
           {{ errors.unit }}
         </p>
       </div>
+      <UiInput
+        v-model="form.min_quantity"
+        label="Mindestbestand (optional)"
+        type="number"
+        inputmode="numeric"
+        min="1"
+        hint="Fällt der Gesamtbestand darunter, gilt der Artikel als Mangel."
+        :error="errors.min_quantity"
+      />
     </template>
     <!-- e.g. "Anzahl gleicher Stücke" of the guided capture -->
     <slot name="kind" />
@@ -98,6 +108,8 @@ export type ItemFieldsForm = {
   kind: string;
   quantity: number | string | null;
   unit: string | number | null;
+  // bulk items: minimum stock ("Mindestbestand")
+  min_quantity?: number | string | null;
   condition_id: number | string | null;
   description: string;
   notes: string;
@@ -112,10 +124,17 @@ const props = withDefaults(
     // only for new items; existing ones change it with "Zustand ändern"
     conditions?: Option[] | null;
     quantityHint?: string | null;
+    // existing bulk item: the quantity follows its places, not the form
+    quantityLocked?: boolean;
     // description and notes behind "Mehr"
     collapsible?: boolean;
   }>(),
-  { conditions: null, quantityHint: null, collapsible: false },
+  {
+    conditions: null,
+    quantityHint: null,
+    quantityLocked: false,
+    collapsible: false,
+  },
 );
 
 // the form object of the page; the fields change it in place (the page passes it with :form)

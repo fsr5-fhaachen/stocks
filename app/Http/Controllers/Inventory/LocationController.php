@@ -6,9 +6,11 @@ use App\Actions\Inventory\CreateLocations;
 use App\Actions\Inventory\DeleteLocation;
 use App\Actions\Inventory\SaveLocation;
 use App\Enums\LocationType;
+use App\Enums\RetireReason;
 use App\Http\Controllers\Controller;
 use App\Models\Item;
 use App\Models\ItemStock;
+use App\Models\ItemUnit;
 use App\Models\Location;
 use App\Support\Inventory\CodeSequence;
 use Illuminate\Http\RedirectResponse;
@@ -67,8 +69,10 @@ class LocationController extends Controller
                 ->map(fn (ItemStock $stock) => [
                     ...$stock->item->only(['id', 'number', 'name', 'unit']),
                     'quantity' => $stock->quantity,
+                    'consumable' => ItemUnit::isConsumable($stock->item->unit),
                     'stock' => ['key' => $stock->place_key, 'target_quantity' => $stock->target_quantity, 'short' => $stock->isShort()],
                 ]),
+            'retireReasons' => RetireReason::choices(),
             // for moving the location to another parent
             'locations' => fn () => request()->user()->can('locations.manage')
                 ? Location::naturally(Location::all())->map(fn (Location $other) => $other->summary())
