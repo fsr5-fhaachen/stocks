@@ -34,6 +34,8 @@ class ItemInput
             'kind' => ['required', Rule::enum(ItemKind::class)],
             'quantity' => ['required_if:kind,bulk', 'nullable', 'integer', 'min:0', 'max:1000000'],
             'unit' => ['nullable', 'string', 'exists:item_units,name'],
+            // bulk items: minimum stock ("Mindestbestand"), empty for none
+            'min_quantity' => ['nullable', 'integer', 'min:1', 'max:1000000'],
             'is_container' => ['boolean'],
             'public_contents' => ['boolean'],
             'notes' => ['nullable', 'string', 'max:5000'],
@@ -77,6 +79,7 @@ class ItemInput
         return [
             ...array_intersect_key($validated, array_flip(['name', 'description', 'category_id', 'kind', 'unit', 'notes', 'label_hint'])),
             'quantity' => $validated['quantity'] ?? 1,
+            'min_quantity' => ($validated['kind'] ?? null) === ItemKind::Bulk->value ? ($validated['min_quantity'] ?? null) : null,
             'is_container' => $validated['is_container'] ?? false,
             'public_contents' => $validated['public_contents'] ?? true,
             'no_label' => $validated['no_label'] ?? false,

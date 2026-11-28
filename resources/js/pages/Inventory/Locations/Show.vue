@@ -35,6 +35,14 @@
       Mengenartikel einräumen
     </UiButton>
     <UiButton
+      v-if="canStock && can('inventory.edit')"
+      variant="secondary"
+      icon="calculator"
+      @click="targetOpen = true"
+    >
+      Sollmenge festlegen
+    </UiButton>
+    <UiButton
       v-if="canStock && stocks.some((entry) => entry.stock.short)"
       variant="secondary"
       icon="fill-drip"
@@ -137,6 +145,15 @@
           <span v-if="item.is_container" class="text-xs text-ink-muted">
             {{ item.contents_count }} darin
           </span>
+          <UiButton
+            v-if="can('inventory.retire')"
+            size="sm"
+            variant="secondary"
+            icon="box-archive"
+            class="ml-auto"
+            :aria-label="`${item.name} ausmustern`"
+            @click="retiring = { ...item, from: null, there: null }"
+          />
         </li>
         <!-- pieces of bulk items lying here, with their target ("Sollmenge") -->
         <li
@@ -161,11 +178,86 @@
             >
             {{ stock.unit }}</UiBadge
           >
+          <!-- count here and set the target; "Verbraucht" (consumables), "Ausmustern" -->
+          <span class="ml-auto flex gap-1">
+            <UiButton
+              v-if="can('inventory.edit')"
+              size="sm"
+              variant="secondary"
+              icon="calculator"
+              :aria-label="`${stock.name} zählen, Sollmenge`"
+              @click="editing = stock"
+            />
+            <UiButton
+              v-if="
+                stock.consumable && can('inventory.move') && stock.quantity > 0
+              "
+              size="sm"
+              variant="secondary"
+              icon="minus"
+              :aria-label="`${stock.name} verbraucht`"
+              @click="consuming = stock"
+            />
+            <UiButton
+              v-if="can('inventory.retire') && stock.quantity > 0"
+              size="sm"
+              variant="secondary"
+              icon="box-archive"
+              :aria-label="`${stock.name} ausmustern`"
+              @click="
+                retiring = {
+                  ...stock,
+                  kind: 'bulk',
+                  from: stock.stock.key,
+                  there: stock.quantity,
+                }
+              "
+            />
+          </span>
         </li>
       </ul>
       <UiEmptyState v-else icon="boxes-stacked" title="Hier liegt nichts" />
     </UiCard>
   </div>
+
+  <InventoryStockTargetModal
+    v-if="targetOpen"
+    :place-code="location.full_code"
+    @close="targetOpen = false"
+    @done="targetOpen = false"
+  />
+  <InventoryStockEditModal
+    v-if="editing"
+    :item-id="editing.id"
+    :unit="editing.unit"
+    :stock="{
+      id: 0,
+      key: editing.stock.key,
+      quantity: editing.quantity,
+      target_quantity: editing.stock.target_quantity,
+      short: editing.stock.short,
+      place: { code: location.full_code } as Place,
+    }"
+    @close="editing = null"
+    @done="editing = null"
+  />
+  <InventoryConsumeModal
+    v-if="consuming"
+    :item="consuming"
+    :from="consuming.stock.key"
+    @close="consuming = null"
+    @done="consuming = null"
+  />
+  <InventoryRetireModal
+    v-if="retiring"
+    :item="retiring"
+    :reasons="retireReasons"
+    :from="retiring.from"
+    :there="retiring.there"
+    :place-name="`in ${location.full_code}`"
+    @close="retiring = null"
+    @done="retiring = null"
+  />
 
   <InventoryPackModal
     v-if="packOpen"
@@ -227,7 +319,9 @@ const props = defineProps<{
     unit: string | null;
     quantity: number;
     stock: StockMark;
+    consumable: boolean;
   }[];
+  retireReasons: Option[];
   // all locations, for moving this one
   locations: LocationSummary[];
 }>();
@@ -243,6 +337,20 @@ const canStock = computed(
     props.location.type !== "building",
 );
 const packOpen = ref(false);
+// "Verbraucht" and "Ausmustern" from this location
+type Stock = (typeof props.stocks)[number];
+const consuming = ref<Stock | null>(null);
+const editing = ref<Stock | null>(null);
+const targetOpen = ref(false);
+const retiring = ref<{
+  id: number;
+  number: string;
+  name: string;
+  unit: string | null;
+  kind: string;
+  from: string | null;
+  there: number | null;
+} | null>(null);
 const filling = ref(false);
 const fill = () =>
   router.post(

@@ -11,6 +11,14 @@
           <UiLink href="/inventory/misplaced">{{ stats.misplaced }}</UiLink>
         </dd>
       </div>
+      <div v-if="stats.short" class="col-span-2">
+        <dt class="text-sm text-ink-muted">Unter Mindestbestand</dt>
+        <dd class="text-red-600">
+          <UiLink href="/inventory/items?short=1"
+            >{{ stats.short }} Artikel</UiLink
+          >
+        </dd>
+      </div>
       <div v-if="stats.incoming.items" class="col-span-2">
         <dt class="text-sm text-ink-muted">Im Eingang</dt>
         <dd>
@@ -41,6 +49,8 @@ const stats = ref<{
   misplaced: number;
   // pieces in "Eingang", not put away yet
   incoming: { pieces: number; items: number };
+  // bulk items below their minimum stock or with a place below its target
+  short: number;
 } | null>(null);
 const { can } = usePermissions();
 

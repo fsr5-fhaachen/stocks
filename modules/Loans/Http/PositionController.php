@@ -2,6 +2,7 @@
 
 namespace Modules\Loans\Http;
 
+use App\Enums\RetireReason;
 use App\Http\Controllers\Controller;
 use App\Models\Item;
 use App\Support\Inventory\CodeLookup;
@@ -10,6 +11,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Modules\Loans\Actions\ChangePositions;
 use Modules\Loans\Models\Loan;
@@ -32,6 +34,8 @@ class PositionController extends Controller
             'item_id' => ['nullable', 'integer', 'exists:items,id'],
             'code' => ['nullable', 'string', 'max:200'],
             'quantity' => ['nullable', 'integer', 'min:1'],
+            // bulk item: the place its pieces leave from at the issue (item_stocks.place_key)
+            'from' => ['nullable', 'string', 'max:20'],
         ]);
 
         $item = isset($validated['item_id']) ? Item::findOrFail($validated['item_id']) : $this->codes->find((string) ($validated['code'] ?? ''));
@@ -39,7 +43,7 @@ class PositionController extends Controller
             throw ValidationException::withMessages(['item' => $this->codes->notFoundMessage((string) ($validated['code'] ?? ''))]);
         }
 
-        $this->positions->add($loan, $item->load('condition'), $validated['quantity'] ?? 1);
+        $this->positions->add($loan, $item->load('condition'), $validated['quantity'] ?? 1, $validated['from'] ?? null);
 
         // on the kiosk (no loan page) the page that added it, e.g. the issue
         $target = Surface::link('loans.show', $loan);
@@ -56,6 +60,26 @@ class PositionController extends Controller
         $this->positions->setQuantity($loan, $position, $validated['quantity']);
 
         return back();
+    }
+
+    /**
+     * Pieces of a bulk position used up or retired before the issue: off the stock and off the
+     * position. "verbraucht" needs inventory.move, the other reasons inventory.retire.
+     */
+    public function takeOff(Request $request, Loan $loan, LoanItem $position): RedirectResponse
+    {
+        $validated = $request->validate([
+            'quantity' => ['required', 'integer', 'min:1'],
+            'reason' => ['required', Rule::enum(RetireReason::class)->except([RetireReason::Merged])],
+            'note' => ['nullable', 'string', 'max:2000'],
+        ]);
+        $reason = RetireReason::from($validated['reason']);
+        abort_unless($request->user()->can($reason === RetireReason::Consumed ? 'inventory.move' : 'inventory.retire'), 403);
+
+        $item = $position->item;
+        $this->positions->takeOff($request->user(), $loan, $position, $validated['quantity'], $reason, $validated['note'] ?? null);
+
+        return back()->with('success', "{$validated['quantity']} {$item->unit} von {$item->number} als {$reason->label()} ausgebucht, die Position ist kleiner.");
     }
 
     /**

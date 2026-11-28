@@ -2,8 +2,10 @@
 
 namespace Modules\Loans\Http;
 
+use App\Enums\RetireReason;
 use App\Http\Controllers\Controller;
 use App\Models\Item;
+use App\Models\ItemStock;
 use App\Models\User;
 use App\Support\QrCode;
 use App\Support\Settings;
@@ -120,6 +122,8 @@ class LoanController extends Controller
         $documentsVisible = self::canSeeDocuments($request->user());
 
         return Inertia::render('Loans::Loans/Show', [
+            // "Verbraucht" or "Ausmustern" of pieces of a bulk position before the issue
+            'takeOffReasons' => array_values(array_filter(RetireReason::options(), fn (array $option) => $option['value'] !== RetireReason::Merged->value)),
             'loan' => [
                 ...$loan->summary(),
                 ...$loan->only(['purpose', 'notes', 'cancelled_reason', 'defects_note']),
@@ -428,7 +432,14 @@ class LoanController extends Controller
             ->with(['responsible', 'responsibleUser', 'borrower'])->orderBy('pickup_at')->limit(50)->get();
 
         return Inertia::render('Loans::Loans/AddItem', [
-            'item' => [...$item->only(['id', 'number', 'name', 'quantity', 'unit']), 'kind' => $item->kind->value],
+            'item' => [
+                ...$item->only(['id', 'number', 'name', 'quantity', 'unit']),
+                'kind' => $item->kind->value,
+                // bulk item: its places with pieces; the chosen one is where the issue takes them
+                'stocks' => $item->isBulk() ? $item->stocks()->where('quantity', '>', 0)->get()->map(fn (ItemStock $stock) => $stock->summary())->values() : [],
+            ],
+            // place given by "Einpacken" (?from=…)
+            'from' => request()->query('from'),
             'problem' => $availability->problemOf($item->load('condition')),
             'loans' => $loans->map(fn (Loan $loan) => [
                 ...$loan->summary(),
@@ -521,6 +532,8 @@ class LoanController extends Controller
             'returned_at' => $position->returned_at?->toIso8601String(),
             'return_state' => $position->returned_at ? ($position->return_state ?? ReturnState::Ok)->label() : $position->return_state?->label(),
             'return_note' => $position->return_note,
+            // consumables used up during the loan, counted at the return
+            'consumed_quantity' => $position->consumed_quantity,
             'stowed_at' => $position->stowed_at?->toIso8601String(),
             'box_checks' => $position->boxChecks->map(fn ($check) => ['name' => $check->name, 'checked_at' => $check->checked_at->toIso8601String(), 'ticked' => count($check->ticks), 'total' => $check->total]),
         ])->all();

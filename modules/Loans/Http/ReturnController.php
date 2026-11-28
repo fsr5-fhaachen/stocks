@@ -56,6 +56,7 @@ class ReturnController extends Controller
                 'checked_at' => $row->return_checked_at?->toIso8601String(),
                 'checked_by_scan' => $row->return_checked_by_scan,
                 'returned_quantity' => $row->returned_quantity,
+                'consumed_quantity' => $row->consumed_quantity,
                 'state' => $row->return_state?->value,
                 'state_label' => $row->return_state?->label(),
                 'note' => $row->return_note,
@@ -83,9 +84,11 @@ class ReturnController extends Controller
             'quantity' => ['nullable', 'integer', 'min:0'],
             'quantities' => ['array'],
             'quantities.*' => ['integer', 'min:0'],
+            // consumables: how many were used up
+            'consumed' => ['nullable', 'integer', 'min:0'],
         ]);
 
-        $row = $this->returnLoan->check($request->user(), $loan, $mode === 'inspect', $validated['code'] ?? null, $validated['row_id'] ?? null, $validated['quantity'] ?? null, $validated['quantities'] ?? []);
+        $row = $this->returnLoan->check($request->user(), $loan, $mode === 'inspect', $validated['code'] ?? null, $validated['row_id'] ?? null, $validated['quantity'] ?? null, $validated['quantities'] ?? [], $validated['consumed'] ?? null);
 
         return back()->with('success', "{$row->item->number} abgehakt.");
     }
@@ -103,9 +106,10 @@ class ReturnController extends Controller
             'photos' => ['array', 'max:'.ItemPhoto::MAX_PER_ITEM],
             'photos.*' => ItemPhotoController::fileRules(),
             'quantity' => ['nullable', 'integer', 'min:0'],
+            'consumed' => ['nullable', 'integer', 'min:0'],
         ]);
 
-        $this->returnLoan->defect($request->user(), $loan, $mode === 'inspect', $row, ReturnState::from($validated['state']), $validated['note'], ItemCondition::find($validated['condition_id'] ?? null), $request->file('photos', []), $validated['quantity'] ?? null);
+        $this->returnLoan->defect($request->user(), $loan, $mode === 'inspect', $row, ReturnState::from($validated['state']), $validated['note'], ItemCondition::find($validated['condition_id'] ?? null), $request->file('photos', []), $validated['quantity'] ?? null, $validated['consumed'] ?? null);
 
         return back()->with('success', 'Vermerkt.');
     }

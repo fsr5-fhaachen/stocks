@@ -260,6 +260,9 @@
                   <template v-if="position.item.kind === 'bulk'">
                     · {{ position.quantity }} {{ position.item.unit }}</template
                   >
+                  <template v-if="position.consumed_quantity">
+                    · {{ position.consumed_quantity }} verbraucht</template
+                  >
                   · {{ position.condition }}
                   <template v-if="position.return_state">
                     · {{ position.return_state }}</template
@@ -300,6 +303,18 @@
                       ($event.target as HTMLInputElement).value,
                     )
                   "
+                />
+                <!-- pieces used up or broken before the issue: off the stock and the position -->
+                <UiButton
+                  v-if="
+                    position.item.kind === 'bulk' &&
+                    (can('inventory.move') || can('inventory.retire'))
+                  "
+                  variant="ghost"
+                  size="sm"
+                  icon="box-archive"
+                  :aria-label="`${position.item.name} verbraucht oder ausmustern`"
+                  @click="openTakeOff(position)"
                 />
                 <UiButton
                   variant="ghost"
@@ -720,6 +735,41 @@
     @close="deleteOpen = false"
     @confirm="destroy"
   />
+
+  <UiModal
+    v-if="takingOff"
+    :title="`${takingOff.item.name}: verbraucht oder ausmustern`"
+    @close="takingOff = null"
+  >
+    <form class="space-y-5" @submit.prevent="takeOff">
+      <UiInput
+        v-model="takeOffForm.quantity"
+        label="Menge"
+        type="number"
+        inputmode="numeric"
+        min="1"
+        :max="takingOff.quantity"
+        required
+        :hint="`Gebucht sind ${takingOff.quantity} ${takingOff.item.unit ?? ''}. Die Stücke gehen von ihrem Platz ab, die Position wird kleiner.`"
+        :error="takeOffForm.errors.quantity"
+      />
+      <UiSelect
+        v-model="takeOffForm.reason"
+        label="Grund"
+        :options="takeOffReasonOptions"
+        :placeholder="null"
+        :error="takeOffForm.errors.reason"
+      />
+      <UiInput
+        v-model="takeOffForm.note"
+        label="Notiz (optional)"
+        :error="takeOffForm.errors.note"
+      />
+      <UiButton type="submit" class="w-full" :disabled="takeOffForm.processing">
+        Ausbuchen
+      </UiButton>
+    </form>
+  </UiModal>
 </template>
 
 <script setup lang="ts">
@@ -750,6 +800,7 @@ type LoanRef = {
  * the steps the status allows.
  */
 const props = defineProps<{
+  takeOffReasons: Option[];
   loan: LoanSummary & {
     purpose: string | null;
     notes: string | null;
@@ -787,6 +838,7 @@ const props = defineProps<{
     issued_at: string | null;
     issue_defect: string | null;
     return_note: string | null;
+    consumed_quantity: number | null;
     check: {
       problem: string | null;
       conflicts: LoanRef[];
@@ -882,6 +934,34 @@ const decide = (decision: "accept" | "decline") =>
   );
 const remove = (id: number) =>
   router.delete(`/loans/${props.loan.id}/positions/${id}`, options);
+// "Verbraucht" / "Ausmustern" of pieces of a bulk position (not issued yet)
+type Position = (typeof props.positions)[number];
+const takingOff = ref<Position | null>(null);
+const takeOffForm = useForm({
+  quantity: 1 as number | null,
+  reason: "consumed",
+  note: "",
+});
+const takeOffReasonOptions = computed(() =>
+  props.takeOffReasons.filter((option) =>
+    option.value === "consumed"
+      ? can("inventory.move")
+      : can("inventory.retire"),
+  ),
+);
+const openTakeOff = (position: Position) => {
+  takeOffForm.reset();
+  takeOffForm.clearErrors();
+  takeOffForm.reason = String(
+    takeOffReasonOptions.value[0]?.value ?? "consumed",
+  );
+  takingOff.value = position;
+};
+const takeOff = () =>
+  takeOffForm.post(
+    `/loans/${props.loan.id}/positions/${takingOff.value!.id}/take-off`,
+    { ...options, onSuccess: () => (takingOff.value = null) },
+  );
 const setQuantity = (id: number, quantity: string) =>
   router.put(
     `/loans/${props.loan.id}/positions/${id}`,

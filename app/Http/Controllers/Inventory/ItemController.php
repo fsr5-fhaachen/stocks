@@ -139,7 +139,7 @@ class ItemController extends Controller
             'history' => fn () => $this->history($item),
             'conditions' => ItemCondition::options(),
             // "verbraucht" has its own action for consumables
-            'retireReasons' => array_values(array_filter(RetireReason::options(), fn (array $option) => ! in_array($option['value'], [RetireReason::Consumed->value, RetireReason::Merged->value], true))),
+            'retireReasons' => RetireReason::choices(),
             'consumable' => $item->kind === ItemKind::Bulk && ItemUnit::isConsumable($item->unit),
             'maxPhotos' => ItemPhoto::MAX_PER_ITEM,
         ]);
@@ -374,6 +374,8 @@ class ItemController extends Controller
             'misplaced' => $this->extensions->misplaced()->count(),
             // "Im Eingang: 12 Stück in 3 Artikeln"
             'incoming' => ['pieces' => (int) (clone $incoming)->sum('quantity'), 'items' => $incoming->count()],
+            // bulk items below their minimum stock or with a place below its target
+            'short' => Item::short()->count(),
         ]);
     }
 
@@ -398,7 +400,7 @@ class ItemController extends Controller
             'conditions' => ItemCondition::options(),
             'labelStatuses' => LabelStatus::options(),
             'filters' => [
-                ...$request->only(['category', 'condition', 'retired']),
+                ...$request->only(['category', 'condition', 'retired', 'short']),
                 'label' => $request->boolean('unlabeled') ? LabelStatus::Missing->value : $request->query('label'),
                 'grouped' => $table->wantsGrouping() ? '1' : '0',
             ],
@@ -414,7 +416,7 @@ class ItemController extends Controller
 
         return Inertia::render('Inventory/Items/Form', [
             'item' => $item ? [
-                ...$item->only(['id', 'number', 'name', 'description', 'category_id', 'quantity', 'unit', 'is_container', 'public_contents', 'notes', 'label_hint', 'ean', 'no_label']),
+                ...$item->only(['id', 'number', 'name', 'description', 'category_id', 'quantity', 'min_quantity', 'unit', 'is_container', 'public_contents', 'notes', 'label_hint', 'ean', 'no_label']),
                 'kind' => $item->kind->value,
                 'home' => Item::placeSummary($item->home()),
             ] : null,

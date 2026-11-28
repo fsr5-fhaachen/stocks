@@ -32,7 +32,7 @@
 
   <UiCard flush>
     <div
-      class="grid gap-4 border-b border-line p-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-5"
+      class="grid gap-4 border-b border-line p-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-3 xl:grid-cols-6"
     >
       <template v-if="!misplaced">
         <UiSelect
@@ -59,6 +59,12 @@
           :options="labelStatuses"
           @update:model-value="applyFilters"
         />
+        <UiCheckbox
+          v-model="filter.short"
+          label="Unter Mindestbestand"
+          class="lg:mt-7"
+          @update:model-value="applyFilters"
+        />
       </template>
       <UiCheckbox
         v-model="grouped"
@@ -68,7 +74,7 @@
       />
       <p
         v-if="grouped && !groupedActive"
-        class="text-sm text-ink-muted sm:col-span-2 lg:col-span-5"
+        class="text-sm text-ink-muted sm:col-span-2 lg:col-span-3 xl:col-span-6"
       >
         Gruppierung ist bei Suche und Filtern aus.
       </p>
@@ -138,6 +144,7 @@ const props = defineProps<{
     condition?: string;
     retired?: string;
     label?: string | null;
+    short?: string;
     grouped?: string;
   };
 }>();
@@ -160,6 +167,7 @@ const filter = ref({
   condition: props.filters.condition ? Number(props.filters.condition) : null,
   retired: props.filters.retired === "1",
   label: props.filters.label ?? null,
+  short: props.filters.short === "1",
 });
 
 // items chosen for printing labels
@@ -171,6 +179,7 @@ const applyFilters = () =>
     condition: filter.value.condition ? String(filter.value.condition) : null,
     retired: filter.value.retired ? "1" : null,
     label: filter.value.label ? String(filter.value.label) : null,
+    short: filter.value.short ? "1" : null,
     // the older filter "Noch ohne Etikett" of links is replaced by "label"
     unlabeled: null,
   });
@@ -189,8 +198,8 @@ const groupedActive = computed(() => {
   return (
     grouped.value &&
     !query.get("search") &&
-    !["category", "condition", "retired", "label", "unlabeled"].some((key) =>
-      query.get(key),
+    !["category", "condition", "retired", "label", "unlabeled", "short"].some(
+      (key) => query.get(key),
     )
   );
 });

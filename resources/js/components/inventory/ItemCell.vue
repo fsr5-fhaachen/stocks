@@ -81,6 +81,8 @@
       }}
     </span>
     <InventoryPlaceLink v-else :place="row.place" empty="kein Ort" />
+    <!-- below the minimum stock or a place below its target -->
+    <UiBadge v-if="row.short" variant="danger" class="ml-2">Mangel</UiBadge>
     <UiBadge v-if="row.away_from_home" variant="warning" class="ml-2">
       nicht am Stammplatz
     </UiBadge>

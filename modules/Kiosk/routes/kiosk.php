@@ -26,6 +26,9 @@ Route::prefix('inventory')->name('inventory.')->middleware('can:inventory.view')
         Route::post('/items/{item}/condition', [ItemController::class, 'changeCondition'])->name('items.condition');
         Route::post('/items/{item}/consume', [ItemController::class, 'consume'])->name('items.consume');
     });
+
+    // "Ausmustern" on the scan card; whether the kiosk account may, decides its role
+    Route::post('/items/{item}/retire', [ItemController::class, 'retire'])->middleware('can:inventory.retire')->name('items.retire');
 });
 
 Route::prefix('labels')->name('labels.')->middleware('can:labels.print')->group(function () {

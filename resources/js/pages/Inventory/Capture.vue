@@ -648,6 +648,7 @@ const defaults = (): CaptureForm => ({
   category_id: null,
   kind: "single",
   quantity: 1,
+  min_quantity: null,
   // the units come from the settings; the first one is "Stück"
   unit: props.units[0] ? String(props.units[0].value) : null,
   // "gut" if it exists, otherwise the first condition

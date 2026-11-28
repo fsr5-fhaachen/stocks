@@ -22,6 +22,17 @@
         eingeräumt)</span
       >
     </p>
+    <!-- minimum stock of the whole item ("Mindestbestand"), lent pieces count -->
+    <UiAlert
+      v-if="minQuantity !== null && quantity < minQuantity"
+      type="error"
+      class="mt-3"
+    >
+      Unter Mindestbestand: {{ quantity }} von {{ minQuantity }} {{ unit }}.
+    </UiAlert>
+    <p v-else-if="minQuantity !== null" class="mt-1 text-sm text-ink-muted">
+      Mindestbestand {{ minQuantity }} {{ unit }}
+    </p>
     <ul v-if="stocks.length" class="mt-3 divide-y divide-line">
       <li
         v-for="stock in stocks"
@@ -93,17 +104,21 @@
  * verbraucht, ausmustern) and "Einpacken"; the page opens its dialogs with the place as source
  * ("from").
  */
-defineProps<{
-  stocks: StockEntry[];
-  quantity: number;
-  quantityHere: number;
-  awayQuantity: number;
-  unit: string | null;
-  home: Place | null;
-  consumable: boolean;
-  // false for retired items and while a module locks the item
-  canAct: boolean;
-}>();
+withDefaults(
+  defineProps<{
+    stocks: StockEntry[];
+    quantity: number;
+    quantityHere: number;
+    awayQuantity: number;
+    unit: string | null;
+    home: Place | null;
+    minQuantity?: number | null;
+    consumable: boolean;
+    // false for retired items and while a module locks the item
+    canAct: boolean;
+  }>(),
+  { minQuantity: null },
+);
 defineEmits<{
   move: [key: string];
   consume: [key: string];

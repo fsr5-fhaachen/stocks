@@ -97,6 +97,29 @@ class StockController extends Controller
     }
 
     /**
+     * Target quantity ("Sollmenge") of a bulk item at a box or location, also where nothing of it
+     * lies yet ("0 / soll 8"); "Auffüllen" then brings the pieces. An empty target clears it.
+     */
+    public function target(Request $request, CodeLookup $codes, StockBook $stock): RedirectResponse
+    {
+        $validated = $request->validate([
+            'code' => ['required', 'string', 'max:200'],
+            'place_code' => ['required', 'string', 'max:200'],
+            'target_quantity' => ['nullable', 'integer', 'min:1', 'max:1000000'],
+        ]);
+        $item = $this->bulkItemOf($codes, $validated['code']);
+        $place = $codes->findPlace($validated['place_code'])
+            ?? throw ValidationException::withMessages(['place_code' => $codes->notFoundMessage($validated['place_code'], place: true)]);
+
+        $stock->setTarget($item, $place, $validated['target_quantity'] ?? null);
+        $code = Item::placeSummary($place)['code'];
+
+        return back()->with('success', isset($validated['target_quantity'])
+            ? "In {$code} sollen {$validated['target_quantity']} {$item->unit} {$item->name} liegen."
+            : "{$item->name} hat in {$code} keine Sollmenge mehr.");
+    }
+
+    /**
      * "Auffüllen": every bulk item below its target at a box or location gets the missing pieces
      * from "Eingang", as far as "Eingang" has them.
      */

@@ -101,12 +101,34 @@
                     class="w-20 rounded-md border-0 bg-surface py-1.5 text-ink ring-1 ring-inset ring-line"
                   />
                   <span class="whitespace-nowrap"
-                    >von {{ row.quantity }} {{ row.unit
-                    }}<template v-if="row.consumable">
-                      (Verbrauch)</template
-                    ></span
+                    >{{ row.consumable ? "zurück" : "" }} von {{ row.quantity }}
+                    {{ row.unit }}</span
                   >
                 </label>
+                <!-- consumables: used up is counted on its own, the rest is missing -->
+                <label
+                  v-if="row.kind === 'bulk' && row.consumable"
+                  class="flex items-center gap-2 text-sm"
+                >
+                  <input
+                    v-model="used[row.id]"
+                    type="number"
+                    min="0"
+                    :max="row.quantity"
+                    inputmode="numeric"
+                    aria-label="Verbraucht"
+                    @input="usedChanged(row)"
+                    @change="row.checked_at && check(row)"
+                    class="w-20 rounded-md border-0 bg-surface py-1.5 text-ink ring-1 ring-inset ring-line"
+                  />
+                  <span>verbraucht</span>
+                </label>
+                <span
+                  v-if="row.kind === 'bulk' && missingOf(row) > 0"
+                  class="text-sm font-semibold text-red-600"
+                >
+                  {{ missingOf(row) }} {{ row.unit }} fehlen
+                </span>
                 <UiButton
                   variant="secondary"
                   size="sm"
@@ -337,6 +359,7 @@ type Row = {
   checked_at: string | null;
   checked_by_scan: boolean;
   returned_quantity: number | null;
+  consumed_quantity: number | null;
   state: string | null;
   state_label: string | null;
   note: string | null;
@@ -363,7 +386,7 @@ const page = usePage<SharedProps>();
 const inspect = computed(() => props.mode === "inspect");
 const receiver = computed(() => page.props.auth?.user.name ?? "");
 const errorMessages = computed(() =>
-  ["loan", "code", "quantity", "photos"]
+  ["loan", "code", "quantity", "consumed", "photos"]
     .map((key) => page.props.errors?.[key])
     .filter(Boolean),
 );
@@ -438,6 +461,60 @@ watch(
       }
     }),
 );
+// consumables: how many were used up; until changed by hand all that did not come back
+const used = reactive<Record<number, number>>(
+  Object.fromEntries(
+    props.rows
+      .filter((row) => row.consumable)
+      .map((row) => [
+        row.id,
+        row.consumed_quantity ??
+          row.quantity - (row.returned_quantity ?? row.quantity),
+      ]),
+  ),
+);
+const touched = reactive(new Set<number>());
+watch(
+  () => props.rows.map((row) => counts[row.id]),
+  () =>
+    props.rows.forEach((row) => {
+      if (!row.consumable) {
+        return;
+      }
+      // "zurück" changed: "verbraucht" follows until set by hand, and never makes more than
+      // were issued
+      const rest = Math.max(0, row.quantity - Number(counts[row.id] || 0));
+      if (!touched.has(row.id) || Number(used[row.id] || 0) > rest) {
+        used[row.id] = rest;
+      }
+    }),
+);
+// "verbraucht" changed by hand: "zurück" goes down when both together are more than were issued
+const usedChanged = (row: Row) => {
+  touched.add(row.id);
+  const consumed = Math.min(
+    row.quantity,
+    Math.max(0, Number(used[row.id] || 0)),
+  );
+  if (Number(counts[row.id] || 0) + consumed > row.quantity) {
+    counts[row.id] = row.quantity - consumed;
+  }
+};
+watch(
+  () => props.rows,
+  (rows) =>
+    rows.forEach((row) => {
+      if (row.consumable && row.consumed_quantity !== null) {
+        used[row.id] = row.consumed_quantity;
+      }
+    }),
+);
+const usedOf = (row: Row | undefined) =>
+  row?.consumable ? Number(used[row.id] ?? 0) : null;
+const missingOf = (row: Row) =>
+  row.quantity -
+  Number(counts[row.id] ?? row.quantity) -
+  (row.consumable ? Number(used[row.id] ?? 0) : 0);
 // the counts of all bulk rows go along: a ticked box takes those of its contents
 const bulkCounts = () =>
   Object.fromEntries(
@@ -463,6 +540,7 @@ const scan = (code: string) => {
     {
       code,
       quantity: row?.kind === "bulk" ? counts[row.id] : null,
+      consumed: usedOf(row),
       quantities: bulkCounts(),
     },
     options,
@@ -474,6 +552,7 @@ const check = (row: Row) =>
     {
       row_id: row.id,
       quantity: row.kind === "bulk" ? counts[row.id] : null,
+      consumed: usedOf(row),
       quantities: bulkCounts(),
     },
     options,
@@ -498,6 +577,7 @@ const saveDefect = () =>
       ...data,
       quantity:
         defectRow.value!.kind === "bulk" ? counts[defectRow.value!.id] : null,
+      consumed: usedOf(defectRow.value!),
     }))
     .post(`${base.value}/rows/${defectRow.value!.id}/defect`, {
       ...options,

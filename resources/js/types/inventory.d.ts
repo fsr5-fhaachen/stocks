@@ -62,6 +62,8 @@ declare global {
     unit: string | null;
     kind: "single" | "bulk";
     is_container: boolean;
+    // bulk item whose unit is a consumable
+    consumable?: boolean;
     // small preview of the first photo
     photo_url: string | null;
     contents: ContentsItem[];

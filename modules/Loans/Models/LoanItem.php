@@ -38,6 +38,7 @@ use Modules\Loans\Enums\ReturnState;
  * @property int|null $return_checked_by
  * @property bool $return_checked_by_scan
  * @property int|null $returned_quantity
+ * @property int|null $consumed_quantity consumables: used up during the loan, counted at the return
  * @property ReturnState|null $return_state
  * @property string|null $return_note
  * @property Carbon|null $returned_at booked as back, on the receipt return_document_id
@@ -66,6 +67,7 @@ class LoanItem extends Model
         return [
             'quantity' => 'integer',
             'returned_quantity' => 'integer',
+            'consumed_quantity' => 'integer',
             'missing_quantity' => 'integer',
             'checked_at' => 'datetime',
             'checked_by_scan' => 'boolean',

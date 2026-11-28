@@ -229,6 +229,15 @@
             Mengenartikel einpacken
           </UiButton>
           <UiButton
+            v-if="can('inventory.edit') && !item.retired_at"
+            variant="secondary"
+            size="sm"
+            icon="calculator"
+            @click="targetOpen = true"
+          >
+            Sollmenge festlegen
+          </UiButton>
+          <UiButton
             v-if="can('inventory.move') && hasShort && !item.retired_at"
             variant="secondary"
             size="sm"
@@ -251,6 +260,10 @@
           <InventoryContentsTree
             v-if="item.contents.length"
             :items="item.contents"
+            :actions="!item.retired_at"
+            @consume="contentConsume = $event"
+            @retire="contentRetire = $event"
+            @edit="editContent"
           />
           <UiEmptyState v-else icon="box" title="Die Box ist leer" />
         </div>
@@ -361,6 +374,7 @@
         :away-quantity="item.away_quantity"
         :unit="item.unit"
         :home="item.home"
+        :min-quantity="item.min_quantity"
         :consumable="consumable"
         :can-act="!item.retired_at && !isLocked"
         @move="openMove"
@@ -586,6 +600,38 @@
     :title="packOpen === 'box' ? 'Mengenartikel einpacken' : 'Einpacken'"
     @close="packOpen = null"
     @done="packOpen = null"
+  />
+  <!-- "Verbraucht" and "Ausmustern" right in the contents of this box -->
+  <InventoryConsumeModal
+    v-if="contentConsume"
+    :item="contentConsume"
+    :from="contentConsume.stock?.key ?? null"
+    @close="contentConsume = null"
+    @done="contentConsume = null"
+  />
+  <InventoryRetireModal
+    v-if="contentRetire"
+    :item="contentRetire"
+    :reasons="retireReasons"
+    :from="contentRetire.stock?.key ?? null"
+    :there="contentRetire.stock ? contentRetire.quantity : null"
+    @close="contentRetire = null"
+    @done="contentRetire = null"
+  />
+  <InventoryStockTargetModal
+    v-if="targetOpen"
+    :place-code="item.number"
+    @close="targetOpen = false"
+    @done="targetOpen = false"
+  />
+  <!-- bulk pieces in this box: count them and set their target -->
+  <InventoryStockEditModal
+    v-if="contentStock"
+    :item-id="contentStock.itemId"
+    :unit="contentStock.unit"
+    :stock="contentStock.stock"
+    @close="contentStock = null"
+    @done="contentStock = null"
   />
   <!-- count a place and set its target ("Sollmenge") -->
   <InventoryStockEditModal
@@ -947,6 +993,38 @@ const consumeFrom = ref<string | null>(null);
 // "Einpacken" of this bulk item ("item") or into this box ("box"); counting a place
 const packOpen = ref<"item" | "box" | null>(null);
 const editStock = ref<StockEntry | null>(null);
+const contentConsume = ref<ContentsItem | null>(null);
+const targetOpen = ref(false);
+const contentStock = ref<{
+  itemId: number;
+  unit: string | null;
+  stock: StockEntry;
+} | null>(null);
+// the entry of a bulk item in this box (or a box in it) as a place of its stock
+const editContent = (entry: ContentsItem) => {
+  if (!entry.stock) {
+    return;
+  }
+  contentStock.value = {
+    itemId: entry.id,
+    unit: entry.unit,
+    stock: {
+      id: 0,
+      key: entry.stock.key,
+      quantity: entry.quantity,
+      target_quantity: entry.stock.target_quantity,
+      short: entry.stock.short,
+      // the entry of a box in this box names that box only by its key
+      place: {
+        code:
+          entry.stock.key === `B${props.item.id}`
+            ? props.item.number
+            : "der inneren Box",
+      } as Place,
+    },
+  };
+};
+const contentRetire = ref<ContentsItem | null>(null);
 // "Auffüllen": bulk pieces below their target in this box get the difference from "Eingang"
 const hasShort = computed(() =>
   props.item.contents.some((entry) => entry.stock?.short),

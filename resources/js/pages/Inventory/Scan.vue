@@ -189,6 +189,20 @@
             Zustand
           </UiButton>
           <UiButton
+            v-if="
+              can('inventory.retire') &&
+              !card.retired &&
+              !isLocked &&
+              (card.kind !== 'bulk' || stockAt(moveFrom) > 0)
+            "
+            variant="secondary"
+            icon="box-archive"
+            size="md"
+            @click="retireOpen = true"
+          >
+            Ausmustern
+          </UiButton>
+          <UiButton
             v-if="can('labels.print') && !card.retired"
             variant="secondary"
             icon="tag"
@@ -283,6 +297,16 @@
     @close="consumeOpen = false"
     @done="afterAction"
   />
+  <!-- bulk items: pieces from the place chosen above -->
+  <InventoryRetireModal
+    v-if="retireOpen && card?.type === 'item'"
+    :item="card"
+    :reasons="retireReasons"
+    :from="card.kind === 'bulk' ? moveFrom : null"
+    :there="card.kind === 'bulk' ? stockAt(moveFrom) : null"
+    @close="retireOpen = false"
+    @done="afterAction"
+  />
   <InventoryConditionModal
     v-if="conditionOpen && card?.type === 'item'"
     :item="card"
@@ -344,7 +368,7 @@ type Scanned = ScannedItem | ScannedLocation | ScannedReserved;
  * location. "Umlagern" makes the next scan the target; "Hierher umlagern" at a location books every
  * following item there until it is ended.
  */
-defineProps<{ conditions: Option[] }>();
+defineProps<{ conditions: Option[]; retireReasons: Option[] }>();
 
 const { can } = usePermissions();
 const { url } = useSurface();
@@ -591,9 +615,11 @@ const closeSheet = () => {
 // dialogs
 const consumeOpen = ref(false);
 const conditionOpen = ref(false);
+const retireOpen = ref(false);
 const afterAction = () => {
   consumeOpen.value = false;
   conditionOpen.value = false;
+  retireOpen.value = false;
   if (card.value?.type === "item") {
     show(card.value.number);
   }

@@ -76,6 +76,7 @@ class LoanDocuments
                 'depth' => $row->parent_id ? 1 : 0,
                 'quantity' => $row->isBulk() ? ($row->returned_quantity ?? $row->quantity) : null,
                 'of' => $row->isBulk() ? $row->quantity : null,
+                'consumed' => $row->consumed_quantity ?: null,
                 'unit' => $row->item->unit,
                 'state' => $row->isReturnHandled() ? ($row->return_state ?? ReturnState::Ok)->label() : 'ungeprüft',
                 'note' => implode('; ', array_filter([$row->return_note, $row->issueDefect() ? "schon bei der Ausgabe: {$row->issueDefect()}" : null])) ?: null,

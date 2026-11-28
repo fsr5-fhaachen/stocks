@@ -202,6 +202,7 @@ export default function (
       kind: form.kind,
       quantity: single ? null : form.quantity,
       unit: single ? null : form.unit,
+      min_quantity: single ? null : (form.min_quantity ?? null),
       condition_id: form.condition_id,
       notes: form.notes,
       label_hint: form.label_hint,

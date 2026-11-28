@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Inventory;
 
+use App\Enums\RetireReason;
 use App\Http\Controllers\Controller;
 use App\Models\ItemCondition;
 use Inertia\Inertia;
@@ -20,6 +21,7 @@ class ScanController extends Controller
     {
         return Inertia::render('Inventory/Scan', [
             'conditions' => ItemCondition::options(),
+            'retireReasons' => RetireReason::choices(),
         ]);
     }
 }

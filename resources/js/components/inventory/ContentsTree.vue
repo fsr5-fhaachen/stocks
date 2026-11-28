@@ -54,11 +54,46 @@
           >
           {{ item.unit }}</UiBadge
         >
+        <!-- right in the list: "Verbraucht" (consumables) and "Ausmustern", from this box -->
+        <span v-if="actions" class="ml-auto flex shrink-0 gap-1">
+          <!-- bulk pieces: count them in this box and set their target ("Sollmenge") -->
+          <UiButton
+            v-if="item.stock && can('inventory.edit')"
+            size="sm"
+            variant="secondary"
+            icon="calculator"
+            :aria-label="`${item.name} zählen, Sollmenge`"
+            @click="$emit('edit', item)"
+          />
+          <UiButton
+            v-if="item.consumable && item.quantity > 0 && can('inventory.move')"
+            size="sm"
+            variant="secondary"
+            icon="minus"
+            :aria-label="`${item.name} verbraucht`"
+            @click="$emit('consume', item)"
+          />
+          <UiButton
+            v-if="
+              can('inventory.retire') &&
+              (item.kind !== 'bulk' || item.quantity > 0)
+            "
+            size="sm"
+            variant="secondary"
+            icon="box-archive"
+            :aria-label="`${item.name} ausmustern`"
+            @click="$emit('retire', item)"
+          />
+        </span>
       </div>
       <InventoryContentsTree
         v-if="item.contents.length && open.has(item.id)"
         :items="item.contents"
+        :actions="actions"
         nested
+        @consume="$emit('consume', $event)"
+        @retire="$emit('retire', $event)"
+        @edit="$emit('edit', $event)"
       />
     </li>
   </ul>
@@ -75,7 +110,15 @@ defineOptions({ name: "InventoryContentsTree" });
 defineProps({
   items: { type: Array as PropType<ContentsItem[]>, required: true },
   nested: { type: Boolean, default: false },
+  // buttons "Verbraucht" and "Ausmustern" at each entry
+  actions: { type: Boolean, default: false },
 });
+defineEmits<{
+  consume: [item: ContentsItem];
+  retire: [item: ContentsItem];
+  edit: [item: ContentsItem];
+}>();
+const { can } = usePermissions();
 
 const { kiosk } = useSurface();
 

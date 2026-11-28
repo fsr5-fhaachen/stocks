@@ -124,6 +124,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/stock-in', [StockController::class, 'index'])->name('stock-in');
             Route::post('/stock-in', [StockController::class, 'receive'])->name('stock-in.store');
             Route::post('/items/{item}/stocks', [StockController::class, 'update'])->name('items.stocks.update');
+            Route::post('/stocks/target', [StockController::class, 'target'])->name('stocks.target');
         });
 
         Route::get('/items/{item}', [ItemController::class, 'show'])->name('items.show');

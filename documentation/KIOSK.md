@@ -63,7 +63,7 @@ Die Kopfzeile hat auf jeder Unterseite „Zurück“ (als Web-App gibt es keinen
 | Material ausgeben | Verleih | Liste „Heute abholen“, dann die Ausgabe in Schritten | `loans.issue` |
 | Material zurücknehmen | Verleih | Liste „Ausgegeben“, dann die Rückgabe in Schritten | `loans.issue` |
 | Einräumen und prüfen | Verleih | Seite „Rückgaben“ (Einräumen, Prüfung offen) | `loans.issue` |
-| Scannen und umlagern | Lager | `/kiosk/inventory/scan`: Scan-Karte, Umlagern, „Hierher umlagern“, Zustand, Verbraucht (mit Stelle), Etikett | `inventory.view`, zum Ändern `inventory.move` |
+| Scannen und umlagern | Lager | `/kiosk/inventory/scan`: Scan-Karte, Umlagern, „Hierher umlagern“, Zustand, Verbraucht (mit Stelle), Ausmustern (`inventory.retire`), Etikett | `inventory.view`, zum Ändern `inventory.move` |
 | Etikett (von der Scan-Karte) | – | `/kiosk/labels/print`: Vorschau und Druck; „Zurück“ bleibt am Kiosk, „Als Vorlage speichern“ fehlt | `labels.print` |
 
 Eine Kachel meldet ein Modul mit `Navigation::addKioskTile(..., description:, section:, badge:)` an; `badge` ist eine Closure wie beim Menü und muss schnell sein.

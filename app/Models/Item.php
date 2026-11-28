@@ -231,6 +231,18 @@ class Item extends Model implements Auditable, AuditSubject
     }
 
     /**
+     * Active bulk items that lack something ("Mangel"): below their minimum stock, or a place below
+     * its target quantity ("Sollmenge").
+     */
+    #[Scope]
+    protected function short(Builder $query): void
+    {
+        $query->whereNull('retired_at')->where('kind', ItemKind::Bulk)->where(fn (Builder $query) => $query
+            ->where(fn (Builder $query) => $query->whereNotNull('min_quantity')->whereColumn('quantity', '<', 'min_quantity'))
+            ->orWhereHas('stocks', fn (Builder $query) => $query->whereNotNull('target_quantity')->whereColumn('quantity', '<', 'target_quantity')));
+    }
+
+    /**
      * Stock of a bulk item per place ("Bestand"), see App\Actions\Inventory\StockBook.
      *
      * @return HasMany<ItemStock, $this>
@@ -269,12 +281,12 @@ class Item extends Model implements Auditable, AuditSubject
     }
 
     /**
-     * Bulk item below its minimum stock ("Mindestbestand"): the whole stock, lent pieces included,
-     * without missing ones.
+     * Bulk item below its minimum stock ("Mindestbestand"): the whole stock counts, lent and
+     * missing pieces included (missing ones until the defects are closed).
      */
-    public function isShort(int $missing = 0): bool
+    public function isShort(): bool
     {
-        return $this->isBulk() && $this->min_quantity !== null && $this->quantity - $missing < $this->min_quantity;
+        return $this->isBulk() && $this->min_quantity !== null && $this->quantity < $this->min_quantity;
     }
 
     /**
